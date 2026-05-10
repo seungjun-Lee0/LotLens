@@ -25,6 +25,14 @@ export type QueryArcGISParams = {
   outFields?: string;
   /** Whether to return polygon/line geometry alongside attributes. Default false. */
   returnGeometry?: boolean;
+  /**
+   * Half-width of an envelope drawn around the point, in `inSR` degrees.
+   * Use a small positive value (~5e-5 ≈ 5m at Brisbane latitude) for thin
+   * corridor layers — point queries near polygon boundaries can miss
+   * features when ArcGIS reprojects from EPSG:28356 to EPSG:4326. Default
+   * 0 = exact point query.
+   */
+  bufferDegrees?: number;
 };
 
 export class ArcGISError extends Error {
@@ -53,14 +61,24 @@ export async function queryArcGIS(
   params: QueryArcGISParams,
 ): Promise<FeatureCollection<Geometry | null, GeoJsonProperties>> {
   const sr = params.inSR ?? params.geometry.spatialReference ?? 4326;
+  const buf = params.bufferDegrees ?? 0;
+  const geom = buf > 0
+    ? {
+        xmin: params.geometry.x - buf,
+        ymin: params.geometry.y - buf,
+        xmax: params.geometry.x + buf,
+        ymax: params.geometry.y + buf,
+        spatialReference: { wkid: params.geometry.spatialReference ?? 4326 },
+      }
+    : {
+        x: params.geometry.x,
+        y: params.geometry.y,
+        spatialReference: { wkid: params.geometry.spatialReference ?? 4326 },
+      };
   const search = new URLSearchParams({
     f: "geojson",
-    geometry: JSON.stringify({
-      x: params.geometry.x,
-      y: params.geometry.y,
-      spatialReference: { wkid: params.geometry.spatialReference ?? 4326 },
-    }),
-    geometryType: params.geometryType,
+    geometry: JSON.stringify(geom),
+    geometryType: buf > 0 ? "esriGeometryEnvelope" : params.geometryType,
     inSR: String(sr),
     spatialRel: "esriSpatialRelIntersects",
     outFields: params.outFields ?? "*",

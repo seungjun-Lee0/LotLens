@@ -48,7 +48,15 @@ export type Database = {
           lot_plan?: string | null;
           created_at?: Iso;
         };
-        Update: Partial<Database["public"]["Tables"]["addresses"]["Insert"]>;
+        Update: {
+          id?: Uuid;
+          address_text?: string;
+          lat?: number;
+          lng?: number;
+          lot_plan?: string | null;
+          created_at?: Iso;
+        };
+        Relationships: [];
       };
       council_data: {
         Row: {
@@ -73,7 +81,18 @@ export type Database = {
           has_consideration?: boolean;
           retrieved_at?: Iso;
         };
-        Update: Partial<Database["public"]["Tables"]["council_data"]["Insert"]>;
+        Update: {
+          id?: Uuid;
+          address_id?: Uuid | null;
+          module?: Module;
+          source_url?: string;
+          source_name?: string;
+          raw_response?: unknown;
+          risk_level?: RiskLevel | null;
+          has_consideration?: boolean;
+          retrieved_at?: Iso;
+        };
+        Relationships: [];
       };
       reports: {
         Row: {
@@ -88,7 +107,13 @@ export type Database = {
           narrative: unknown;
           generated_at?: Iso;
         };
-        Update: Partial<Database["public"]["Tables"]["reports"]["Insert"]>;
+        Update: {
+          id?: Uuid;
+          address_id?: Uuid | null;
+          narrative?: unknown;
+          generated_at?: Iso;
+        };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

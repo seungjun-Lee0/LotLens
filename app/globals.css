@@ -116,7 +116,7 @@
 
   /* Glassmorphism — tuned for subtle use on light surfaces */
   --glass-bg: rgba(255, 255, 255, 0.65);
-  --glass-bg-strong: rgba(255, 255, 255, 0.82);
+  --glass-bg-strong: rgba(255, 255, 255, 0.92);
   --glass-border: rgba(255, 255, 255, 0.6);
   --glass-shadow: 0 8px 32px -8px rgba(15, 23, 42, 0.08),
                   0 2px 8px -2px rgba(15, 23, 42, 0.06);
@@ -172,7 +172,7 @@
   --apple-gray: #98989d;
 
   --glass-bg: rgba(20, 22, 30, 0.55);
-  --glass-bg-strong: rgba(20, 22, 30, 0.75);
+  --glass-bg-strong: rgba(20, 22, 30, 0.92);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.5),
                   0 2px 8px -2px rgba(0, 0, 0, 0.4);
@@ -222,8 +222,8 @@
   .glass-strong {
     background-color: var(--glass-bg-strong);
     border: 1px solid var(--glass-border);
-    backdrop-filter: saturate(200%) blur(30px);
-    -webkit-backdrop-filter: saturate(200%) blur(30px);
+    backdrop-filter: saturate(200%) blur(40px);
+    -webkit-backdrop-filter: saturate(200%) blur(40px);
     box-shadow: var(--glass-shadow);
   }
   /* Colored glass tint — pass --tint as the base color */

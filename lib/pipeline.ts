@@ -165,6 +165,87 @@ export type GenerateReportResult = {
   elapsedMs: number;
 };
 
+// ── Report payload loader (consumed by /report/[id]/page.tsx + PDF) ─────
+
+export type ReportModuleRow = {
+  module: Module;
+  riskLevel: RiskLevel | null;
+  hasConsideration: boolean;
+  sourceName: string;
+  sourceUrl: string;
+  raw: unknown;
+};
+
+export type ReportPayload = {
+  report: { id: string; generated_at: string; narrative: ReportNarrative };
+  address: Address;
+  modules: ReportModuleRow[];
+  considerationCount: number;
+};
+
+export async function loadReportPayload(
+  reportId: string,
+): Promise<ReportPayload | null> {
+  const sb = getServerSupabase();
+  const { data: report } = await sb
+    .from("reports")
+    .select("id,address_id,narrative,generated_at")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (!report || !report.address_id) return null;
+
+  const [addrRes, dataRes] = await Promise.all([
+    sb
+      .from("addresses")
+      .select("id,address_text,lat,lng")
+      .eq("id", report.address_id)
+      .single(),
+    sb
+      .from("council_data")
+      .select(
+        "module,risk_level,has_consideration,source_name,source_url,raw_response",
+      )
+      .eq("address_id", report.address_id),
+  ]);
+  if (addrRes.error || !addrRes.data) return null;
+  if (dataRes.error) throw new Error(dataRes.error.message);
+
+  const ordered: Module[] = [
+    "flooding",
+    "bushfire",
+    "heritage",
+    "easements",
+    "zoning",
+  ];
+  const byModule = new Map(
+    (dataRes.data ?? []).map((r) => [r.module as Module, r]),
+  );
+  const modules: ReportModuleRow[] = ordered
+    .filter((m) => byModule.has(m))
+    .map((m) => {
+      const r = byModule.get(m)!;
+      return {
+        module: m,
+        riskLevel: r.risk_level,
+        hasConsideration: r.has_consideration,
+        sourceName: r.source_name,
+        sourceUrl: r.source_url,
+        raw: r.raw_response,
+      };
+    });
+
+  return {
+    report: {
+      id: report.id,
+      generated_at: report.generated_at,
+      narrative: (report.narrative ?? {}) as ReportNarrative,
+    },
+    address: addrRes.data as Address,
+    modules,
+    considerationCount: modules.filter((m) => m.hasConsideration).length,
+  };
+}
+
 export async function generateReportForAddress(
   addressId: string,
 ): Promise<GenerateReportResult> {

@@ -59,7 +59,8 @@ export async function fetchEasementsData(
     geometryType: "esriGeometryPoint",
     inSR: 4326,
     outFields: "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION",
-    returnGeometry: false,
+    returnGeometry: true,
+    maxAllowableOffset: 0.0001,
     // ~5m envelope. The HV easement polygons are thin corridors and the
     // EPSG:28356→4326 reprojection drifts a few decimetres; exact point
     // queries miss boundaries. 5m stays well inside a typical lot width.

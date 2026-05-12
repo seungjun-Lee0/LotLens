@@ -4,6 +4,7 @@ import { RiskBadge } from "@/components/report/risk-badge";
 import { ModuleMap } from "@/components/report/module-map";
 import type { ModuleNarrative } from "@/lib/anthropic";
 import { MODULE_META } from "@/lib/module-meta";
+import { extractOverlays } from "@/lib/overlays";
 import type { ReportModuleRow } from "@/lib/pipeline";
 import type { Module, RiskLevel } from "@/lib/supabase";
 
@@ -179,7 +180,13 @@ export function ModuleSection({
 
       {/* Hero map */}
       <div className="px-6 pt-6 sm:px-10">
-        <ModuleMap lat={lat} lng={lng} tint={meta.tint} className="h-64" />
+        <ModuleMap
+          lat={lat}
+          lng={lng}
+          tint={meta.tint}
+          className="h-64"
+          overlays={extractOverlays(row.module, row.raw)}
+        />
       </div>
 
       {/* Status + source + AI summary */}
@@ -298,10 +305,6 @@ export function ModuleSection({
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-[10.5px] leading-relaxed text-muted-foreground">
-              Map overlay polygons will land in a follow-up. Today the map shows
-              the property location only.
-            </p>
           </div>
 
           {narrative?.sources?.length ? (

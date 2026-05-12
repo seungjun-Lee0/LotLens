@@ -112,7 +112,10 @@ export async function fetchFloodingData(
     geometry: point,
     geometryType: "esriGeometryPoint" as const,
     inSR: 4326,
-    returnGeometry: false,
+    returnGeometry: true,
+    // Polygon vertex simplification ~10m — invisible at the map zoom we use
+    // but cuts payload from MBs to ~10s of KB.
+    maxAllowableOffset: 0.0001,
   };
 
   const [overall, h2022, h2011] = await Promise.all([

@@ -13,8 +13,11 @@ import type { Module } from "@/lib/supabase";
 
 export type LegendItem = {
   label: string;
-  /** CSS color expression. */
+  /** CSS color expression (CSS-var based, for the web view). */
   color: string;
+  /** Hex equivalent for environments that can't resolve CSS variables
+   * (React-PDF). Should track `color` semantically. */
+  colorHex: string;
 };
 
 export type ModuleMeta = {
@@ -23,6 +26,8 @@ export type ModuleMeta = {
   question: string;
   /** Module accent colour — used for the map pin, icon, swatches. */
   tint: string;
+  /** Hex equivalent of `tint` for React-PDF. */
+  tintHex: string;
   icon: LucideIcon;
   /** Attribution shown above "Things to know". */
   sourceLabel: string;
@@ -36,11 +41,27 @@ export type ModuleMeta = {
   legend: LegendItem[];
 };
 
+// Apple system color hex equivalents — used wherever React-PDF can't
+// resolve CSS variables. Match :root in app/globals.css.
+export const APPLE_HEX = {
+  blue:   "#007aff",
+  green:  "#34c759",
+  indigo: "#5856d6",
+  orange: "#ff9500",
+  pink:   "#ff2d55",
+  purple: "#af52de",
+  red:    "#ff3b30",
+  teal:   "#5ac8fa",
+  yellow: "#ffcc00",
+  gray:   "#8e8e93",
+};
+
 export const MODULE_META: Record<Module, ModuleMeta> = {
   flooding: {
     name: "Flooding",
     question: "Is the property in a potential flood area?",
     tint: "var(--apple-blue)",
+    tintHex: APPLE_HEX.blue,
     icon: Waves,
     sourceLabel: "Brisbane City Council — Flood Awareness Mapping",
     thingsToKnow: [
@@ -49,10 +70,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "Government flood risk models are broad guides that estimate flood probability and acceptable risk but do not guarantee site-specific accuracy. Newly subdivided lots may have already considered flooding risk and been built above acceptable flood levels. For specific concerns, consult your local authority or a qualified professional.",
     legend: [
-      { label: "High risk",     color: "var(--apple-red)" },
-      { label: "Medium risk",   color: "var(--apple-orange)" },
-      { label: "Low risk",      color: "var(--apple-teal)" },
-      { label: "Very low risk", color: "var(--apple-yellow)" },
+      { label: "High risk",     color: "var(--apple-red)",    colorHex: APPLE_HEX.red },
+      { label: "Medium risk",   color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
+      { label: "Low risk",      color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
+      { label: "Very low risk", color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
     ],
   },
 
@@ -60,6 +81,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     name: "Bushfire",
     question: "Is the property in a potential bushfire area?",
     tint: "var(--apple-orange)",
+    tintHex: APPLE_HEX.orange,
     icon: Flame,
     sourceLabel: "Brisbane City Council — City Plan Bushfire overlay",
     thingsToKnow: [
@@ -68,10 +90,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "BCC's overlay is council-scope. Some properties on the statewide Queensland Fire Department mapping fall outside the council overlay. For high-stakes decisions, also check the QFD bushfire prone area map.",
     legend: [
-      { label: "Very high potential",   color: "var(--apple-red)" },
-      { label: "High hazard area",      color: "var(--apple-orange)" },
-      { label: "High hazard buffer",    color: "var(--apple-yellow)" },
-      { label: "Medium hazard area",    color: "var(--apple-teal)" },
+      { label: "Very high potential",   color: "var(--apple-red)",    colorHex: APPLE_HEX.red },
+      { label: "High hazard area",      color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
+      { label: "High hazard buffer",    color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
+      { label: "Medium hazard area",    color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
     ],
   },
 
@@ -79,6 +101,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     name: "Heritage & Character",
     question: "Is the property in a heritage or character area?",
     tint: "var(--apple-purple)",
+    tintHex: APPLE_HEX.purple,
     icon: Landmark,
     sourceLabel: "Brisbane City Council — Heritage + Character overlays",
     thingsToKnow: [
@@ -87,9 +110,9 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "Even properties outside both overlays can carry character significance if the house was built before 1947. Council can take an interest in pre-1947 demolition applications case-by-case.",
     legend: [
-      { label: "State heritage area", color: "var(--apple-purple)" },
-      { label: "Local heritage area", color: "var(--apple-pink)" },
-      { label: "Character (pre-1947)", color: "var(--apple-indigo)" },
+      { label: "State heritage area",  color: "var(--apple-purple)", colorHex: APPLE_HEX.purple },
+      { label: "Local heritage area",  color: "var(--apple-pink)",   colorHex: APPLE_HEX.pink },
+      { label: "Character (pre-1947)", color: "var(--apple-indigo)", colorHex: APPLE_HEX.indigo },
     ],
   },
 
@@ -97,6 +120,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     name: "Easements",
     question: "What access rights exist over the property?",
     tint: "var(--apple-teal)",
+    tintHex: APPLE_HEX.teal,
     icon: ScrollText,
     sourceLabel: "Brisbane City Council — public overlay (NOT title search)",
     thingsToKnow: [
@@ -105,7 +129,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "This module shows only Council-mapped high-voltage easements. The majority of easements — drainage, sewerage, access, party walls — are recorded on land title and require a QLD Title Search via a conveyancer to discover. The absence of a result here is not proof the property has no easements.",
     legend: [
-      { label: "High-voltage easement", color: "var(--apple-teal)" },
+      { label: "High-voltage easement", color: "var(--apple-teal)", colorHex: APPLE_HEX.teal },
     ],
   },
 
@@ -113,6 +137,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     name: "Zoning",
     question: "What can the land be used for?",
     tint: "var(--apple-indigo)",
+    tintHex: APPLE_HEX.indigo,
     icon: LayoutGrid,
     sourceLabel: "Brisbane City Council — City Plan 2014 Zoning",
     thingsToKnow: [
@@ -121,11 +146,11 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "Zone codes alone don't tell the full story. Each zone has a code in the City Plan that specifies development standards. Read it alongside any precinct overlay before making any subdivision or building decision.",
     legend: [
-      { label: "Centre",                   color: "var(--apple-red)" },
-      { label: "Mixed use",                color: "var(--apple-orange)" },
-      { label: "General residential",      color: "var(--apple-yellow)" },
-      { label: "Open space / Recreation",  color: "var(--apple-green)" },
-      { label: "Industry / Other",         color: "var(--apple-indigo)" },
+      { label: "Centre",                  color: "var(--apple-red)",    colorHex: APPLE_HEX.red },
+      { label: "Mixed use",               color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
+      { label: "General residential",     color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
+      { label: "Open space / Recreation", color: "var(--apple-green)",  colorHex: APPLE_HEX.green },
+      { label: "Industry / Other",        color: "var(--apple-indigo)", colorHex: APPLE_HEX.indigo },
     ],
   },
 };

@@ -1,28 +1,13 @@
-import {
-  Flame,
-  Landmark,
-  LayoutGrid,
-  ScrollText,
-  Waves,
-  type LucideIcon,
-} from "lucide-react";
+import { Check, TriangleAlert } from "lucide-react";
 
 import { RiskBadge } from "@/components/report/risk-badge";
 import { ModuleMap } from "@/components/report/module-map";
 import type { ModuleNarrative } from "@/lib/anthropic";
+import { MODULE_META } from "@/lib/module-meta";
 import type { ReportModuleRow } from "@/lib/pipeline";
 import type { Module, RiskLevel } from "@/lib/supabase";
 
-const MODULE_META: Record<
-  Module,
-  { name: string; icon: LucideIcon; tint: string; sourceLabel: string }
-> = {
-  flooding:  { name: "Flooding",            icon: Waves,       tint: "var(--apple-blue)",   sourceLabel: "BCC Flood Awareness Mapping" },
-  bushfire:  { name: "Bushfire",            icon: Flame,       tint: "var(--apple-orange)", sourceLabel: "BCC City Plan — Bushfire overlay" },
-  heritage:  { name: "Heritage & Character", icon: Landmark,    tint: "var(--apple-purple)", sourceLabel: "BCC heritage + character overlays" },
-  easements: { name: "Easements",           icon: ScrollText,  tint: "var(--apple-teal)",   sourceLabel: "BCC HV easements overlay (public only)" },
-  zoning:    { name: "Zoning",              icon: LayoutGrid,  tint: "var(--apple-indigo)", sourceLabel: "BCC City Plan — Zoning" },
-};
+// ── Per-module facts panel ────────────────────────────────────────────────
 
 function ModuleFacts({
   module,
@@ -36,18 +21,16 @@ function ModuleFacts({
     case "flooding": {
       const ft = raw.floodType as string | null;
       const ev = Array.isArray(raw.historicEvents)
-        ? (raw.historicEvents as { event: string; sourceName: string | null }[])
+        ? (raw.historicEvents as { event: string }[])
         : [];
       return (
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           <dt className="text-muted-foreground">Flood type</dt>
           <dd className="font-medium">{ft ?? "—"}</dd>
           {ev.length > 0 && (
             <>
               <dt className="text-muted-foreground">Historic events</dt>
-              <dd className="font-medium">
-                {ev.map((e) => e.event).join(", ")}
-              </dd>
+              <dd className="font-medium">{ev.map((e) => e.event).join(", ")}</dd>
             </>
           )}
         </dl>
@@ -57,7 +40,7 @@ function ModuleFacts({
       const cat = raw.hazardCategory as string | null;
       const code = raw.hazardCode as string | null;
       return (
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           <dt className="text-muted-foreground">Hazard category</dt>
           <dd className="font-medium">{cat ?? "—"}</dd>
           <dt className="text-muted-foreground">Code</dt>
@@ -67,14 +50,11 @@ function ModuleFacts({
     }
     case "heritage": {
       const entries = Array.isArray(raw.entries)
-        ? (raw.entries as {
-            type: string;
-            description: string | null;
-          }[])
+        ? (raw.entries as { type: string; description: string | null }[])
         : [];
       if (entries.length === 0) return null;
       return (
-        <ul className="flex flex-col gap-1 text-[12px]">
+        <ul className="flex flex-col gap-1 text-[12.5px]">
           {entries.map((e, i) => (
             <li key={i} className="flex items-center gap-2">
               <span
@@ -87,9 +67,7 @@ function ModuleFacts({
               >
                 {e.type}
               </span>
-              <span className="text-muted-foreground">
-                {e.description ?? "—"}
-              </span>
+              <span className="text-muted-foreground">{e.description ?? "—"}</span>
             </li>
           ))}
         </ul>
@@ -97,21 +75,12 @@ function ModuleFacts({
     }
     case "easements": {
       const desc = raw.description as string | null;
-      const scope = raw.scopeNote as string | null;
+      if (!desc) return null;
       return (
-        <div className="flex flex-col gap-2 text-[12px]">
-          {desc && (
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-              <dt className="text-muted-foreground">Layer</dt>
-              <dd className="font-medium">{desc}</dd>
-            </dl>
-          )}
-          {scope && (
-            <p className="rounded-lg bg-foreground/5 px-3 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
-              {scope}
-            </p>
-          )}
-        </div>
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">Layer</dt>
+          <dd className="font-medium">{desc}</dd>
+        </dl>
       );
     }
     case "zoning": {
@@ -119,7 +88,7 @@ function ModuleFacts({
       const prec = raw.zonePrecinct as string | null;
       const lvl1 = raw.lvl1Zone as string | null;
       return (
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]">
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           <dt className="text-muted-foreground">Zone</dt>
           <dd className="font-medium">{prec ?? code ?? "—"}</dd>
           <dt className="text-muted-foreground">Family</dt>
@@ -129,6 +98,41 @@ function ModuleFacts({
     }
   }
 }
+
+// ── Status pill (Develo "CONSIDERATIONS IDENTIFIED" / "NO CONSIDERATIONS") ─
+
+function StatusPill({
+  hasConsideration,
+  tint,
+}: {
+  hasConsideration: boolean;
+  tint: string;
+}) {
+  const bg = hasConsideration
+    ? `color-mix(in oklab, ${tint} 18%, transparent)`
+    : "color-mix(in oklab, var(--apple-green) 14%, transparent)";
+  const border = hasConsideration
+    ? `color-mix(in oklab, ${tint} 35%, transparent)`
+    : "color-mix(in oklab, var(--apple-green) 35%, transparent)";
+  const color = hasConsideration ? tint : "var(--apple-green)";
+  const Icon = hasConsideration ? TriangleAlert : Check;
+  return (
+    <div
+      className="inline-flex items-center gap-2.5 rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
+      style={{ background: bg, borderWidth: 1, borderStyle: "solid", borderColor: border, color }}
+    >
+      <span
+        className="flex size-5 items-center justify-center rounded-full"
+        style={{ background: color, color: "white" }}
+      >
+        <Icon className="size-3" strokeWidth={3} />
+      </span>
+      {hasConsideration ? "Considerations identified" : "No considerations identified"}
+    </div>
+  );
+}
+
+// ── Section ───────────────────────────────────────────────────────────────
 
 export function ModuleSection({
   row,
@@ -150,8 +154,9 @@ export function ModuleSection({
       : undefined;
 
   return (
-    <section className="rounded-3xl border border-border/60 bg-card/80 p-6 shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(15,23,42,0.12)] backdrop-blur-sm sm:p-8">
-      <div className="flex items-start justify-between gap-4">
+    <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(15,23,42,0.12)]">
+      {/* Header: name + clarifying question */}
+      <div className="flex flex-col gap-3 px-6 pt-7 sm:flex-row sm:items-end sm:justify-between sm:px-10 sm:pt-9">
         <div className="flex items-center gap-3">
           <div
             className="flex size-11 items-center justify-center rounded-2xl"
@@ -163,46 +168,94 @@ export function ModuleSection({
           >
             <Icon className="size-5" />
           </div>
-          <div>
-            <div className="text-[16px] font-semibold tracking-tight">
-              {meta.name}
-            </div>
-            <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
-              {meta.sourceLabel}
-            </div>
-          </div>
+          <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+            {meta.name}
+          </h2>
         </div>
-        <RiskBadge level={risk} />
+        <p className="text-balance text-[14.5px] leading-snug text-muted-foreground sm:text-right sm:text-[15px]">
+          {meta.question}
+        </p>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
-        {/* Narrative */}
-        <div className="flex flex-col gap-4">
-          {narrative ? (
-            <>
-              <p className="text-[18px] leading-snug tracking-tight text-foreground text-pretty">
-                {narrative.summary}
-              </p>
-              <p className="text-[14px] leading-relaxed text-muted-foreground text-pretty">
-                {narrative.detail}
-              </p>
-            </>
-          ) : (
-            <p className="text-muted-foreground text-[14px]">
-              No narrative was generated for this module.
-            </p>
-          )}
+      {/* Hero map */}
+      <div className="px-6 pt-6 sm:px-10">
+        <ModuleMap lat={lat} lng={lng} tint={meta.tint} className="h-64" />
+      </div>
 
-          <div className="mt-1 flex flex-col gap-3">
-            <ModuleFacts module={row.module} raw={raw} />
+      {/* Status + source + AI summary */}
+      <div className="flex flex-col gap-4 px-6 pt-6 sm:px-10">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <StatusPill hasConsideration={row.hasConsideration} tint={meta.tint} />
+          <RiskBadge level={risk} size="sm" />
+          <span className="text-[11.5px] uppercase tracking-[0.14em] text-muted-foreground">
+            Sources: {meta.sourceLabel}
+          </span>
+        </div>
+
+        {narrative?.summary && (
+          <p
+            className="text-[16.5px] leading-snug text-foreground text-pretty"
+            style={{ fontWeight: 500 }}
+          >
+            {narrative.summary}
+          </p>
+        )}
+      </div>
+
+      {/* Two-column body: Things to know + Note (L) / Questions + Legend (R) */}
+      <div className="grid grid-cols-1 gap-x-10 gap-y-8 px-6 pb-8 pt-7 sm:px-10 sm:pb-10 lg:grid-cols-[1fr_280px]">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Things to know
+            </h3>
+            {meta.thingsToKnow.map((p, i) => (
+              <p
+                key={i}
+                className="text-[14px] leading-relaxed text-foreground/80 text-pretty"
+              >
+                {p}
+              </p>
+            ))}
+            {narrative?.detail && (
+              <div
+                className="rounded-2xl p-4"
+                style={{
+                  background: `color-mix(in oklab, ${meta.tint} 6%, var(--muted))`,
+                  borderWidth: 1,
+                  borderStyle: "solid",
+                  borderColor: `color-mix(in oklab, ${meta.tint} 16%, transparent)`,
+                }}
+              >
+                <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.16em]" style={{ color: meta.tint }}>
+                  For this property
+                </div>
+                <p className="text-[13.5px] leading-relaxed text-foreground/85 text-pretty">
+                  {narrative.detail}
+                </p>
+              </div>
+            )}
           </div>
 
+          {(raw && Object.keys(raw).length > 0) && (
+            <div className="rounded-2xl bg-foreground/[0.04] p-4">
+              <ModuleFacts module={row.module} raw={raw} />
+            </div>
+          )}
+
+          <p className="text-[12px] leading-relaxed text-muted-foreground text-pretty">
+            <span className="font-semibold text-foreground/80">Note: </span>
+            {meta.note}
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-6">
           {narrative?.questions_to_ask?.length ? (
-            <div className="mt-2">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <div>
+              <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Questions to ask
-              </div>
-              <ul className="flex flex-col gap-1.5 text-[13.5px] leading-relaxed text-foreground/90">
+              </h3>
+              <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-foreground/90">
                 {narrative.questions_to_ask.map((q, i) => (
                   <li key={i} className="flex gap-2">
                     <span
@@ -216,19 +269,54 @@ export function ModuleSection({
             </div>
           ) : null}
 
+          <div>
+            <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Legend
+            </h3>
+            <ul className="flex flex-col gap-2 text-[12.5px]">
+              <li className="flex items-center gap-2">
+                <span
+                  className="size-3 rounded-sm"
+                  style={{
+                    background: meta.tint,
+                    boxShadow: "0 0 0 1.5px white",
+                    outline: `1px solid color-mix(in oklab, ${meta.tint} 60%, transparent)`,
+                  }}
+                />
+                <span className="text-foreground/80">Selected property</span>
+              </li>
+              {meta.legend.map((l) => (
+                <li key={l.label} className="flex items-center gap-2">
+                  <span
+                    className="size-3 rounded-sm"
+                    style={{
+                      background: `color-mix(in oklab, ${l.color} 65%, transparent)`,
+                      outline: `1px solid color-mix(in oklab, ${l.color} 70%, transparent)`,
+                    }}
+                  />
+                  <span className="text-foreground/80">{l.label}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-[10.5px] leading-relaxed text-muted-foreground">
+              Map overlay polygons will land in a follow-up. Today the map shows
+              the property location only.
+            </p>
+          </div>
+
           {narrative?.sources?.length ? (
-            <div className="mt-2">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Sources
-              </div>
-              <ul className="flex flex-col gap-1.5 text-[12.5px]">
+            <div>
+              <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Source links
+              </h3>
+              <ul className="flex flex-col gap-1.5 text-[12px]">
                 {Array.from(new Set(narrative.sources)).map((url) => (
                   <li key={url}>
                     <a
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[var(--apple-blue)] hover:underline"
+                      className="break-all text-[var(--apple-blue)] hover:underline"
                     >
                       {url}
                     </a>
@@ -237,15 +325,6 @@ export function ModuleSection({
               </ul>
             </div>
           ) : null}
-        </div>
-
-        {/* Map */}
-        <div className="flex flex-col gap-2">
-          <ModuleMap lat={lat} lng={lng} tint={meta.tint} />
-          <p className="text-[11px] text-muted-foreground">
-            Property pin only — overlay polygons available in a future
-            iteration. {row.sourceName} is the data source.
-          </p>
         </div>
       </div>
     </section>

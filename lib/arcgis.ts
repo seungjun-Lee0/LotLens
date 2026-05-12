@@ -33,6 +33,13 @@ export type QueryArcGISParams = {
    * 0 = exact point query.
    */
   bufferDegrees?: number;
+  /**
+   * Tells ArcGIS to simplify returned geometry to within this many `inSR`
+   * units of the original. ~10 meters in EPSG:28356 cuts polygon vertex
+   * count dramatically without visible loss at map zoom levels we use.
+   * Only meaningful when `returnGeometry` is true. Default 0 = unsimplified.
+   */
+  maxAllowableOffset?: number;
 };
 
 export class ArcGISError extends Error {
@@ -83,7 +90,13 @@ export async function queryArcGIS(
     spatialRel: "esriSpatialRelIntersects",
     outFields: params.outFields ?? "*",
     returnGeometry: String(params.returnGeometry ?? false),
+    outSR: "4326",
   });
+  if (params.returnGeometry && params.maxAllowableOffset !== undefined) {
+    // The offset is expressed in *output* SR units. We outSR=4326 so the
+    // offset is in degrees; ~9e-5 ≈ 10m at Brisbane's latitude.
+    search.set("maxAllowableOffset", String(params.maxAllowableOffset));
+  }
   const url = `${endpoint}?${search.toString()}`;
   if (DEBUG) console.log("[arcgis] GET", url);
 

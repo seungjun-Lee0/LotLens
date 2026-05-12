@@ -75,7 +75,8 @@ export async function fetchBushfireData(
     geometryType: "esriGeometryPoint",
     inSR: 4326,
     outFields: "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION",
-    returnGeometry: false,
+    returnGeometry: true,
+    maxAllowableOffset: 0.0001,
   });
   const a = attrs(fc.features[0]);
   const hazardCategory =

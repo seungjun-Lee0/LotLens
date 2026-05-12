@@ -67,7 +67,10 @@ export async function fetchZoningData(
     geometryType: "esriGeometryPoint",
     inSR: 4326,
     outFields: "ZONE_CODE,ZONE_PREC_DESC,LVL1_ZONE,LVL2_ZONE",
-    returnGeometry: false,
+    returnGeometry: true,
+    // Zone polygons follow cadastre lots — smaller than flood/heritage
+    // polygons and want sharper boundaries. ~3m simplification.
+    maxAllowableOffset: 0.00003,
   });
   const a = attrs(fc.features[0]);
   const zoneCode = str(a.ZONE_CODE);

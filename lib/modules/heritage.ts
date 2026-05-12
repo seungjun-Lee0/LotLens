@@ -82,7 +82,8 @@ export async function fetchHeritageData(
     geometryType: "esriGeometryPoint" as const,
     inSR: 4326,
     outFields: "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION",
-    returnGeometry: false,
+    returnGeometry: true,
+    maxAllowableOffset: 0.0001,
   };
   const [state, local, character] = await Promise.all([
     queryArcGIS(STATE_HERITAGE, common),

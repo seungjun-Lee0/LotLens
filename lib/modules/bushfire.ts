@@ -43,7 +43,10 @@ export type BushfireResult = {
   hazardCode: string | null;
   hasConsideration: boolean;
   sources: BushfireSource[];
+  /** Point-query GeoJSON — drives classification. */
   raw: unknown;
+  /** Envelope-query GeoJSON (~280 m around property) for map context. */
+  context: unknown;
 };
 
 function attrs(
@@ -70,14 +73,26 @@ export async function fetchBushfireData(
   lat: number,
   lng: number,
 ): Promise<BushfireResult> {
-  const fc = await queryArcGIS(BUSHFIRE_OVERLAY, {
-    geometry: { x: lng, y: lat, spatialReference: 4326 },
-    geometryType: "esriGeometryPoint",
-    inSR: 4326,
-    outFields: "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION",
-    returnGeometry: true,
-    maxAllowableOffset: 0.0001,
-  });
+  const point = { x: lng, y: lat, spatialReference: 4326 } as const;
+  const fields = "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION";
+  const [fc, ctx] = await Promise.all([
+    queryArcGIS(BUSHFIRE_OVERLAY, {
+      geometry: point,
+      geometryType: "esriGeometryPoint",
+      inSR: 4326,
+      outFields: fields,
+      returnGeometry: false,
+    }),
+    queryArcGIS(BUSHFIRE_OVERLAY, {
+      geometry: point,
+      geometryType: "esriGeometryPoint",
+      inSR: 4326,
+      outFields: fields,
+      returnGeometry: true,
+      bufferDegrees: 0.0025,
+      maxAllowableOffset: 0.0001,
+    }),
+  ]);
   const a = attrs(fc.features[0]);
   const hazardCategory =
     typeof a.OVL2_DESC === "string" ? a.OVL2_DESC : null;
@@ -97,5 +112,6 @@ export async function fetchBushfireData(
       },
     ],
     raw: fc,
+    context: ctx,
   };
 }

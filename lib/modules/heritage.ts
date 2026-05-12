@@ -50,6 +50,7 @@ export type HeritageResult = {
   hasConsideration: boolean;
   sources: HeritageSource[];
   raw: { state: unknown; local: unknown; character: unknown };
+  context: { state: unknown; local: unknown; character: unknown };
 };
 
 function attrs(
@@ -77,19 +78,32 @@ export async function fetchHeritageData(
   lng: number,
 ): Promise<HeritageResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
-  const common = {
+  const fields = "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION";
+  const pointParams = {
     geometry: point,
     geometryType: "esriGeometryPoint" as const,
     inSR: 4326,
-    outFields: "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION",
+    outFields: fields,
+    returnGeometry: false,
+  };
+  const contextParams = {
+    geometry: point,
+    geometryType: "esriGeometryPoint" as const,
+    inSR: 4326,
+    outFields: fields,
     returnGeometry: true,
+    bufferDegrees: 0.0025,
     maxAllowableOffset: 0.0001,
   };
-  const [state, local, character] = await Promise.all([
-    queryArcGIS(STATE_HERITAGE, common),
-    queryArcGIS(LOCAL_HERITAGE, common),
-    queryArcGIS(CHARACTER, common),
-  ]);
+  const [state, local, character, stateCtx, localCtx, characterCtx] =
+    await Promise.all([
+      queryArcGIS(STATE_HERITAGE, pointParams),
+      queryArcGIS(LOCAL_HERITAGE, pointParams),
+      queryArcGIS(CHARACTER, pointParams),
+      queryArcGIS(STATE_HERITAGE, contextParams),
+      queryArcGIS(LOCAL_HERITAGE, contextParams),
+      queryArcGIS(CHARACTER, contextParams),
+    ]);
 
   const entries: HeritageEntry[] = [
     ...state.features.map((f) => toEntry("state", f)),
@@ -127,5 +141,6 @@ export async function fetchHeritageData(
       },
     ],
     raw: { state, local, character },
+    context: { state: stateCtx, local: localCtx, character: characterCtx },
   };
 }

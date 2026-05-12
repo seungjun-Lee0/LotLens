@@ -52,8 +52,16 @@ export type FloodingResult = {
   historicEvents: HistoricFloodEvent[];
   hasConsideration: boolean;
   sources: FloodingSource[];
-  /** Raw GeoJSON FeatureCollections per layer — stored in council_data.raw_response. */
+  /** Point-query GeoJSON — drives risk classification. */
   raw: {
+    overall: unknown;
+    historic2022: unknown;
+    historic2011: unknown;
+  };
+  /** Envelope-query GeoJSON (~280 m around the property) — for the map
+   * to show surrounding overlay context even when the property itself
+   * isn't inside a polygon. */
+  context: {
     overall: unknown;
     historic2022: unknown;
     historic2011: unknown;
@@ -108,27 +116,37 @@ export async function fetchFloodingData(
   lng: number,
 ): Promise<FloodingResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
-  const common = {
+  const pointParams = {
+    geometry: point,
+    geometryType: "esriGeometryPoint" as const,
+    inSR: 4326,
+    returnGeometry: false,
+  };
+  const contextParams = {
     geometry: point,
     geometryType: "esriGeometryPoint" as const,
     inSR: 4326,
     returnGeometry: true,
-    // Polygon vertex simplification ~10m — invisible at the map zoom we use
-    // but cuts payload from MBs to ~10s of KB.
+    // ~280m envelope around the property — wide enough for street-level
+    // context, tight enough to keep payload bounded.
+    bufferDegrees: 0.0025,
+    // Polygon vertex simplification ~10m — invisible at the map zoom we
+    // use but keeps the envelope payload to ~10s of KB.
     maxAllowableOffset: 0.0001,
   };
 
-  const [overall, h2022, h2011] = await Promise.all([
-    queryArcGIS(FAM_OVERALL, { ...common, outFields: "FLOOD_RISK,FLOOD_TYPE" }),
-    queryArcGIS(HISTORIC_2022, {
-      ...common,
-      outFields: "FLOOD_EVENT,SOURCE_TYPE,SOURCE_NAME,STATUS",
-    }),
-    queryArcGIS(HISTORIC_2011, {
-      ...common,
-      outFields: "FLOOD_EVENT,SOURCE_TYPE,SOURCE_NAME,STATUS",
-    }),
-  ]);
+  const fieldsOverall = "FLOOD_RISK,FLOOD_TYPE";
+  const fieldsHist = "FLOOD_EVENT,SOURCE_TYPE,SOURCE_NAME,STATUS";
+
+  const [overall, h2022, h2011, overallCtx, h2022Ctx, h2011Ctx] =
+    await Promise.all([
+      queryArcGIS(FAM_OVERALL,   { ...pointParams,   outFields: fieldsOverall }),
+      queryArcGIS(HISTORIC_2022, { ...pointParams,   outFields: fieldsHist }),
+      queryArcGIS(HISTORIC_2011, { ...pointParams,   outFields: fieldsHist }),
+      queryArcGIS(FAM_OVERALL,   { ...contextParams, outFields: fieldsOverall }),
+      queryArcGIS(HISTORIC_2022, { ...contextParams, outFields: fieldsHist }),
+      queryArcGIS(HISTORIC_2011, { ...contextParams, outFields: fieldsHist }),
+    ]);
 
   const overallAttrs = asAttrs(overall.features[0]);
   const riskLevel = normalizeRisk(
@@ -171,6 +189,11 @@ export async function fetchFloodingData(
       overall,
       historic2022: h2022,
       historic2011: h2011,
+    },
+    context: {
+      overall: overallCtx,
+      historic2022: h2022Ctx,
+      historic2011: h2011Ctx,
     },
   };
 }

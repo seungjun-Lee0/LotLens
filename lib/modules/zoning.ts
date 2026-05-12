@@ -45,7 +45,10 @@ export type ZoningResult = {
   lvl2Zone: string | null;
   hasConsideration: boolean;
   sources: ZoningSource[];
+  /** Point-query GeoJSON — drives classification. */
   raw: unknown;
+  /** Envelope-query GeoJSON (~280 m around property) for map context. */
+  context: unknown;
 };
 
 function attrs(
@@ -62,16 +65,28 @@ export async function fetchZoningData(
   lat: number,
   lng: number,
 ): Promise<ZoningResult> {
-  const fc = await queryArcGIS(ZONING, {
-    geometry: { x: lng, y: lat, spatialReference: 4326 },
-    geometryType: "esriGeometryPoint",
-    inSR: 4326,
-    outFields: "ZONE_CODE,ZONE_PREC_DESC,LVL1_ZONE,LVL2_ZONE",
-    returnGeometry: true,
-    // Zone polygons follow cadastre lots — smaller than flood/heritage
-    // polygons and want sharper boundaries. ~3m simplification.
-    maxAllowableOffset: 0.00003,
-  });
+  const point = { x: lng, y: lat, spatialReference: 4326 } as const;
+  const fields = "ZONE_CODE,ZONE_PREC_DESC,LVL1_ZONE,LVL2_ZONE";
+  const [fc, ctx] = await Promise.all([
+    queryArcGIS(ZONING, {
+      geometry: point,
+      geometryType: "esriGeometryPoint",
+      inSR: 4326,
+      outFields: fields,
+      returnGeometry: false,
+    }),
+    queryArcGIS(ZONING, {
+      geometry: point,
+      geometryType: "esriGeometryPoint",
+      inSR: 4326,
+      outFields: fields,
+      returnGeometry: true,
+      bufferDegrees: 0.0025,
+      // Zone polygons follow cadastre lots — smaller than flood/heritage
+      // polygons and want sharper boundaries. ~3 m simplification.
+      maxAllowableOffset: 0.00003,
+    }),
+  ]);
   const a = attrs(fc.features[0]);
   const zoneCode = str(a.ZONE_CODE);
   const zonePrecinct = str(a.ZONE_PREC_DESC);
@@ -94,5 +109,6 @@ export async function fetchZoningData(
       },
     ],
     raw: fc,
+    context: ctx,
   };
 }

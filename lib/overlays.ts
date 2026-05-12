@@ -78,7 +78,11 @@ function zoningColor(props: Record<string, unknown>) {
 export function extractOverlays(module: Module, raw: unknown): OverlayFeature[] {
   const out: OverlayFeature[] = [];
   if (!raw || typeof raw !== "object") return out;
-  const inner = (raw as Record<string, unknown>).raw;
+  // Prefer `context` (envelope query — ~280 m around property, always has
+  // features when any exist nearby) over `raw` (point query — only has
+  // features the property is inside).
+  const r = raw as Record<string, unknown>;
+  const inner = r.context ?? r.raw;
   if (inner === undefined) return out;
 
   switch (module) {

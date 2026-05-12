@@ -38,7 +38,10 @@ export type EasementResult = {
   scopeNote: string;
   hasConsideration: boolean;
   sources: EasementSource[];
+  /** Point-query GeoJSON — drives classification. */
   raw: unknown;
+  /** Envelope-query GeoJSON (~280 m around property) for map context. */
+  context: unknown;
 };
 
 const SCOPE_NOTE =
@@ -54,18 +57,31 @@ export async function fetchEasementsData(
   lat: number,
   lng: number,
 ): Promise<EasementResult> {
-  const fc = await queryArcGIS(HIGH_VOLTAGE, {
-    geometry: { x: lng, y: lat, spatialReference: 4326 },
-    geometryType: "esriGeometryPoint",
-    inSR: 4326,
-    outFields: "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION",
-    returnGeometry: true,
-    maxAllowableOffset: 0.0001,
-    // ~5m envelope. The HV easement polygons are thin corridors and the
-    // EPSG:28356→4326 reprojection drifts a few decimetres; exact point
-    // queries miss boundaries. 5m stays well inside a typical lot width.
-    bufferDegrees: 0.00005,
-  });
+  const point = { x: lng, y: lat, spatialReference: 4326 } as const;
+  const fields = "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION";
+  const [fc, ctx] = await Promise.all([
+    queryArcGIS(HIGH_VOLTAGE, {
+      geometry: point,
+      geometryType: "esriGeometryPoint",
+      inSR: 4326,
+      outFields: fields,
+      returnGeometry: false,
+      // ~5m envelope. HV easement polygons are thin corridors and the
+      // EPSG:28356→4326 reprojection drifts a few decimetres; exact
+      // point queries miss boundaries. 5m stays well inside a typical
+      // lot width.
+      bufferDegrees: 0.00005,
+    }),
+    queryArcGIS(HIGH_VOLTAGE, {
+      geometry: point,
+      geometryType: "esriGeometryPoint",
+      inSR: 4326,
+      outFields: fields,
+      returnGeometry: true,
+      bufferDegrees: 0.0025,
+      maxAllowableOffset: 0.0001,
+    }),
+  ]);
   const hit = fc.features[0];
   const description =
     typeof attrs(hit).OVL2_DESC === "string"
@@ -86,5 +102,6 @@ export async function fetchEasementsData(
       },
     ],
     raw: fc,
+    context: ctx,
   };
 }

@@ -10,47 +10,6 @@ import type { OverlayFeature } from "@/lib/overlays";
 // raster basemap (free, no key). Each feature carries a `fillColor` in its
 // properties so a single fill layer paints them all.
 
-function bboxFromFeatures(
-  features: OverlayFeature[],
-  fallback: { lat: number; lng: number },
-): [[number, number], [number, number]] {
-  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
-  function visit(coords: unknown) {
-    if (!Array.isArray(coords)) return;
-    if (typeof coords[0] === "number" && typeof coords[1] === "number") {
-      const lng = coords[0] as number;
-      const lat = coords[1] as number;
-      if (lng < minLng) minLng = lng;
-      if (lng > maxLng) maxLng = lng;
-      if (lat < minLat) minLat = lat;
-      if (lat > maxLat) maxLat = lat;
-      return;
-    }
-    for (const c of coords) visit(c);
-  }
-  for (const f of features) {
-    if (!f.geometry) continue;
-    visit((f.geometry as { coordinates?: unknown }).coordinates);
-  }
-  if (!Number.isFinite(minLng)) {
-    // No features — make a tiny box around the property pin.
-    const pad = 0.0015;
-    return [
-      [fallback.lng - pad, fallback.lat - pad],
-      [fallback.lng + pad, fallback.lat + pad],
-    ];
-  }
-  // Include the property pin in the bounds.
-  if (fallback.lng < minLng) minLng = fallback.lng;
-  if (fallback.lng > maxLng) maxLng = fallback.lng;
-  if (fallback.lat < minLat) minLat = fallback.lat;
-  if (fallback.lat > maxLat) maxLat = fallback.lat;
-  return [
-    [minLng, minLat],
-    [maxLng, maxLat],
-  ];
-}
-
 export function ModuleMap({
   lat,
   lng,
@@ -136,14 +95,19 @@ export function ModuleMap({
           },
         });
 
-        // Fit to overlay extents (with the pin included).
-        const [sw, ne] = bboxFromFeatures(overlays, { lat, lng });
+        // Frame the property, not the polygons. We let polygons extend
+        // outside the viewport — MapLibre clips them for free. A property
+        // pack is about "where is YOUR house and what's on it", not "how
+        // big is the flood polygon as a whole". Picking a tight property-
+        // centric envelope (~250m) keeps every map at a consistent scale
+        // and makes small overlays (e.g. zoning parcels) actually visible.
+        const PAD = 0.0023; // ~250m at Brisbane latitude
         map.fitBounds(
           [
-            [sw[0], sw[1]],
-            [ne[0], ne[1]],
+            [lng - PAD, lat - PAD],
+            [lng + PAD, lat + PAD],
           ],
-          { padding: 28, maxZoom: 17, duration: 0 },
+          { padding: 12, maxZoom: 18, duration: 0 },
         );
       }
     });

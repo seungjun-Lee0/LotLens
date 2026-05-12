@@ -13,12 +13,15 @@ export function ModuleMap({
   lng,
   tint,
   zoom = 15,
+  className = "h-44 w-full",
 }: {
   lat: number;
   lng: number;
   /** Pin colour. Pass a CSS color expression. */
   tint: string;
   zoom?: number;
+  /** Tailwind size classes. Default "h-44 w-full". */
+  className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -69,7 +72,7 @@ export function ModuleMap({
   return (
     <div
       ref={containerRef}
-      className="h-44 w-full overflow-hidden rounded-2xl border border-border/40"
+      className={`${className} overflow-hidden rounded-2xl border border-border/40`}
       style={{ background: "var(--muted)" }}
       aria-label="Property location map"
     />

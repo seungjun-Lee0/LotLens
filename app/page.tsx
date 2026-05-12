@@ -49,25 +49,21 @@ export default function Home() {
             plain English — cited line by line.
           </p>
 
-          {/* Address form — wiring lands in Task 7 */}
-          <AddressForm />
-
-          <div className="flex flex-wrap items-center justify-center gap-2 text-[13px]">
-            <span className="text-muted-foreground">Try one of ours —</span>
-            <button
-              type="button"
-              className="glass rounded-full px-3 py-1.5 font-medium transition hover:bg-foreground/5"
-            >
-              Property A · clean baseline
-            </button>
-            <button
-              type="button"
-              className="glass-tint rounded-full px-3 py-1.5 font-medium"
-              style={{ ["--tint" as string]: "var(--apple-orange)" }}
-            >
-              Property B · 2022 flood case
-            </button>
-          </div>
+          {/* Live: geocode → fetch-overlays → generate-narrative → redirect */}
+          <AddressForm
+            presets={[
+              {
+                label: "Property A · Chermside (clean)",
+                address: "Westfield Chermside, Chermside QLD 4032",
+                tint: "var(--apple-teal)",
+              },
+              {
+                label: "Property B · Rocklea (flood)",
+                address: "250 Sherwood Road, Rocklea QLD 4106",
+                tint: "var(--apple-orange)",
+              },
+            ]}
+          />
         </section>
 
         {/* Module preview grid */}

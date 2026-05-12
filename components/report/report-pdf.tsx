@@ -13,6 +13,7 @@ import {
   Page,
   Text,
   View,
+  Image,
   StyleSheet,
   Link,
   Font,
@@ -42,6 +43,9 @@ const RISK_STYLE: Record<RiskLevel, { label: string; tint: string }> = {
 
 const DISCLAIMER =
   "This report aggregates public data for informational purposes only. It is not legal, financial, or planning advice. Confirm all details with a qualified professional, conveyancer, or the relevant Council before making decisions.";
+
+/** One per module — null when staticmaps render fails on that module. */
+export type ModuleMapPng = { module: Module; png: Buffer | null };
 
 Font.registerHyphenationCallback((w) => [w]);
 
@@ -154,6 +158,16 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: BORDER,
     padding: 14,
+  },
+
+  heroMap: {
+    width: "100%",
+    height: 220,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: BORDER,
+    marginTop: 14,
+    objectFit: "cover",
   },
 
   sectionLabel: {
@@ -324,12 +338,14 @@ function ModulePage({
   hasConsideration,
   narrative,
   raw,
+  mapPng,
 }: {
   module: Module;
   riskLevel: RiskLevel;
   hasConsideration: boolean;
   narrative: ModuleNarrative | undefined;
   raw: RawAttrs | undefined;
+  mapPng: Buffer | null;
 }) {
   const meta = MODULE_META[module];
   const risk = RISK_STYLE[riskLevel];
@@ -346,6 +362,11 @@ function ModulePage({
         <Text style={styles.title}>{meta.name}</Text>
         <Text style={styles.question}>{meta.question}</Text>
       </View>
+
+      {/* Hero map */}
+      {mapPng && (
+        <Image src={mapPng} style={styles.heroMap} />
+      )}
 
       {/* Status + source */}
       <View style={{ marginTop: 14, flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
@@ -585,8 +606,18 @@ function Footer() {
 
 // ── Document ──────────────────────────────────────────────────────────────
 
-export function ReportPDF({ payload }: { payload: ReportPayload }) {
+export function ReportPDF({
+  payload,
+  maps = [],
+}: {
+  payload: ReportPayload;
+  /** Pre-rendered module map PNGs, one per module (Buffer or null). */
+  maps?: ModuleMapPng[];
+}) {
   const { report, address, modules } = payload;
+  const mapByModule = new Map<Module, Buffer | null>();
+  for (const m of maps) mapByModule.set(m.module, m.png);
+
   return (
     <Document title={`PropAI Fact Pack - ${address.address_text}`}>
       <AtAGlancePage payload={payload} />
@@ -601,6 +632,7 @@ export function ReportPDF({ payload }: { payload: ReportPayload }) {
             hasConsideration={m.hasConsideration}
             narrative={report.narrative[m.module]}
             raw={raw}
+            mapPng={mapByModule.get(m.module) ?? null}
           />
         );
       })}

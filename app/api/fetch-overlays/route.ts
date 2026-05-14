@@ -10,6 +10,9 @@ import { fetchOverlaysForAddress } from "@/lib/pipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// 5 modules × (point + envelope) = 10 ArcGIS calls in parallel. Usually
+// 1-3 s; allow a wide safety margin for tile / endpoint slowness.
+export const maxDuration = 60;
 
 const BodySchema = z.object({ addressId: z.string().uuid() });
 

@@ -54,15 +54,16 @@ export function ModuleMap({
     });
     mapRef.current = map;
 
-    // Pin
+    // Small centre dot — gives the eye an exact geocoded point inside
+    // the "selected property" box drawn below as a map layer.
     const el = document.createElement("div");
     el.style.cssText = `
-      width: 18px; height: 18px;
+      width: 8px; height: 8px;
       border-radius: 999px;
       background: ${tint};
       box-shadow:
-        0 0 0 2px white,
-        0 6px 16px -4px color-mix(in oklab, ${tint} 60%, transparent);
+        0 0 0 1.5px white,
+        0 4px 10px -3px color-mix(in oklab, ${tint} 60%, transparent);
     `;
     new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
 
@@ -94,22 +95,54 @@ export function ModuleMap({
             "line-opacity": 0.9,
           },
         });
-
-        // Frame the property, not the polygons. We let polygons extend
-        // outside the viewport — MapLibre clips them for free. A property
-        // pack is about "where is YOUR house and what's on it", not "how
-        // big is the flood polygon as a whole". Picking a tight property-
-        // centric envelope (~250m) keeps every map at a consistent scale
-        // and makes small overlays (e.g. zoning parcels) actually visible.
-        const PAD = 0.0023; // ~250m at Brisbane latitude
-        map.fitBounds(
-          [
-            [lng - PAD, lat - PAD],
-            [lng + PAD, lat + PAD],
-          ],
-          { padding: 12, maxZoom: 18, duration: 0 },
-        );
       }
+
+      // "Selected property" highlight — ~30 m half-width box drawn ABOVE
+      // the overlay polygons so it stays visible regardless of overlay
+      // colour.
+      const PROP = 0.00028;
+      map.addSource("selected-property", {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Polygon",
+            coordinates: [[
+              [lng - PROP, lat - PROP],
+              [lng + PROP, lat - PROP],
+              [lng + PROP, lat + PROP],
+              [lng - PROP, lat + PROP],
+              [lng - PROP, lat - PROP],
+            ]],
+          },
+        },
+      });
+      map.addLayer({
+        id: "selected-property-fill",
+        type: "fill",
+        source: "selected-property",
+        paint: { "fill-color": "#f5c518", "fill-opacity": 0.28 },
+      });
+      map.addLayer({
+        id: "selected-property-line",
+        type: "line",
+        source: "selected-property",
+        paint: { "line-color": "#f5c518", "line-width": 2.4 },
+      });
+      // Frame the property, not the polygons. We let overlay polygons
+      // extend outside the viewport — MapLibre clips them for free. A
+      // property pack is about "where is YOUR house and what's on it",
+      // not "how big is the flood polygon as a whole". A tight ~250 m
+      // envelope keeps every module map at a consistent scale.
+      const PAD = 0.0023; // ~250 m at Brisbane latitude
+      map.fitBounds(
+        [
+          [lng - PAD, lat - PAD],
+          [lng + PAD, lat + PAD],
+        ],
+        { padding: 12, maxZoom: 18, duration: 0 },
+      );
     });
 
     return () => {

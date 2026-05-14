@@ -90,19 +90,38 @@ export async function renderModuleMapPNG({
     }
   }
 
-  // Property pin — two stacked circles to match the web pin look.
-  // Radius is in METRES per staticmaps API. At 280 m envelope rendered to
-  // 1100×540 px, 1 m ≈ 2 px, so 14 m ≈ 28 px (outer), 6 m ≈ 12 px (inner).
-  map.addCircle({
-    coord: [lng, lat],
-    radius: 14,
+  // "Selected property" highlight — mirrors Develo's yellow box on every
+  // module page. We don't have the actual cadastre lot polygon (a paid
+  // Title Search), so we approximate with a ~50×50 m square centred on
+  // the geocoded point. That matches typical Brisbane lot frontage and
+  // is unambiguous enough to read at a glance.
+  const PROP_HALF = 0.00028; // ~30 m at Brisbane latitude
+  const propCoords: [number, number][] = [
+    [lng - PROP_HALF, lat - PROP_HALF],
+    [lng + PROP_HALF, lat - PROP_HALF],
+    [lng + PROP_HALF, lat + PROP_HALF],
+    [lng - PROP_HALF, lat + PROP_HALF],
+    [lng - PROP_HALF, lat - PROP_HALF],
+  ];
+  // White soft halo behind so the highlight stays legible over dark
+  // overlay polygons.
+  map.addPolygon({
+    coords: propCoords,
     color: "#ffffff",
-    fill: "#ffffff",
-    width: 0,
+    width: 4.5,
+    fill: "#ffffff00",
   });
+  map.addPolygon({
+    coords: propCoords,
+    color: "#f5c518", // Apple-ish yellow used by Develo for the same job
+    width: 2.6,
+    fill: withAlpha("#f5c518", 0.28),
+  });
+
+  // Small inner pin in the module tint — exact geocoded point.
   map.addCircle({
     coord: [lng, lat],
-    radius: 7,
+    radius: 3.5,
     color: tint,
     fill: tint,
     width: 0,

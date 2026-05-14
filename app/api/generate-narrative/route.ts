@@ -11,6 +11,9 @@ import { generateReportForAddress } from "@/lib/pipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Currently fast (LLM stub). Set high so swapping in a real Anthropic
+// call later doesn't require route surgery.
+export const maxDuration = 60;
 
 const BodySchema = z.object({ addressId: z.string().uuid() });
 

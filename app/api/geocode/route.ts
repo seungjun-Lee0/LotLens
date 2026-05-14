@@ -14,6 +14,7 @@ import { getServerSupabase } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 const BodySchema = z.object({ address: z.string().min(3).max(300) });
 

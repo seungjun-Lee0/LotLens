@@ -7,6 +7,7 @@ import { MODULE_META } from "@/lib/module-meta";
 import { extractOverlays } from "@/lib/overlays";
 import type { ReportModuleRow } from "@/lib/pipeline";
 import type { Module, RiskLevel } from "@/lib/supabase";
+import { prettyUrl } from "@/lib/url";
 
 // ── Per-module facts panel ────────────────────────────────────────────────
 
@@ -109,24 +110,21 @@ function StatusPill({
   hasConsideration: boolean;
   tint: string;
 }) {
-  const bg = hasConsideration
-    ? `color-mix(in oklab, ${tint} 18%, transparent)`
-    : "color-mix(in oklab, var(--apple-green) 14%, transparent)";
-  const border = hasConsideration
-    ? `color-mix(in oklab, ${tint} 35%, transparent)`
-    : "color-mix(in oklab, var(--apple-green) 35%, transparent)";
   const color = hasConsideration ? tint : "var(--apple-green)";
   const Icon = hasConsideration ? TriangleAlert : Check;
   return (
     <div
-      className="inline-flex items-center gap-2.5 rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em]"
-      style={{ background: bg, borderWidth: 1, borderStyle: "solid", borderColor: border, color }}
+      className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
+      style={{
+        background: `color-mix(in oklab, ${color} 14%, transparent)`,
+        color,
+      }}
     >
       <span
-        className="flex size-5 items-center justify-center rounded-full"
+        className="flex size-4 items-center justify-center rounded-full"
         style={{ background: color, color: "white" }}
       >
-        <Icon className="size-3" strokeWidth={3} />
+        <Icon className="size-2.5" strokeWidth={3.5} />
       </span>
       {hasConsideration ? "Considerations identified" : "No considerations identified"}
     </div>
@@ -308,20 +306,22 @@ export function ModuleSection({
           </div>
 
           {narrative?.sources?.length ? (
-            <div>
+            <div className="min-w-0">
               <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Source links
+                References
               </h3>
-              <ul className="flex flex-col gap-1.5 text-[12px]">
+              <ul className="flex min-w-0 flex-col gap-1.5 text-[12.5px]">
                 {Array.from(new Set(narrative.sources)).map((url) => (
-                  <li key={url}>
+                  <li key={url} className="min-w-0">
                     <a
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="break-all text-[var(--apple-blue)] hover:underline"
+                      className="text-foreground/80 hover:text-foreground"
                     >
-                      {url}
+                      <span className="block truncate" style={{ color: "var(--apple-blue)" }}>
+                        {prettyUrl(url)}
+                      </span>
                     </a>
                   </li>
                 ))}

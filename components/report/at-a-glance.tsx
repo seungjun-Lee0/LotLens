@@ -97,9 +97,6 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                     className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
                     style={{
                       background: `color-mix(in oklab, ${tint} 14%, transparent)`,
-                      borderWidth: 1,
-                      borderStyle: "solid",
-                      borderColor: `color-mix(in oklab, ${tint} 28%, transparent)`,
                       color: tint,
                     }}
                   >

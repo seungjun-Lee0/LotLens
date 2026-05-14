@@ -1,12 +1,8 @@
-// Print PDF rendered server-side via @react-pdf/renderer. Mirrors the
-// information structure of the web /report/[id] page (Develo's per-module
-// layout: title + question, status, AI summary, Things to know, Note,
-// Questions to ask, Legend) while keeping our Apple-glass visual identity
-// in print-appropriate form (solid surfaces — no backdrop-filter in PDF).
-//
-// Maps are intentionally absent: ArcGIS queries currently use
-// returnGeometry=false, so we have no polygons to draw, and a pin-only
-// static map adds nothing in print.
+// Print PDF rendered server-side via @react-pdf/renderer. Premium /
+// Apple-system aesthetic: warm off-white page background (Apple's #f5f5f7),
+// near-black text, muted secondary, hairline dividers, sparing colour use
+// (module tints only on the status pill, legend swatches, and the
+// "for this property" accent). One module = one A4 page.
 
 import {
   Document,
@@ -24,14 +20,15 @@ import { MODULE_META, APPLE_HEX } from "@/lib/module-meta";
 import type { ReportPayload } from "@/lib/pipeline";
 import type { Module, RiskLevel } from "@/lib/supabase";
 
-// ── Tokens ────────────────────────────────────────────────────────────────
+// ── Apple-ish tokens (mirrors apple.com / iCloud system surfaces) ────────
 
-const TEXT_PRIMARY = "#0f1116";
-const TEXT_BODY = "#3a3a44";
-const TEXT_MUTED = APPLE_HEX.gray;
-const PAGE_BG = "#fafafa";
+const TEXT_PRIMARY = "#1d1d1f"; // Apple primary label
+const TEXT_BODY = "#3c3c43";    // Apple secondary label on light
+const TEXT_MUTED = "#86868b";   // Apple tertiary / hint
+const PAGE_BG = "#f5f5f7";      // apple.com page bg
 const SURFACE = "#ffffff";
-const BORDER = "#e6e7eb";
+const HAIRLINE = "#d2d2d7";     // Apple separator
+const PANEL_BG = "#fbfbfd";     // very light surface for callouts
 
 const RISK_STYLE: Record<RiskLevel, { label: string; tint: string }> = {
   high:     { label: "High",             tint: APPLE_HEX.red },
@@ -49,7 +46,7 @@ export type ModuleMapPng = { module: Module; png: Buffer | null };
 
 Font.registerHyphenationCallback((w) => [w]);
 
-// ── Tiny helpers ──────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
 
 const BRISBANE_CBD = { lat: -27.4694, lng: 153.0235 };
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -85,19 +82,19 @@ function asArr<T>(v: unknown): T[] {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 48,
-    paddingBottom: 56,
-    paddingHorizontal: 48,
+    paddingTop: 44,
+    paddingBottom: 44,
+    paddingHorizontal: 44,
     fontFamily: "Helvetica",
-    fontSize: 10,
+    fontSize: 9.5,
     color: TEXT_PRIMARY,
     lineHeight: 1.5,
     backgroundColor: PAGE_BG,
   },
 
-  // Eyebrow + big title
+  // ── Eyebrow + headline ────────────────────────────────────────────
   eyebrow: {
-    fontSize: 8,
+    fontSize: 7.5,
     letterSpacing: 1.6,
     color: TEXT_MUTED,
     fontFamily: "Helvetica-Bold",
@@ -105,192 +102,214 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   title: {
-    fontSize: 28,
+    fontSize: 30,
     fontFamily: "Helvetica-Bold",
-    lineHeight: 1.1,
+    lineHeight: 1.05,
     color: TEXT_PRIMARY,
+    letterSpacing: -0.4,
   },
   question: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: 6,
+    fontSize: 11,
     color: TEXT_BODY,
+    lineHeight: 1.4,
   },
 
-  // Status pill (Considerations identified / All clear)
-  statusPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 0.8,
-    marginRight: 8,
-  },
-  statusDot: { width: 8, height: 8, borderRadius: 999, marginRight: 6 },
-  statusLabel: {
-    fontSize: 8.5,
-    fontFamily: "Helvetica-Bold",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-
-  riskPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 999,
-    borderWidth: 0.6,
-  },
-  riskLabel: { fontSize: 8, fontFamily: "Helvetica-Bold" },
-
-  sourceLine: {
-    fontSize: 8,
-    letterSpacing: 1.2,
-    color: TEXT_MUTED,
-    textTransform: "uppercase",
-  },
-
-  surface: {
-    backgroundColor: SURFACE,
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: BORDER,
-    padding: 14,
-  },
-
+  // ── Map ────────────────────────────────────────────────────────────
   heroMap: {
     width: "100%",
-    height: 220,
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: BORDER,
+    height: 150,
+    borderRadius: 10,
     marginTop: 14,
     objectFit: "cover",
   },
 
-  sectionLabel: {
+  // ── Status + sources strip ─────────────────────────────────────────
+  metaRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+    borderRadius: 999,
+    borderWidth: 0.6,
+    marginRight: 8,
+  },
+  statusDot: { width: 6, height: 6, borderRadius: 999, marginRight: 5 },
+  statusLabel: {
     fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  sourceLine: {
+    fontSize: 7.5,
+    letterSpacing: 1.2,
+    color: TEXT_MUTED,
+    textTransform: "uppercase",
+  },
+
+  // ── Lead-in (AI summary) ───────────────────────────────────────────
+  lead: {
+    fontSize: 11.5,
+    fontFamily: "Helvetica-Bold",
+    color: TEXT_PRIMARY,
+    marginTop: 12,
+    lineHeight: 1.32,
+    letterSpacing: -0.1,
+  },
+
+  // ── Section labels ────────────────────────────────────────────────
+  sectionLabel: {
+    fontSize: 7.5,
     letterSpacing: 1.4,
     color: TEXT_MUTED,
     fontFamily: "Helvetica-Bold",
     textTransform: "uppercase",
-    marginBottom: 6,
+    marginBottom: 5,
   },
 
   para: {
-    fontSize: 10,
+    fontSize: 9,
     color: TEXT_BODY,
-    marginBottom: 6,
-  },
-
-  leadInSummary: {
-    fontSize: 12.5,
-    fontFamily: "Helvetica-Bold",
-    color: TEXT_PRIMARY,
-    marginTop: 10,
     marginBottom: 4,
-    lineHeight: 1.35,
+    lineHeight: 1.42,
   },
 
+  // ── "For this property" callout ───────────────────────────────────
   forProperty: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 6,
-    borderWidth: 0.5,
+    marginTop: 8,
+    paddingLeft: 10,
+    borderLeftWidth: 2,
   },
   forPropertyLabel: {
-    fontSize: 7.5,
-    letterSpacing: 1.4,
+    fontSize: 7,
+    letterSpacing: 1.6,
     fontFamily: "Helvetica-Bold",
     textTransform: "uppercase",
     marginBottom: 3,
   },
-  forPropertyText: { fontSize: 9.5, color: TEXT_BODY },
+  forPropertyText: {
+    fontSize: 9,
+    color: TEXT_BODY,
+    lineHeight: 1.42,
+  },
 
+  // ── Facts panel ───────────────────────────────────────────────────
   factsPanel: {
-    marginTop: 10,
-    padding: 10,
+    marginTop: 8,
+    padding: 9,
     borderRadius: 6,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: PANEL_BG,
+    borderWidth: 0.5,
+    borderColor: HAIRLINE,
   },
   factRow: { flexDirection: "row", marginBottom: 2 },
-  factKey: { width: 110, color: TEXT_MUTED, fontSize: 9 },
-  factVal: { flex: 1, fontFamily: "Helvetica-Bold", fontSize: 9, color: TEXT_PRIMARY },
+  factKey: { width: 92, color: TEXT_MUTED, fontSize: 8.5 },
+  factVal: { flex: 1, fontFamily: "Helvetica-Bold", fontSize: 8.5, color: TEXT_PRIMARY },
 
-  noteRow: { marginTop: 10, flexDirection: "row" },
-  noteLabel: { fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY, fontSize: 9 },
-  noteText: { flex: 1, fontSize: 9, color: TEXT_BODY },
+  // ── Note ─────────────────────────────────────────────────────────
+  noteWrap: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: HAIRLINE,
+    flexDirection: "row",
+  },
+  noteLabel: { fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY, fontSize: 8 },
+  noteText: { flex: 1, fontSize: 8, color: TEXT_BODY, lineHeight: 1.4 },
 
-  bullet: { flexDirection: "row", marginBottom: 4 },
-  bulletDot: { width: 10, fontSize: 9 },
-  bulletTxt: { flex: 1, fontSize: 9.5, color: TEXT_PRIMARY },
+  // ── Bullets / lists ───────────────────────────────────────────────
+  bullet: { flexDirection: "row", marginBottom: 3 },
+  bulletDot: { width: 9, fontSize: 8.5 },
+  bulletTxt: { flex: 1, fontSize: 8.5, color: TEXT_PRIMARY, lineHeight: 1.4 },
 
-  legendRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  legendSwatch: { width: 10, height: 10, borderRadius: 2, marginRight: 6 },
-  legendLabel: { fontSize: 9, color: TEXT_BODY },
+  // ── Legend ────────────────────────────────────────────────────────
+  legendRow: { flexDirection: "row", alignItems: "center", marginBottom: 3.5 },
+  legendSwatch: { width: 9, height: 9, borderRadius: 2.5, marginRight: 7 },
+  legendLabel: { fontSize: 8.5, color: TEXT_BODY },
 
-  link: { fontSize: 8.5, color: APPLE_HEX.blue, textDecoration: "none", marginBottom: 2 },
+  link: { fontSize: 7.5, color: APPLE_HEX.blue, textDecoration: "none", marginBottom: 1.5 },
 
-  // Two-column grid wrappers
-  twoCol: { flexDirection: "row", marginTop: 14 },
-  leftCol: { width: "62%", paddingRight: 14 },
-  rightCol: { width: "38%", paddingLeft: 14, borderLeftWidth: 0.5, borderLeftColor: BORDER },
+  // ── Body grid ─────────────────────────────────────────────────────
+  body: { flexDirection: "row", marginTop: 12 },
+  leftCol: { width: "62%", paddingRight: 16 },
+  rightCol: { width: "38%" },
 
-  // At-a-glance
+  // ── At-a-glance bits ──────────────────────────────────────────────
   glanceRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 10,
-    borderRadius: 8,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     backgroundColor: SURFACE,
     borderWidth: 0.5,
-    borderColor: BORDER,
+    borderColor: HAIRLINE,
     marginBottom: 6,
   },
-  glanceSwatch: { width: 18, height: 18, borderRadius: 5, marginRight: 10 },
-  glanceName: { fontFamily: "Helvetica-Bold", fontSize: 11.5, color: TEXT_PRIMARY },
-  glanceSource: { fontSize: 8, color: TEXT_MUTED, marginTop: 1 },
-
-  metaBlock: { marginBottom: 8 },
-  metaLabel: {
-    fontSize: 7.5,
-    letterSpacing: 1.4,
+  glanceSwatch: {
+    width: 14,
+    height: 14,
+    borderRadius: 4,
+    marginRight: 11,
+  },
+  glanceName: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
     color: TEXT_PRIMARY,
+    letterSpacing: -0.1,
+  },
+  glanceSource: { fontSize: 7.5, color: TEXT_MUTED, marginTop: 1, letterSpacing: 0.4 },
+
+  metaBlock: { marginBottom: 11 },
+  metaLabel: {
+    fontSize: 7,
+    letterSpacing: 1.4,
+    color: TEXT_MUTED,
     fontFamily: "Helvetica-Bold",
     textTransform: "uppercase",
     marginBottom: 2,
   },
-  metaValue: { fontSize: 10, color: TEXT_PRIMARY },
+  metaValue: { fontSize: 9.5, color: TEXT_PRIMARY, lineHeight: 1.4 },
 
+  // ── Disclaimer page ───────────────────────────────────────────────
   disclaimerBox: {
     marginTop: 14,
-    padding: 12,
-    borderRadius: 6,
-    backgroundColor: "#f3f4f6",
+    padding: 16,
+    borderRadius: 10,
+    backgroundColor: SURFACE,
+    borderWidth: 0.5,
+    borderColor: HAIRLINE,
   },
   disclaimerLabel: {
-    fontSize: 8,
+    fontSize: 7.5,
     fontFamily: "Helvetica-Bold",
     color: TEXT_PRIMARY,
-    letterSpacing: 1.2,
+    letterSpacing: 1.4,
     textTransform: "uppercase",
-    marginBottom: 4,
+    marginBottom: 5,
   },
-  disclaimerText: { fontSize: 9, color: TEXT_BODY },
+  disclaimerText: { fontSize: 9.5, color: TEXT_BODY, lineHeight: 1.55 },
 
-  divider: { height: 1, backgroundColor: BORDER, marginVertical: 14 },
+  divider: { height: 0.5, backgroundColor: HAIRLINE, marginVertical: 16 },
 
+  // ── Footer ────────────────────────────────────────────────────────
   footer: {
     position: "absolute",
-    bottom: 22,
-    left: 48,
-    right: 48,
+    bottom: 20,
+    left: 44,
+    right: 44,
     flexDirection: "row",
     justifyContent: "space-between",
     fontSize: 7.5,
     color: TEXT_MUTED,
+    letterSpacing: 0.4,
   },
 });
 
@@ -339,6 +358,7 @@ function ModulePage({
   narrative,
   raw,
   mapPng,
+  address,
 }: {
   module: Module;
   riskLevel: RiskLevel;
@@ -346,6 +366,7 @@ function ModulePage({
   narrative: ModuleNarrative | undefined;
   raw: RawAttrs | undefined;
   mapPng: Buffer | null;
+  address: string;
 }) {
   const meta = MODULE_META[module];
   const risk = RISK_STYLE[riskLevel];
@@ -355,21 +376,19 @@ function ModulePage({
   const statusLabel = hasConsideration ? "Considerations identified" : "No considerations identified";
 
   return (
-    <Page size="A4" style={styles.page} wrap>
+    <Page size="A4" style={styles.page}>
       {/* Header */}
       <View>
-        <Text style={styles.eyebrow}>{meta.name.toUpperCase()}</Text>
+        <Text style={styles.eyebrow}>0{moduleIndex(module)} · {meta.name.toUpperCase()}</Text>
         <Text style={styles.title}>{meta.name}</Text>
         <Text style={styles.question}>{meta.question}</Text>
       </View>
 
       {/* Hero map */}
-      {mapPng && (
-        <Image src={mapPng} style={styles.heroMap} />
-      )}
+      {mapPng && <Image src={mapPng} style={styles.heroMap} />}
 
       {/* Status + source */}
-      <View style={{ marginTop: 14, flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+      <View style={styles.metaRow}>
         <View
           style={[
             styles.statusPill,
@@ -379,22 +398,13 @@ function ModulePage({
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
           <Text style={[styles.statusLabel, { color: statusColor }]}>{statusLabel}</Text>
         </View>
-        <View
-          style={[
-            styles.riskPill,
-            { borderColor: risk.tint, backgroundColor: SURFACE, marginRight: 8 },
-          ]}
-        >
-          <View style={[styles.statusDot, { backgroundColor: risk.tint }]} />
-          <Text style={[styles.riskLabel, { color: risk.tint }]}>{risk.label}</Text>
-        </View>
-        <Text style={styles.sourceLine}>Sources: {meta.sourceLabel}</Text>
+        <Text style={styles.sourceLine}>Sources · {meta.sourceLabel}</Text>
       </View>
 
-      {narrative?.summary && <Text style={styles.leadInSummary}>{narrative.summary}</Text>}
+      {narrative?.summary && <Text style={styles.lead}>{narrative.summary}</Text>}
 
       {/* Two-column body */}
-      <View style={styles.twoCol}>
+      <View style={styles.body}>
         <View style={styles.leftCol}>
           <Text style={styles.sectionLabel}>Things to know</Text>
           {meta.thingsToKnow.map((p, i) => (
@@ -405,10 +415,7 @@ function ModulePage({
             <View
               style={[
                 styles.forProperty,
-                {
-                  backgroundColor: "#fbfcfe",
-                  borderColor: meta.tintHex + "33", // ~20% alpha when supported
-                },
+                { borderLeftColor: meta.tintHex },
               ]}
             >
               <Text style={[styles.forPropertyLabel, { color: meta.tintHex }]}>
@@ -429,8 +436,8 @@ function ModulePage({
             </View>
           )}
 
-          <View style={styles.noteRow}>
-            <Text style={styles.noteLabel}>Note:&nbsp;</Text>
+          <View style={styles.noteWrap}>
+            <Text style={styles.noteLabel}>Note · </Text>
             <Text style={styles.noteText}>{meta.note}</Text>
           </View>
         </View>
@@ -441,11 +448,11 @@ function ModulePage({
               <Text style={styles.sectionLabel}>Questions to ask</Text>
               {narrative.questions_to_ask.map((q, i) => (
                 <View key={i} style={styles.bullet}>
-                  <Text style={styles.bulletDot}>•</Text>
+                  <Text style={styles.bulletDot}>·</Text>
                   <Text style={styles.bulletTxt}>{q}</Text>
                 </View>
               ))}
-              <View style={{ height: 10 }} />
+              <View style={{ height: 12 }} />
             </>
           ) : null}
 
@@ -463,8 +470,8 @@ function ModulePage({
 
           {sources.length > 0 && (
             <>
-              <View style={{ height: 10 }} />
-              <Text style={styles.sectionLabel}>Source links</Text>
+              <View style={{ height: 12 }} />
+              <Text style={styles.sectionLabel}>References</Text>
               {sources.map((url) => (
                 <Link key={url} src={url} style={styles.link}>{url}</Link>
               ))}
@@ -473,9 +480,14 @@ function ModulePage({
         </View>
       </View>
 
-      <Footer />
+      <Footer address={address} />
     </Page>
   );
+}
+
+const MODULE_ORDER: Module[] = ["flooding", "bushfire", "heritage", "easements", "zoning"];
+function moduleIndex(m: Module): number {
+  return MODULE_ORDER.indexOf(m) + 1;
 }
 
 // ── At a glance page ──────────────────────────────────────────────────────
@@ -492,8 +504,8 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
   const zoneFamily = (zRaw?.lvl1Zone as string | null) ?? null;
 
   return (
-    <Page size="A4" style={styles.page} wrap>
-      <Text style={styles.eyebrow}>Property Fact Pack</Text>
+    <Page size="A4" style={styles.page}>
+      <Text style={styles.eyebrow}>Property fact pack</Text>
       <Text style={styles.title}>{address.address_text}</Text>
       <Text style={styles.question}>
         Five public-data modules.{" "}
@@ -504,10 +516,9 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
 
       <View style={styles.divider} />
 
-      <Text style={[styles.sectionLabel, { fontSize: 9 }]}>At a glance</Text>
-
-      <View style={styles.twoCol}>
+      <View style={styles.body}>
         <View style={styles.leftCol}>
+          <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>At a glance</Text>
           {modules.map((m) => {
             const meta = MODULE_META[m.module];
             const statusColor = m.hasConsideration ? meta.tintHex : APPLE_HEX.green;
@@ -529,6 +540,7 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
         </View>
 
         <View style={styles.rightCol}>
+          <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>Details</Text>
           <View style={styles.metaBlock}>
             <Text style={styles.metaLabel}>Date of report</Text>
             <Text style={styles.metaValue}>{formatDate(report.generated_at)}</Text>
@@ -544,9 +556,9 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
           {zoneText && (
             <View style={styles.metaBlock}>
               <Text style={styles.metaLabel}>Zoning</Text>
-              <Text style={styles.metaValue}>• {zoneText}</Text>
+              <Text style={styles.metaValue}>{zoneText}</Text>
               {zoneFamily && zoneFamily !== zoneText && (
-                <Text style={styles.metaValue}>• {zoneFamily}</Text>
+                <Text style={[styles.metaValue, { color: TEXT_MUTED, fontSize: 8.5 }]}>{zoneFamily}</Text>
               )}
             </View>
           )}
@@ -562,44 +574,47 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
           </View>
           <View style={styles.metaBlock}>
             <Text style={styles.metaLabel}>Report id</Text>
-            <Text style={styles.metaValue}>{report.id.slice(0, 8)}</Text>
+            <Text style={[styles.metaValue, { fontFamily: "Helvetica", fontSize: 8.5 }]}>
+              {report.id.slice(0, 8)}
+            </Text>
           </View>
         </View>
       </View>
 
-      <Footer />
+      <Footer address={address.address_text} />
     </Page>
   );
 }
 
 // ── Disclaimer page ───────────────────────────────────────────────────────
 
-function DisclaimerPage() {
+function DisclaimerPage({ address }: { address: string }) {
   return (
     <Page size="A4" style={styles.page}>
-      <Text style={styles.eyebrow}>Disclaimer</Text>
-      <Text style={styles.title}>Use this report responsibly.</Text>
+      <Text style={styles.eyebrow}>End of report</Text>
+      <Text style={styles.title}>Use this responsibly.</Text>
       <View style={styles.disclaimerBox}>
+        <Text style={styles.disclaimerLabel}>Disclaimer</Text>
         <Text style={styles.disclaimerText}>{DISCLAIMER}</Text>
       </View>
       <View style={[styles.disclaimerBox, { marginTop: 10 }]}>
         <Text style={styles.disclaimerLabel}>Public data only</Text>
         <Text style={styles.disclaimerText}>
           No valuation. No QLD Title Search. Drainage, sewerage, access, and
-          private covenants are recorded on title and not captured here — order
-          a current title search via a conveyancer.
+          private covenants are recorded on title and are not captured here —
+          order a current title search via a conveyancer.
         </Text>
       </View>
-      <Footer />
+      <Footer address={address} />
     </Page>
   );
 }
 
-function Footer() {
+function Footer({ address }: { address: string }) {
   return (
     <View style={styles.footer} fixed>
-      <Text>PropAI - Brisbane DD prototype</Text>
-      <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} / ${totalPages}`} />
+      <Text>PropAI · {address.length > 60 ? address.slice(0, 57) + "…" : address}</Text>
+      <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
     </View>
   );
 }
@@ -619,7 +634,7 @@ export function ReportPDF({
   for (const m of maps) mapByModule.set(m.module, m.png);
 
   return (
-    <Document title={`PropAI Fact Pack - ${address.address_text}`}>
+    <Document title={`PropAI Fact Pack · ${address.address_text}`}>
       <AtAGlancePage payload={payload} />
       {modules.map((m) => {
         const raw =
@@ -633,10 +648,11 @@ export function ReportPDF({
             narrative={report.narrative[m.module]}
             raw={raw}
             mapPng={mapByModule.get(m.module) ?? null}
+            address={address.address_text}
           />
         );
       })}
-      <DisclaimerPage />
+      <DisclaimerPage address={address.address_text} />
     </Document>
   );
 }

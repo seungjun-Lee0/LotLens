@@ -19,6 +19,7 @@ import type { ModuleNarrative } from "@/lib/anthropic";
 import { MODULE_META, APPLE_HEX } from "@/lib/module-meta";
 import type { ReportPayload } from "@/lib/pipeline";
 import type { Module, RiskLevel } from "@/lib/supabase";
+import { prettyUrl } from "@/lib/url";
 
 // ── Apple-ish tokens (mirrors apple.com / iCloud system surfaces) ────────
 
@@ -137,7 +138,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 9,
     borderRadius: 999,
-    borderWidth: 0.6,
     marginRight: 8,
   },
   statusDot: { width: 6, height: 6, borderRadius: 999, marginRight: 5 },
@@ -392,7 +392,7 @@ function ModulePage({
         <View
           style={[
             styles.statusPill,
-            { borderColor: statusColor, backgroundColor: SURFACE },
+            { backgroundColor: `${statusColor}24` },
           ]}
         >
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -473,7 +473,9 @@ function ModulePage({
               <View style={{ height: 12 }} />
               <Text style={styles.sectionLabel}>References</Text>
               {sources.map((url) => (
-                <Link key={url} src={url} style={styles.link}>{url}</Link>
+                <Link key={url} src={url} style={styles.link}>
+                  {prettyUrl(url)}
+                </Link>
               ))}
             </>
           )}
@@ -530,7 +532,7 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
                   <Text style={styles.glanceName}>{meta.name}</Text>
                   <Text style={styles.glanceSource}>{meta.sourceLabel}</Text>
                 </View>
-                <View style={[styles.statusPill, { borderColor: statusColor, backgroundColor: SURFACE }]}>
+                <View style={[styles.statusPill, { backgroundColor: `${statusColor}24` }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <Text style={[styles.statusLabel, { color: statusColor }]}>{statusLabel}</Text>
                 </View>

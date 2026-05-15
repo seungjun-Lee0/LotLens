@@ -105,29 +105,44 @@ export async function POST(req: Request) {
 
   // Reuse an existing addresses row when display_name matches exactly,
   // else insert a new one. Avoids piling up duplicate rows on demo replays.
-  const sb = getServerSupabase();
-  const { data: existing } = await sb
-    .from("addresses")
-    .select("id")
-    .eq("address_text", hit.display_name)
-    .maybeSingle();
-
   let addressId: string;
-  if (existing?.id) {
-    addressId = existing.id;
-  } else {
-    const ins = await sb
+  try {
+    const sb = getServerSupabase();
+    const { data: existing, error: selErr } = await sb
       .from("addresses")
-      .insert({ address_text: hit.display_name, lat, lng })
       .select("id")
-      .single();
-    if (ins.error || !ins.data) {
+      .eq("address_text", hit.display_name)
+      .maybeSingle();
+    if (selErr) {
+      console.error("[geocode] select failed:", selErr);
       return NextResponse.json(
-        { error: `failed to persist address: ${ins.error?.message}` },
+        { error: `db read failed: ${selErr.message}` },
         { status: 500 },
       );
     }
-    addressId = ins.data.id;
+    if (existing?.id) {
+      addressId = existing.id;
+    } else {
+      const ins = await sb
+        .from("addresses")
+        .insert({ address_text: hit.display_name, lat, lng })
+        .select("id")
+        .single();
+      if (ins.error || !ins.data) {
+        console.error("[geocode] insert failed:", ins.error);
+        return NextResponse.json(
+          { error: `failed to persist address: ${ins.error?.message}` },
+          { status: 500 },
+        );
+      }
+      addressId = ins.data.id;
+    }
+  } catch (err) {
+    console.error("[geocode] supabase setup failed:", err);
+    return NextResponse.json(
+      { error: `db setup failed: ${(err as Error).message}` },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({

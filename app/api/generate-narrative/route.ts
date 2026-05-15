@@ -31,6 +31,7 @@ export async function POST(req: Request) {
     const result = await generateReportForAddress(parsed.addressId);
     return NextResponse.json(result);
   } catch (err) {
+    console.error("[generate-narrative] failed:", err);
     return NextResponse.json(
       { error: (err as Error).message },
       { status: 500 },

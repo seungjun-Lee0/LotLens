@@ -13,8 +13,11 @@ import StaticMaps from "staticmaps";
 
 import type { OverlayFeature } from "@/lib/overlays";
 
-const OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const OSM_UA = "PropAI/0.1 Brisbane-DD-prototype (contact: jun@propai.dev)";
+// Esri World Imagery — free satellite tile service, no API key. URL uses
+// {z}/{y}/{x} order (ArcGIS REST convention) rather than OSM's {z}/{x}/{y}.
+const SAT_TILES =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const TILE_UA = "PropAI/0.1 Brisbane-DD-prototype (contact: jun@propai.dev)";
 
 // 8-digit hex with alpha for staticmaps fill colours.
 function withAlpha(hex: string, alpha: number): string {
@@ -35,8 +38,9 @@ export async function renderModuleMapPNG({
   lng,
   tint,
   overlays,
-  width = 1100,
-  height = 540,
+  propertyPolygon = null,
+  width = 1200,
+  height = 720,
 }: {
   lat: number;
   lng: number;
@@ -44,16 +48,20 @@ export async function renderModuleMapPNG({
   tint: string;
   /** Module-tagged polygon features from extractOverlays(). */
   overlays: OverlayFeature[];
+  /** GeoJSON Polygon / MultiPolygon for the cadastre lot. When present
+   * we draw it as the yellow highlight; otherwise we fall back to a
+   * ~50 m box around the geocoded point. */
+  propertyPolygon?: unknown | null;
   width?: number;
   height?: number;
 }): Promise<Buffer> {
   const map = new StaticMaps({
     width,
     height,
-    tileUrl: OSM_TILES,
+    tileUrl: SAT_TILES,
     tileSize: 256,
-    tileRequestHeader: { "User-Agent": OSM_UA, "Accept-Language": "en" },
-    tileRequestTimeout: 12000,
+    tileRequestHeader: { "User-Agent": TILE_UA, "Accept-Language": "en" },
+    tileRequestTimeout: 15000,
     paddingX: 0,
     paddingY: 0,
   });
@@ -90,33 +98,54 @@ export async function renderModuleMapPNG({
     }
   }
 
-  // "Selected property" highlight — mirrors Develo's yellow box on every
-  // module page. We don't have the actual cadastre lot polygon (a paid
-  // Title Search), so we approximate with a ~50×50 m square centred on
-  // the geocoded point. That matches typical Brisbane lot frontage and
-  // is unambiguous enough to read at a glance.
-  const PROP_HALF = 0.00028; // ~30 m at Brisbane latitude
-  const propCoords: [number, number][] = [
-    [lng - PROP_HALF, lat - PROP_HALF],
-    [lng + PROP_HALF, lat - PROP_HALF],
-    [lng + PROP_HALF, lat + PROP_HALF],
-    [lng - PROP_HALF, lat + PROP_HALF],
-    [lng - PROP_HALF, lat - PROP_HALF],
-  ];
-  // White soft halo behind so the highlight stays legible over dark
-  // overlay polygons.
-  map.addPolygon({
-    coords: propCoords,
-    color: "#ffffff",
-    width: 4.5,
-    fill: "#ffffff00",
-  });
-  map.addPolygon({
-    coords: propCoords,
-    color: "#f5c518", // Apple-ish yellow used by Develo for the same job
-    width: 2.6,
-    fill: withAlpha("#f5c518", 0.28),
-  });
+  // "Selected property" highlight — mirrors Develo's yellow lot outline.
+  // Uses the real cadastre lot polygon (from zoning's point-query) when
+  // present, falls back to a ~60×60 m box centred on the geocoded point
+  // when zoning didn't match (rare for Brisbane LGA addresses).
+  const drawPropertyRing = (ring: [number, number][]) => {
+    // White halo first for legibility against dark satellite imagery.
+    map.addPolygon({ coords: ring, color: "#ffffff", width: 5, fill: "#ffffff00" });
+    map.addPolygon({
+      coords: ring,
+      color: "#f5c518",
+      width: 3,
+      fill: withAlpha("#f5c518", 0.28),
+    });
+  };
+
+  let drew = false;
+  if (
+    propertyPolygon &&
+    typeof propertyPolygon === "object" &&
+    "type" in propertyPolygon
+  ) {
+    const g = propertyPolygon as { type: string; coordinates: unknown };
+    if (g.type === "Polygon" && Array.isArray(g.coordinates)) {
+      const ring = (g.coordinates as number[][][])[0];
+      if (ring && ring.length >= 3) {
+        drawPropertyRing(ring as [number, number][]);
+        drew = true;
+      }
+    } else if (g.type === "MultiPolygon" && Array.isArray(g.coordinates)) {
+      for (const poly of g.coordinates as number[][][][]) {
+        const ring = poly[0];
+        if (ring && ring.length >= 3) {
+          drawPropertyRing(ring as [number, number][]);
+          drew = true;
+        }
+      }
+    }
+  }
+  if (!drew) {
+    const PROP_HALF = 0.00028;
+    drawPropertyRing([
+      [lng - PROP_HALF, lat - PROP_HALF],
+      [lng + PROP_HALF, lat - PROP_HALF],
+      [lng + PROP_HALF, lat + PROP_HALF],
+      [lng - PROP_HALF, lat + PROP_HALF],
+      [lng - PROP_HALF, lat - PROP_HALF],
+    ]);
+  }
 
   // Small inner pin in the module tint — exact geocoded point.
   map.addCircle({

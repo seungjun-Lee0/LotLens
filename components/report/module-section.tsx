@@ -138,11 +138,13 @@ export function ModuleSection({
   narrative,
   lat,
   lng,
+  propertyPolygon = null,
 }: {
   row: ReportModuleRow;
   narrative: ModuleNarrative | undefined;
   lat: number;
   lng: number;
+  propertyPolygon?: unknown | null;
 }) {
   const meta = MODULE_META[row.module];
   const Icon = meta.icon;
@@ -184,6 +186,7 @@ export function ModuleSection({
           tint={meta.tint}
           className="h-48 sm:h-64"
           overlays={extractOverlays(row.module, row.raw)}
+          propertyPolygon={propertyPolygon}
         />
       </div>
 

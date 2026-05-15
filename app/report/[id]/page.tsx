@@ -21,7 +21,7 @@ export default async function ReportPage({
   const payload = await loadReportPayload(id);
   if (!payload) notFound();
 
-  const { report, address, modules } = payload;
+  const { report, address, modules, propertyPolygon } = payload;
 
   return (
     <>
@@ -59,6 +59,7 @@ export default async function ReportPage({
               narrative={report.narrative[row.module as Module]}
               lat={address.lat}
               lng={address.lng}
+              propertyPolygon={propertyPolygon}
             />
           ))}
         </div>

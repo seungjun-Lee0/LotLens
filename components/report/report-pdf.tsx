@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   title: {
-    fontSize: 30,
+    fontSize: 26,
     fontFamily: "Helvetica-Bold",
     lineHeight: 1.05,
     color: TEXT_PRIMARY,
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   // ── Map ────────────────────────────────────────────────────────────
   heroMap: {
     width: "100%",
-    height: 150,
+    height: 220,
     borderRadius: 10,
     marginTop: 14,
     objectFit: "cover",
@@ -156,11 +156,11 @@ const styles = StyleSheet.create({
 
   // ── Lead-in (AI summary) ───────────────────────────────────────────
   lead: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontFamily: "Helvetica-Bold",
     color: TEXT_PRIMARY,
-    marginTop: 12,
-    lineHeight: 1.32,
+    marginTop: 10,
+    lineHeight: 1.3,
     letterSpacing: -0.1,
   },
 
@@ -175,10 +175,10 @@ const styles = StyleSheet.create({
   },
 
   para: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: TEXT_BODY,
-    marginBottom: 4,
-    lineHeight: 1.42,
+    marginBottom: 3,
+    lineHeight: 1.4,
   },
 
   // ── "For this property" callout ───────────────────────────────────
@@ -195,9 +195,9 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   forPropertyText: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: TEXT_BODY,
-    lineHeight: 1.42,
+    lineHeight: 1.4,
   },
 
   // ── Facts panel ───────────────────────────────────────────────────

@@ -50,14 +50,14 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
 
   return (
     <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(15,23,42,0.12)]">
-      <div className="grid grid-cols-1 gap-x-10 gap-y-8 px-6 py-8 sm:px-10 sm:py-10 lg:grid-cols-[1fr_280px]">
+      <div className="grid grid-cols-1 gap-x-10 gap-y-6 px-5 py-6 sm:gap-y-8 sm:px-10 sm:py-10 lg:grid-cols-[1fr_280px]">
         {/* Left — title + 5 module rows */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5 sm:gap-6">
           <div>
-            <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+            <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
               At a glance
             </h2>
-            <p className="mt-2 max-w-md text-pretty text-[14px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 max-w-md text-pretty text-[13.5px] leading-relaxed text-muted-foreground sm:text-[14px]">
               Five public-data modules summarising what we found at this
               address. {considerationCount === 0
                 ? "Nothing of concern."
@@ -74,10 +74,10 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
               return (
                 <li
                   key={m.module}
-                  className="flex items-center gap-4 rounded-2xl border border-border/40 bg-background/40 px-4 py-3"
+                  className="flex items-center gap-3 rounded-2xl border border-border/40 bg-background/40 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3"
                 >
                   <div
-                    className="flex size-9 items-center justify-center rounded-xl"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-xl sm:size-9"
                     style={{
                       background: `color-mix(in oklab, ${meta.tint} 14%, transparent)`,
                       color: meta.tint,
@@ -85,16 +85,16 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                   >
                     <Icon className="size-4" />
                   </div>
-                  <div className="flex-1">
-                    <div className="text-[15px] font-semibold tracking-tight">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[14px] font-semibold tracking-tight sm:text-[15px]">
                       {meta.name}
                     </div>
-                    <div className="text-[11.5px] text-muted-foreground">
+                    <div className="truncate text-[11px] text-muted-foreground sm:text-[11.5px]">
                       {meta.sourceLabel}
                     </div>
                   </div>
                   <div
-                    className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] sm:gap-2 sm:px-3 sm:text-[11px] sm:tracking-[0.14em]"
                     style={{
                       background: `color-mix(in oklab, ${tint} 14%, transparent)`,
                       color: tint,
@@ -106,7 +106,9 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                     >
                       <Status className="size-2.5" strokeWidth={3.5} />
                     </span>
-                    {m.hasConsideration ? "Considerations" : "All clear"}
+                    <span className="hidden sm:inline">
+                      {m.hasConsideration ? "Considerations" : "All clear"}
+                    </span>
                   </div>
                 </li>
               );
@@ -115,9 +117,9 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
         </div>
 
         {/* Right — metadata sidebar */}
-        <aside className="flex flex-col gap-5 border-l-0 border-t border-border/40 pt-7 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+        <aside className="flex flex-col gap-4 border-l-0 border-t border-border/40 pt-6 sm:gap-5 sm:pt-7 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
           <Meta label="Date of report">{formatDate(report.generated_at)}</Meta>
-          <Meta label="Address">{address.address_text}</Meta>
+          <Meta label="Address"><span className="break-words">{address.address_text}</span></Meta>
           <Meta label="Council">Brisbane City Council</Meta>
           {zoneText && (
             <Meta label="Zoning">

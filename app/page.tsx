@@ -18,10 +18,10 @@ export default function Home() {
     <>
       <SiteHeader />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-24 px-6 pb-24 pt-12 sm:pt-20">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-16 px-4 pb-16 pt-8 sm:gap-24 sm:px-6 sm:pb-24 sm:pt-20">
         {/* Hero + address form */}
-        <section className="flex flex-col items-center gap-10 text-center">
-          <span className="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-medium text-foreground/70">
+        <section className="flex flex-col items-center gap-6 text-center sm:gap-10">
+          <span className="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11.5px] font-medium text-foreground/70 sm:text-[12px]">
             <span
               className="size-1.5 rounded-full"
               style={{ background: "var(--apple-green)" }}
@@ -29,7 +29,7 @@ export default function Home() {
             Prototype · Brisbane LGA only
           </span>
 
-          <h1 className="text-balance text-5xl font-semibold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
+          <h1 className="text-balance text-[2.4rem] font-semibold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
             Brisbane Property
             <br />
             <span
@@ -43,7 +43,7 @@ export default function Home() {
             </span>
           </h1>
 
-          <p className="max-w-xl text-pretty text-[17px] leading-relaxed text-muted-foreground">
+          <p className="max-w-xl text-pretty text-[15px] leading-relaxed text-muted-foreground sm:text-[17px]">
             Enter a Brisbane address to see what you&rsquo;re buying. We pull
             council overlay data across five modules and translate it into
             plain English — cited line by line.
@@ -67,13 +67,13 @@ export default function Home() {
         </section>
 
         {/* Module preview grid */}
-        <section id="modules" className="flex flex-col gap-8">
-          <div className="flex items-end justify-between gap-6">
+        <section id="modules" className="flex flex-col gap-6 sm:gap-8">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end sm:gap-6">
             <div>
-              <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
                 Five modules
               </div>
-              <h2 className="mt-2 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h2 className="mt-2 text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
                 Every claim cited to public data.
               </h2>
             </div>
@@ -146,8 +146,8 @@ export default function Home() {
         </section>
 
         {/* Pipeline strip */}
-        <section className="glass rounded-3xl p-8">
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
+        <section className="glass rounded-3xl p-6 sm:p-8">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-8">
             {[
               {
                 step: "01",
@@ -201,7 +201,7 @@ export default function Home() {
       </main>
 
       <footer className="border-t border-border/40 bg-background/40 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-6 py-6 text-[12px] text-muted-foreground sm:flex-row">
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-6 text-center text-[11.5px] text-muted-foreground sm:flex-row sm:px-6 sm:text-left sm:text-[12px]">
           <span>© PropAI — Brisbane DD prototype</span>
           <span>Public data only · No valuation · No title search</span>
         </div>

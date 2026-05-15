@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     const summary = await fetchOverlaysForAddress(parsed.addressId);
     return NextResponse.json(summary);
   } catch (err) {
+    console.error("[fetch-overlays] failed:", err);
     return NextResponse.json(
       { error: (err as Error).message },
       { status: 500 },

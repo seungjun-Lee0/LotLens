@@ -3,11 +3,11 @@ import { ThemeToggle } from "@/components/site/theme-toggle";
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-30 w-full px-4 pt-4">
-      <div className="glass-strong mx-auto flex h-14 w-full max-w-6xl items-center justify-between rounded-full px-5">
+    <header className="sticky top-0 z-30 w-full px-3 pt-3 sm:px-4 sm:pt-4">
+      <div className="glass-strong mx-auto flex h-[52px] w-full max-w-6xl items-center justify-between rounded-full px-4 sm:h-14 sm:px-5">
         <Link
           href="/"
-          className="flex items-center gap-2.5 text-[18px] font-semibold tracking-tight"
+          className="flex items-center gap-2.5 text-[16px] font-semibold tracking-tight sm:text-[18px]"
         >
           <span
             aria-hidden

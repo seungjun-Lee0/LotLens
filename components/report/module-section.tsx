@@ -155,10 +155,10 @@ export function ModuleSection({
   return (
     <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(15,23,42,0.12)]">
       {/* Header: name + clarifying question */}
-      <div className="flex flex-col gap-3 px-6 pt-7 sm:flex-row sm:items-end sm:justify-between sm:px-10 sm:pt-9">
+      <div className="flex flex-col gap-3 px-5 pt-6 sm:flex-row sm:items-end sm:justify-between sm:px-10 sm:pt-9">
         <div className="flex items-center gap-3">
           <div
-            className="flex size-11 items-center justify-center rounded-2xl"
+            className="flex size-10 shrink-0 items-center justify-center rounded-2xl sm:size-11"
             style={{
               background: `linear-gradient(135deg, color-mix(in oklab, ${meta.tint} 22%, transparent), color-mix(in oklab, ${meta.tint} 6%, transparent))`,
               color: meta.tint,
@@ -167,39 +167,39 @@ export function ModuleSection({
           >
             <Icon className="size-5" />
           </div>
-          <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+          <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
             {meta.name}
           </h2>
         </div>
-        <p className="text-balance text-[14.5px] leading-snug text-muted-foreground sm:text-right sm:text-[15px]">
+        <p className="text-balance text-[13.5px] leading-snug text-muted-foreground sm:text-right sm:text-[15px]">
           {meta.question}
         </p>
       </div>
 
       {/* Hero map */}
-      <div className="px-6 pt-6 sm:px-10">
+      <div className="px-5 pt-5 sm:px-10 sm:pt-6">
         <ModuleMap
           lat={lat}
           lng={lng}
           tint={meta.tint}
-          className="h-64"
+          className="h-48 sm:h-64"
           overlays={extractOverlays(row.module, row.raw)}
         />
       </div>
 
       {/* Status + source + AI summary */}
-      <div className="flex flex-col gap-4 px-6 pt-6 sm:px-10">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="flex flex-col gap-3 px-5 pt-5 sm:gap-4 sm:px-10 sm:pt-6">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-4">
           <StatusPill hasConsideration={row.hasConsideration} tint={meta.tint} />
           <RiskBadge level={risk} size="sm" />
-          <span className="text-[11.5px] uppercase tracking-[0.14em] text-muted-foreground">
+          <span className="hidden text-[11.5px] uppercase tracking-[0.14em] text-muted-foreground sm:inline">
             Sources: {meta.sourceLabel}
           </span>
         </div>
 
         {narrative?.summary && (
           <p
-            className="text-[16.5px] leading-snug text-foreground text-pretty"
+            className="text-[15px] leading-snug text-foreground text-pretty sm:text-[16.5px]"
             style={{ fontWeight: 500 }}
           >
             {narrative.summary}
@@ -208,7 +208,7 @@ export function ModuleSection({
       </div>
 
       {/* Two-column body: Things to know + Note (L) / Questions + Legend (R) */}
-      <div className="grid grid-cols-1 gap-x-10 gap-y-8 px-6 pb-8 pt-7 sm:px-10 sm:pb-10 lg:grid-cols-[1fr_280px]">
+      <div className="grid grid-cols-1 gap-x-10 gap-y-6 px-5 pb-6 pt-5 sm:gap-y-8 sm:px-10 sm:pb-10 sm:pt-7 lg:grid-cols-[1fr_280px]">
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-4">
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">

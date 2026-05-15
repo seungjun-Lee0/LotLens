@@ -1,15 +1,14 @@
 // POST /api/geocode
 // Body: { address: string }
-// Geocodes a free-text Brisbane LGA address via OSM Nominatim, restricted
-// to the Brisbane LGA bounding box. Reuses an existing addresses row when
-// the resolved display_name matches; otherwise inserts a new row.
-//
-// Nominatim usage policy compliance: User-Agent header (project + contact),
-// max 1 req/s. Restaurant-demo traffic stays well inside fair use.
+// Geocodes a Brisbane LGA address. Google Maps Geocoding (best AU
+// unit / apartment resolution) when GOOGLE_GEOCODING_API_KEY is set,
+// Nominatim fallback otherwise. Reuses an existing addresses row when
+// the resolved display name matches; otherwise inserts a new row.
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { geocodeAddress } from "@/lib/geocoder";
 import { getServerSupabase } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -17,29 +16,6 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 const BodySchema = z.object({ address: z.string().min(3).max(300) });
-
-// Brisbane LGA approximate bbox. Nominatim viewbox order: lon_min,lat_min,lon_max,lat_max.
-const BRISBANE_BBOX = {
-  lonMin: 152.65,
-  latMin: -27.75,
-  lonMax: 153.30,
-  latMax: -27.20,
-};
-
-const NOMINATIM_UA =
-  "PropAI/0.1 Brisbane-DD-prototype (https://github.com/propai - contact: jun@propai.dev)";
-
-type NominatimResult = {
-  lat: string;
-  lon: string;
-  display_name: string;
-  address?: {
-    city?: string;
-    town?: string;
-    municipality?: string;
-    county?: string;
-  };
-};
 
 export async function POST(req: Request) {
   let parsed: z.infer<typeof BodySchema>;
@@ -52,41 +28,18 @@ export async function POST(req: Request) {
     );
   }
 
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", parsed.address);
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("addressdetails", "1");
-  url.searchParams.set("countrycodes", "au");
-  url.searchParams.set("limit", "1");
-  url.searchParams.set(
-    "viewbox",
-    `${BRISBANE_BBOX.lonMin},${BRISBANE_BBOX.latMin},${BRISBANE_BBOX.lonMax},${BRISBANE_BBOX.latMax}`,
-  );
-  url.searchParams.set("bounded", "1");
-
-  let results: NominatimResult[];
+  let hit: { lat: number; lng: number; displayName: string } | null;
   try {
-    const res = await fetch(url.toString(), {
-      headers: {
-        "User-Agent": NOMINATIM_UA,
-        "Accept-Language": "en-AU,en",
-      },
-    });
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: `geocoder ${res.status}` },
-        { status: 502 },
-      );
-    }
-    results = (await res.json()) as NominatimResult[];
+    hit = await geocodeAddress(parsed.address);
   } catch (err) {
+    console.error("[geocode] provider error:", err);
     return NextResponse.json(
       { error: `geocoder error: ${(err as Error).message}` },
       { status: 502 },
     );
   }
 
-  if (results.length === 0) {
+  if (!hit) {
     return NextResponse.json(
       {
         error:
@@ -96,12 +49,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const hit = results[0];
-  const lat = Number(hit.lat);
-  const lng = Number(hit.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return NextResponse.json({ error: "geocoder returned non-numeric coords" }, { status: 502 });
-  }
+  const lat = hit.lat;
+  const lng = hit.lng;
 
   // Reuse an existing addresses row when display_name matches exactly,
   // else insert a new one. Avoids piling up duplicate rows on demo replays.
@@ -111,7 +60,7 @@ export async function POST(req: Request) {
     const { data: existing, error: selErr } = await sb
       .from("addresses")
       .select("id")
-      .eq("address_text", hit.display_name)
+      .eq("address_text", hit.displayName)
       .maybeSingle();
     if (selErr) {
       console.error("[geocode] select failed:", selErr);
@@ -125,7 +74,7 @@ export async function POST(req: Request) {
     } else {
       const ins = await sb
         .from("addresses")
-        .insert({ address_text: hit.display_name, lat, lng })
+        .insert({ address_text: hit.displayName, lat, lng })
         .select("id")
         .single();
       if (ins.error || !ins.data) {
@@ -149,6 +98,6 @@ export async function POST(req: Request) {
     addressId,
     lat,
     lng,
-    displayName: hit.display_name,
+    displayName: hit.displayName,
   });
 }

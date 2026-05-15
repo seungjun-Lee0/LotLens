@@ -69,7 +69,9 @@ need any of these, surface it before building:
   changing route handlers, the report page, or the PDF — the data
   shape is final.
 - **PDF**: `@react-pdf/renderer` with pre-rendered static map images
-- **Geocoding**: OSM Nominatim, Brisbane LGA viewbox-bounded
+- **Geocoding**: Google Maps Geocoding + Places Autocomplete when
+  `GOOGLE_GEOCODING_API_KEY` is set (unit / apartment precision), OSM
+  Nominatim fallback otherwise (street-level only)
 
 ## Run it locally
 
@@ -88,11 +90,37 @@ Copy `.env.local.example` to `.env.local` and fill in:
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
+# Optional — enables unit / apartment-level AU geocoding (see below).
+GOOGLE_GEOCODING_API_KEY=
 # Optional. When unset, the LLM stub is used (Task 4b — see
 # lib/anthropic.ts).
 ANTHROPIC_API_KEY=
 NEXT_PUBLIC_DEBUG=false
 ```
+
+### Optional: Google Geocoding for unit / apartment precision
+
+Nominatim has no unit-number data for AU — it only resolves to the
+street. For live demos where buyers paste "Unit 103, …" we need
+Google. Free tier $200/mo (~10K geocoding + autocomplete requests),
+nowhere near a demo's traffic.
+
+1. Google Cloud Console → create a project (or reuse one).
+2. **APIs & Services → Library** → enable both:
+   - Geocoding API
+   - Places API
+3. **APIs & Services → Credentials** → Create API Key.
+4. Restrict the key:
+   - **Application restrictions**: HTTP referrer → add your Vercel
+     domain (e.g. `https://prop-ai-three.vercel.app/*`). For local
+     dev the server-side route uses the key directly, so the
+     restriction can stay HTTP-referrer; just make sure to also
+     add `http://localhost:3000/*` during dev.
+   - **API restrictions**: limit to Geocoding API + Places API.
+5. Set `GOOGLE_GEOCODING_API_KEY` in `.env.local` and on Vercel.
+
+When the key is missing the routes silently fall back to Nominatim,
+so the prototype keeps working — you just lose unit precision.
 
 `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never reach a
 browser bundle. The clients in [`lib/supabase.ts`](./lib/supabase.ts)

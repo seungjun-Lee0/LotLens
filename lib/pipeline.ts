@@ -181,6 +181,11 @@ export type ReportPayload = {
   address: Address;
   modules: ReportModuleRow[];
   considerationCount: number;
+  /** GeoJSON Polygon/MultiPolygon of the cadastre lot the property sits on,
+   * extracted from the zoning module's point-query result. null when no
+   * parcel was matched (very rare in Brisbane LGA — every parcel is zoned).
+   * Used as the yellow "selected property" outline on every module map. */
+  propertyPolygon: unknown | null;
 };
 
 export async function loadReportPayload(
@@ -234,6 +239,20 @@ export async function loadReportPayload(
       };
     });
 
+  // Extract the cadastre lot polygon from the zoning module's point-query
+  // result. Zoning_opendata returns one feature per lot; the polygon IS
+  // the lot outline.
+  const zoning = modules.find((m) => m.module === "zoning");
+  const zRaw =
+    zoning?.raw && typeof zoning.raw === "object"
+      ? (zoning.raw as Record<string, unknown>)
+      : null;
+  const zInner =
+    zRaw?.raw && typeof zRaw.raw === "object"
+      ? (zRaw.raw as { features?: Array<{ geometry?: unknown }> })
+      : null;
+  const propertyPolygon = zInner?.features?.[0]?.geometry ?? null;
+
   return {
     report: {
       id: report.id,
@@ -243,6 +262,7 @@ export async function loadReportPayload(
     address: addrRes.data as Address,
     modules,
     considerationCount: modules.filter((m) => m.hasConsideration).length,
+    propertyPolygon,
   };
 }
 

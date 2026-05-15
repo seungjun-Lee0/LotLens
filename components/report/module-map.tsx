@@ -17,6 +17,7 @@ export function ModuleMap({
   zoom = 16,
   className = "h-44 w-full",
   overlays = [],
+  propertyPolygon = null,
 }: {
   lat: number;
   lng: number;
@@ -27,6 +28,10 @@ export function ModuleMap({
   className?: string;
   /** Module-tagged polygon features. Empty array = pin-only map. */
   overlays?: OverlayFeature[];
+  /** GeoJSON Polygon / MultiPolygon for the cadastre lot the property
+   * sits on. When present we use this as the yellow "selected property"
+   * highlight; falls back to a ~30 m square otherwise. */
+  propertyPolygon?: unknown | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -41,15 +46,18 @@ export function ModuleMap({
       style: {
         version: 8,
         sources: {
-          osm: {
+          // Esri World Imagery — free satellite raster tiles, no API key.
+          esri: {
             type: "raster",
-            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+            tiles: [
+              "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            ],
             tileSize: 256,
             attribution:
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+              "Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
           },
         },
-        layers: [{ id: "osm", type: "raster", source: "osm" }],
+        layers: [{ id: "esri", type: "raster", source: "esri" }],
       },
     });
     mapRef.current = map;
@@ -97,25 +105,34 @@ export function ModuleMap({
         });
       }
 
-      // "Selected property" highlight — ~30 m half-width box drawn ABOVE
-      // the overlay polygons so it stays visible regardless of overlay
-      // colour.
+      // "Selected property" highlight — drawn ABOVE the overlay polygons
+      // so it stays visible regardless of overlay colour.
+      // Prefer the real cadastre lot polygon (from zoning); fall back to a
+      // ~30 m box when no parcel was matched.
       const PROP = 0.00028;
+      const fallbackBox = {
+        type: "Polygon" as const,
+        coordinates: [[
+          [lng - PROP, lat - PROP],
+          [lng + PROP, lat - PROP],
+          [lng + PROP, lat + PROP],
+          [lng - PROP, lat + PROP],
+          [lng - PROP, lat - PROP],
+        ]],
+      };
+      const propertyGeom =
+        propertyPolygon &&
+        typeof propertyPolygon === "object" &&
+        ((propertyPolygon as { type?: string }).type === "Polygon" ||
+          (propertyPolygon as { type?: string }).type === "MultiPolygon")
+          ? (propertyPolygon as GeoJSON.Geometry)
+          : fallbackBox;
       map.addSource("selected-property", {
         type: "geojson",
         data: {
           type: "Feature",
           properties: {},
-          geometry: {
-            type: "Polygon",
-            coordinates: [[
-              [lng - PROP, lat - PROP],
-              [lng + PROP, lat - PROP],
-              [lng + PROP, lat + PROP],
-              [lng - PROP, lat + PROP],
-              [lng - PROP, lat - PROP],
-            ]],
-          },
+          geometry: propertyGeom,
         },
       });
       map.addLayer({

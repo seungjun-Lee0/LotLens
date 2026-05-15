@@ -73,7 +73,11 @@ export async function fetchZoningData(
       geometryType: "esriGeometryPoint",
       inSR: 4326,
       outFields: fields,
-      returnGeometry: false,
+      // Zoning polygons follow cadastre lot boundaries 1:1 in BCC's data —
+      // so the point-query polygon IS the property's lot outline. We use
+      // this as the Develo-style yellow "selected property" highlight.
+      returnGeometry: true,
+      maxAllowableOffset: 0.00002, // ~2m — sharp parcel edges
     }),
     queryArcGIS(ZONING, {
       geometry: point,

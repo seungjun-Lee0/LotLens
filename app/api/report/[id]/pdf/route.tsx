@@ -41,6 +41,7 @@ export async function GET(
           lng: payload.address.lng,
           tint: meta.tintHex,
           overlays,
+          propertyPolygon: payload.propertyPolygon,
         });
         return { module: row.module, png };
       } catch (err) {

@@ -6,7 +6,7 @@ import type { ModuleNarrative } from "@/lib/anthropic";
 import { MODULE_META } from "@/lib/module-meta";
 import { extractOverlays } from "@/lib/overlays";
 import type { ReportModuleRow } from "@/lib/pipeline";
-import type { Module, RiskLevel } from "@/lib/supabase";
+import type { Module, RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
 // ── Per-module facts panel ────────────────────────────────────────────────

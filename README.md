@@ -2,8 +2,8 @@
 
 An end-to-end Brisbane LGA property due diligence report generator.
 Type an address → the backend geocodes, queries five public ArcGIS
-overlay layers, persists results to Supabase, and renders a web report
-plus a print-ready PDF.
+overlay layers, persists results to Postgres (Vercel Postgres / Neon),
+and renders a web report plus a print-ready PDF.
 
 This is a **prototype**, not an MVP. The point is to prove the
 public-data + structured-narrative pipeline produces a usable DD report
@@ -61,8 +61,9 @@ need any of these, surface it before building:
   shadcn/ui
 - **Maps**: MapLibre GL JS on the web (OSM raster basemap), the
   `staticmaps` npm package for server-rendered PDF map images
-- **Backend**: Next.js Route Handlers, Supabase (PostGIS enabled,
-  `ap-southeast-2` Sydney) for persistence
+- **Backend**: Next.js Route Handlers, Postgres via
+  `@neondatabase/serverless` (Vercel Postgres / Neon — HTTP-fetch
+  driver, no connection pool to manage in serverless functions)
 - **LLM narrative**: Currently a deterministic stub in
   [`lib/anthropic.ts`](./lib/anthropic.ts) that mirrors the Anthropic
   SDK signature. Swap for a real Claude Sonnet 4.5 call without
@@ -75,21 +76,27 @@ need any of these, surface it before building:
 
 ## Run it locally
 
-### 1. Supabase
+### 1. Postgres (Vercel Postgres / Neon)
 
-Provision a free-tier Supabase project in `ap-southeast-2` (Sydney).
-Run [`db/schema.sql`](./db/schema.sql) in the SQL Editor — it enables
-PostGIS and creates the three tables. (`db/seed.sql` has placeholder
-rows you can skip.) See [`db/README.md`](./db/README.md) for details.
+On the Vercel dashboard for your project → **Storage** → **Create
+Database** → **Postgres** (Vercel uses Neon under the hood). Pick the
+free tier and `iad1` (closest to the Vercel functions). Vercel will
+auto-inject `DATABASE_URL` (and a few other variants) into every
+deployment's environment.
+
+Then open the Postgres "Query" tab in the Vercel dashboard and paste
+the contents of [`db/schema.sql`](./db/schema.sql) to create the three
+tables.
+
+Standalone Neon (without the Vercel integration) works the same way —
+sign up at neon.tech, create a project, copy the connection string.
 
 ### 2. Env vars
 
 Copy `.env.local.example` to `.env.local` and fill in:
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
+DATABASE_URL=postgresql://...   # Vercel Postgres / Neon connection string
 # Optional — enables unit / apartment-level AU geocoding (see below).
 GOOGLE_GEOCODING_API_KEY=
 # Optional. When unset, the LLM stub is used (Task 4b — see
@@ -122,9 +129,9 @@ nowhere near a demo's traffic.
 When the key is missing the routes silently fall back to Nominatim,
 so the prototype keeps working — you just lose unit precision.
 
-`SUPABASE_SERVICE_ROLE_KEY` is server-only and must never reach a
-browser bundle. The clients in [`lib/supabase.ts`](./lib/supabase.ts)
-enforce this — `getServerSupabase()` throws if called from `window`.
+`DATABASE_URL` is server-only and must never reach a browser bundle.
+The client in [`lib/db.ts`](./lib/db.ts) enforces this —
+`getDb()` throws if called from `window`.
 
 ### 3. Run
 
@@ -138,8 +145,8 @@ any Brisbane LGA address.
 
 ### Useful scripts
 
-- `npx tsx scripts/test-supabase.ts` — verifies env vars and that the
-  three tables exist.
+- `npx tsx scripts/test-db.ts` — verifies env vars and that the three
+  tables exist.
 - `npx tsx scripts/test-flooding.ts` (and `-bushfire`, `-zoning`,
   `-heritage`, `-easements`) — probe the ArcGIS endpoints directly,
   no DB needed.
@@ -219,7 +226,7 @@ lib/
   anthropic.ts        Narrative generator (stub today)
   pipeline.ts         End-to-end orchestration consumed by routes +
                       scripts
-  supabase.ts         Browser + server-only Supabase factories
+  db.ts               Neon Postgres client (server-only)
   overlays.ts         Map-overlay feature extractor
   module-meta.ts      Per-module display copy (question, things-to-
                       know, note, legend, hex)

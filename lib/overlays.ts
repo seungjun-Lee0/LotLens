@@ -14,7 +14,7 @@
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 
 import { APPLE_HEX } from "@/lib/module-meta";
-import type { Module } from "@/lib/supabase";
+import type { Module } from "@/lib/db";
 
 export type OverlayFeature = Feature<
   Geometry,

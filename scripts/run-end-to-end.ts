@@ -5,12 +5,12 @@
 //   fetchOverlaysForAddress -> council_data
 //   generateReportForAddress -> reports
 // and prints the final report JSON. Skip the dev server entirely — the
-// pipeline functions run directly against Supabase.
+// pipeline functions run directly against the Postgres DB.
 
 import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
-import { getServerSupabase } from "../lib/supabase";
+import { getDb } from "../lib/db";
 import {
   fetchOverlaysForAddress,
   generateReportForAddress,
@@ -23,20 +23,17 @@ const TEST_ADDRESS = {
 };
 
 async function ensureTestAddress(): Promise<string> {
-  const sb = getServerSupabase();
-  const { data: existing } = await sb
-    .from("addresses")
-    .select("id")
-    .eq("address_text", TEST_ADDRESS.address_text)
-    .maybeSingle();
-  if (existing) return existing.id;
-  const { data, error } = await sb
-    .from("addresses")
-    .insert(TEST_ADDRESS)
-    .select("id")
-    .single();
-  if (error) throw new Error(`insert test address failed: ${error.message}`);
-  return data.id;
+  const sql = getDb();
+  const existing = (await sql`
+    SELECT id FROM addresses WHERE address_text = ${TEST_ADDRESS.address_text} LIMIT 1
+  `) as Array<{ id: string }>;
+  if (existing.length > 0) return existing[0].id;
+  const inserted = (await sql`
+    INSERT INTO addresses (address_text, lat, lng)
+    VALUES (${TEST_ADDRESS.address_text}, ${TEST_ADDRESS.lat}, ${TEST_ADDRESS.lng})
+    RETURNING id
+  `) as Array<{ id: string }>;
+  return inserted[0].id;
 }
 
 async function main() {

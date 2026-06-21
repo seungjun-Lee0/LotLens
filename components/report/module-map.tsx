@@ -6,6 +6,48 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { OverlayFeature } from "@/lib/overlays";
 
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+/**
+ * Prefer Mapbox Satellite Streets (Develo-grade imagery) when the token
+ * is configured. Fall back to free Esri World Imagery so the report
+ * still renders if Mapbox is unset.
+ */
+function buildBasemapStyle(): maplibregl.StyleSpecification {
+  if (MAPBOX_TOKEN) {
+    return {
+      version: 8,
+      sources: {
+        mapbox: {
+          type: "raster",
+          tiles: [
+            `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`,
+          ],
+          tileSize: 256,
+          attribution:
+            '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="http://www.openstreetmap.org/about/">OpenStreetMap</a>',
+        },
+      },
+      layers: [{ id: "mapbox", type: "raster", source: "mapbox" }],
+    };
+  }
+  return {
+    version: 8,
+    sources: {
+      esri: {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution:
+          "Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+      },
+    },
+    layers: [{ id: "esri", type: "raster", source: "esri" }],
+  };
+}
+
 // Property-pin map with optional module-specific overlay polygons. OSM
 // raster basemap (free, no key). Each feature carries a `fillColor` in its
 // properties so a single fill layer paints them all.
@@ -43,22 +85,7 @@ export function ModuleMap({
       center: [lng, lat],
       zoom,
       attributionControl: { compact: true },
-      style: {
-        version: 8,
-        sources: {
-          // Esri World Imagery — free satellite raster tiles, no API key.
-          esri: {
-            type: "raster",
-            tiles: [
-              "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-            ],
-            tileSize: 256,
-            attribution:
-              "Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
-          },
-        },
-        layers: [{ id: "esri", type: "raster", source: "esri" }],
-      },
+      style: buildBasemapStyle(),
     });
     mapRef.current = map;
 

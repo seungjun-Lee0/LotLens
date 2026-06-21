@@ -142,7 +142,7 @@ export async function fetchFloodingData(
     bufferDegrees: 0.0025,
     // Polygon vertex simplification ~10m — invisible at the map zoom we
     // use but keeps the envelope payload to ~10s of KB.
-    maxAllowableOffset: 0.0001,
+    maxAllowableOffset: 0.00003,
   };
 
   const fieldsOverall = "FLOOD_RISK,FLOOD_TYPE";

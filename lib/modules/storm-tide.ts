@@ -65,7 +65,7 @@ export async function fetchStormTideData(
       outFields,
       returnGeometry: true,
       bufferDegrees: 0.0025,
-      maxAllowableOffset: 0.0001,
+      maxAllowableOffset: 0.00003,
     }),
   ]);
 

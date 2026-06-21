@@ -93,7 +93,7 @@ export async function fetchHeritageData(
     outFields: fields,
     returnGeometry: true,
     bufferDegrees: 0.0025,
-    maxAllowableOffset: 0.0001,
+    maxAllowableOffset: 0.00003,
   };
   const [state, local, character, stateCtx, localCtx, characterCtx] =
     await Promise.all([

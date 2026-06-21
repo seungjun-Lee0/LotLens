@@ -160,7 +160,8 @@ export async function renderModuleMapPNG({
   });
 
   // ~280m half-width around the property — locks framing across modules.
-  const PAD = 0.0023;
+  // Match the web map zoom (Develo-style tight ~115 m half-width).
+  const PAD = 0.00105;
   await map.render([lng - PAD, lat - PAD, lng + PAD, lat + PAD]);
 
   return await map.image.buffer("image/png");

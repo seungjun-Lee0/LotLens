@@ -118,16 +118,21 @@ export function ModuleMap({
           paint: {
             "fill-color": ["get", "fillColor"],
             "fill-opacity": 0.35,
+            "fill-antialias": true,
           },
         });
         map.addLayer({
           id: "overlay-line",
           type: "line",
           source: "overlays",
+          layout: {
+            "line-join": "round",
+            "line-cap": "round",
+          },
           paint: {
             "line-color": ["get", "fillColor"],
-            "line-width": 1.5,
-            "line-opacity": 0.9,
+            "line-width": 1.8,
+            "line-opacity": 0.95,
           },
         });
       }
@@ -172,20 +177,22 @@ export function ModuleMap({
         id: "selected-property-line",
         type: "line",
         source: "selected-property",
-        paint: { "line-color": "#f5c518", "line-width": 2.4 },
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#f5c518", "line-width": 2.8 },
       });
       // Frame the property, not the polygons. We let overlay polygons
-      // extend outside the viewport — MapLibre clips them for free. A
-      // property pack is about "where is YOUR house and what's on it",
-      // not "how big is the flood polygon as a whole". A tight ~250 m
-      // envelope keeps every module map at a consistent scale.
-      const PAD = 0.0023; // ~250 m at Brisbane latitude
+      // extend outside the viewport — MapLibre clips them for free.
+      // Develo's reports zoom in tight (~100 m half-width); matching that
+      // makes the lot outline read at a glance and overlay tints feel
+      // immediate. Larger overlay polygons are still obvious from the
+      // colour bleeding off the edges.
+      const PAD = 0.00105; // ~115 m half-width at Brisbane latitude
       map.fitBounds(
         [
           [lng - PAD, lat - PAD],
           [lng + PAD, lat + PAD],
         ],
-        { padding: 12, maxZoom: 18, duration: 0 },
+        { padding: 10, maxZoom: 19, duration: 0 },
       );
     });
 
@@ -199,12 +206,58 @@ export function ModuleMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Floating legend (Apple-style glass card, bottom-right of the map).
+  // We dedupe overlay (fillColor, legendLabel) pairs so each colour is
+  // listed once — the user can see at a glance what each tint means.
+  const legendItems: { color: string; label: string }[] = [
+    { color: "#f5c518", label: "Selected property" },
+  ];
+  const seen = new Set<string>();
+  for (const f of overlays) {
+    const key = `${f.properties.fillColor}|${f.properties.legendLabel}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    legendItems.push({
+      color: f.properties.fillColor,
+      label: f.properties.legendLabel,
+    });
+  }
+
   return (
     <div
-      ref={containerRef}
-      className={`${className} overflow-hidden rounded-2xl border border-border/40`}
+      className={`${className} relative overflow-hidden rounded-2xl border border-border/40`}
       style={{ background: "var(--muted)" }}
       aria-label="Property location map"
-    />
+    >
+      <div ref={containerRef} className="absolute inset-0" />
+      {legendItems.length > 0 && (
+        <div className="pointer-events-none absolute bottom-2.5 right-2.5 z-10 max-w-[55%] sm:bottom-3 sm:right-3">
+          <div
+            className="rounded-xl px-2.5 py-2 text-[10.5px] leading-tight shadow-[0_4px_18px_-6px_rgba(0,0,0,0.4)] sm:text-[11px]"
+            style={{
+              background: "rgba(255,255,255,0.92)",
+              backdropFilter: "saturate(180%) blur(14px)",
+              WebkitBackdropFilter: "saturate(180%) blur(14px)",
+              color: "#1d1d1f",
+            }}
+          >
+            <ul className="flex flex-col gap-1">
+              {legendItems.map((item) => (
+                <li key={`${item.color}-${item.label}`} className="flex items-center gap-2">
+                  <span
+                    className="size-2.5 shrink-0 rounded-sm"
+                    style={{
+                      background: item.color,
+                      outline: `1px solid color-mix(in oklab, ${item.color} 75%, transparent)`,
+                    }}
+                  />
+                  <span className="truncate font-medium">{item.label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

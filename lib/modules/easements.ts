@@ -79,7 +79,7 @@ export async function fetchEasementsData(
       outFields: fields,
       returnGeometry: true,
       bufferDegrees: 0.0025,
-      maxAllowableOffset: 0.0001,
+      maxAllowableOffset: 0.00003,
     }),
   ]);
   const hit = fc.features[0];

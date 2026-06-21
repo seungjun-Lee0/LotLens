@@ -24,7 +24,7 @@
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
-import type { RiskLevel } from "@/lib/supabase";
+import type { RiskLevel } from "@/lib/db";
 
 const FAM_OVERALL =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Flood_Awareness_Flood_Risk_Overall/FeatureServer/0/query";

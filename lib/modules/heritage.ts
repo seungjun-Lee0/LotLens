@@ -17,7 +17,7 @@
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
-import type { RiskLevel } from "@/lib/supabase";
+import type { RiskLevel } from "@/lib/db";
 
 const STATE_HERITAGE =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Heritage_overlay_State_heritage_area/FeatureServer/0/query";

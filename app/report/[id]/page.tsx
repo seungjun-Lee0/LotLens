@@ -5,7 +5,7 @@ import { SiteHeader } from "@/components/site/site-header";
 import { AtAGlance } from "@/components/report/at-a-glance";
 import { ModuleSection } from "@/components/report/module-section";
 import { loadReportPayload } from "@/lib/pipeline";
-import type { Module } from "@/lib/supabase";
+import type { Module } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 

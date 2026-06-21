@@ -8,8 +8,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getDb } from "@/lib/db";
 import { geocodeAddress } from "@/lib/geocoder";
-import { getServerSupabase } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,38 +56,22 @@ export async function POST(req: Request) {
   // else insert a new one. Avoids piling up duplicate rows on demo replays.
   let addressId: string;
   try {
-    const sb = getServerSupabase();
-    const { data: existing, error: selErr } = await sb
-      .from("addresses")
-      .select("id")
-      .eq("address_text", hit.displayName)
-      .maybeSingle();
-    if (selErr) {
-      console.error("[geocode] select failed:", selErr);
-      return NextResponse.json(
-        { error: `db read failed: ${selErr.message}` },
-        { status: 500 },
-      );
-    }
-    if (existing?.id) {
-      addressId = existing.id;
+    const sql = getDb();
+    const existing = (await sql`
+      SELECT id FROM addresses WHERE address_text = ${hit.displayName} LIMIT 1
+    `) as Array<{ id: string }>;
+    if (existing.length > 0) {
+      addressId = existing[0].id;
     } else {
-      const ins = await sb
-        .from("addresses")
-        .insert({ address_text: hit.displayName, lat, lng })
-        .select("id")
-        .single();
-      if (ins.error || !ins.data) {
-        console.error("[geocode] insert failed:", ins.error);
-        return NextResponse.json(
-          { error: `failed to persist address: ${ins.error?.message}` },
-          { status: 500 },
-        );
-      }
-      addressId = ins.data.id;
+      const inserted = (await sql`
+        INSERT INTO addresses (address_text, lat, lng)
+        VALUES (${hit.displayName}, ${lat}, ${lng})
+        RETURNING id
+      `) as Array<{ id: string }>;
+      addressId = inserted[0].id;
     }
   } catch (err) {
-    console.error("[geocode] supabase setup failed:", err);
+    console.error("[geocode] db failed:", err);
     return NextResponse.json(
       { error: `db setup failed: ${(err as Error).message}` },
       { status: 500 },

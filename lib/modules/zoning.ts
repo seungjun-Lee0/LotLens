@@ -22,7 +22,7 @@
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
-import type { RiskLevel } from "@/lib/supabase";
+import type { RiskLevel } from "@/lib/db";
 
 const ZONING =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Zoning_opendata/FeatureServer/0/query";

@@ -1,4 +1,4 @@
-import type { RiskLevel } from "@/lib/supabase";
+import type { RiskLevel } from "@/lib/db";
 
 const STYLE: Record<RiskLevel, { label: string; tint: string }> = {
   high:     { label: "High",          tint: "var(--apple-red)" },

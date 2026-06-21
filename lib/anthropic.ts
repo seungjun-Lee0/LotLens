@@ -8,7 +8,7 @@
 // CLAUDE.md §7. The route handlers, pipeline, and report renderer do not
 // change.
 
-import type { Database, Module } from "@/lib/supabase";
+import type { CouncilDataRow, Module } from "@/lib/db";
 
 export type ModuleNarrative = {
   summary: string;
@@ -20,7 +20,7 @@ export type ModuleNarrative = {
 export type GenerateModuleNarrativeInput = {
   module: Module;
   address: string;
-  councilData: Database["public"]["Tables"]["council_data"]["Row"];
+  councilData: CouncilDataRow;
 };
 
 const DISCLAIMER_FALLBACK_QUESTIONS = [

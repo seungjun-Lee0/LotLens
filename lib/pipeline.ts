@@ -20,11 +20,11 @@ import { fetchZoningData } from "@/lib/modules/zoning";
 
 import { generateModuleNarrative, type ModuleNarrative } from "@/lib/anthropic";
 import {
-  getServerSupabase,
+  getDb,
+  type CouncilDataRow,
   type Module,
   type RiskLevel,
-  type TypedSupabase,
-} from "@/lib/supabase";
+} from "@/lib/db";
 
 type Address = {
   id: string;
@@ -50,27 +50,26 @@ export type FetchOverlaysSummary = {
   elapsedMs: number;
 };
 
-async function loadAddress(
-  sb: TypedSupabase,
-  addressId: string,
-): Promise<Address> {
-  const { data, error } = await sb
-    .from("addresses")
-    .select("id,address_text,lat,lng")
-    .eq("id", addressId)
-    .single();
-  if (error || !data) {
-    throw new Error(`address ${addressId} not found: ${error?.message ?? "no row"}`);
+async function loadAddress(addressId: string): Promise<Address> {
+  const sql = getDb();
+  const rows = (await sql`
+    SELECT id, address_text, lat, lng
+    FROM addresses
+    WHERE id = ${addressId}
+    LIMIT 1
+  `) as Address[];
+  if (rows.length === 0) {
+    throw new Error(`address ${addressId} not found`);
   }
-  return data as Address;
+  return rows[0];
 }
 
 export async function fetchOverlaysForAddress(
   addressId: string,
 ): Promise<FetchOverlaysSummary> {
   const t0 = performance.now();
-  const sb = getServerSupabase();
-  const addr = await loadAddress(sb, addressId);
+  const sql = getDb();
+  const addr = await loadAddress(addressId);
 
   const [flood, fire, herit, ease, zone] = await Promise.all([
     fetchFloodingData(addr.lat, addr.lng),
@@ -123,22 +122,23 @@ export async function fetchOverlaysForAddress(
     },
   ];
 
-  // Idempotent replace.
-  const del = await sb.from("council_data").delete().eq("address_id", addressId);
-  if (del.error) throw new Error(`failed to clear council_data: ${del.error.message}`);
+  // Idempotent replace. Each invocation drops the address's previous rows
+  // and rewrites the five fresh ones.
+  await sql`DELETE FROM council_data WHERE address_id = ${addressId}`;
 
-  const ins = await sb.from("council_data").insert(
-    overlays.map((o) => ({
-      address_id: addressId,
-      module: o.module,
-      risk_level: o.riskLevel,
-      has_consideration: o.hasConsideration,
-      source_name: o.sourceName,
-      source_url: o.sourceUrl,
-      raw_response: o.raw,
-    })),
-  );
-  if (ins.error) throw new Error(`failed to insert council_data: ${ins.error.message}`);
+  // 5 small inserts — fast enough sequentially on Neon's HTTP driver
+  // (~30 ms each). Avoiding multi-row INSERT lets us serialise jsonb
+  // through the tagged-template binding without manual escaping.
+  for (const o of overlays) {
+    await sql`
+      INSERT INTO council_data
+        (address_id, module, risk_level, has_consideration,
+         source_name, source_url, raw_response)
+      VALUES
+        (${addressId}, ${o.module}, ${o.riskLevel}, ${o.hasConsideration},
+         ${o.sourceName}, ${o.sourceUrl}, ${JSON.stringify(o.raw)}::jsonb)
+    `;
+  }
 
   const modules = Object.fromEntries(
     overlays.map((o) => [
@@ -191,29 +191,42 @@ export type ReportPayload = {
 export async function loadReportPayload(
   reportId: string,
 ): Promise<ReportPayload | null> {
-  const sb = getServerSupabase();
-  const { data: report } = await sb
-    .from("reports")
-    .select("id,address_id,narrative,generated_at")
-    .eq("id", reportId)
-    .maybeSingle();
-  if (!report || !report.address_id) return null;
+  const sql = getDb();
 
-  const [addrRes, dataRes] = await Promise.all([
-    sb
-      .from("addresses")
-      .select("id,address_text,lat,lng")
-      .eq("id", report.address_id)
-      .single(),
-    sb
-      .from("council_data")
-      .select(
-        "module,risk_level,has_consideration,source_name,source_url,raw_response",
-      )
-      .eq("address_id", report.address_id),
+  const reportRows = (await sql`
+    SELECT id, address_id, narrative, generated_at
+    FROM reports
+    WHERE id = ${reportId}
+    LIMIT 1
+  `) as Array<{
+    id: string;
+    address_id: string;
+    narrative: unknown;
+    generated_at: string;
+  }>;
+  if (reportRows.length === 0) return null;
+  const report = reportRows[0];
+
+  const [addrRows, dataRows] = await Promise.all([
+    sql`
+      SELECT id, address_text, lat, lng
+      FROM addresses
+      WHERE id = ${report.address_id}
+      LIMIT 1
+    `,
+    sql`
+      SELECT module, risk_level, has_consideration,
+             source_name, source_url, raw_response
+      FROM council_data
+      WHERE address_id = ${report.address_id}
+    `,
   ]);
-  if (addrRes.error || !addrRes.data) return null;
-  if (dataRes.error) throw new Error(dataRes.error.message);
+  if ((addrRows as unknown[]).length === 0) return null;
+  const address = (addrRows as Address[])[0];
+  const rows = dataRows as Pick<
+    CouncilDataRow,
+    "module" | "risk_level" | "has_consideration" | "source_name" | "source_url" | "raw_response"
+  >[];
 
   const ordered: Module[] = [
     "flooding",
@@ -222,9 +235,7 @@ export async function loadReportPayload(
     "easements",
     "zoning",
   ];
-  const byModule = new Map(
-    (dataRes.data ?? []).map((r) => [r.module as Module, r]),
-  );
+  const byModule = new Map(rows.map((r) => [r.module as Module, r]));
   const modules: ReportModuleRow[] = ordered
     .filter((m) => byModule.has(m))
     .map((m) => {
@@ -259,7 +270,7 @@ export async function loadReportPayload(
       generated_at: report.generated_at,
       narrative: (report.narrative ?? {}) as ReportNarrative,
     },
-    address: addrRes.data as Address,
+    address,
     modules,
     considerationCount: modules.filter((m) => m.hasConsideration).length,
     propertyPolygon,
@@ -270,15 +281,16 @@ export async function generateReportForAddress(
   addressId: string,
 ): Promise<GenerateReportResult> {
   const t0 = performance.now();
-  const sb = getServerSupabase();
-  const addr = await loadAddress(sb, addressId);
+  const sql = getDb();
+  const addr = await loadAddress(addressId);
 
-  const { data: rows, error } = await sb
-    .from("council_data")
-    .select("*")
-    .eq("address_id", addressId);
-  if (error) throw new Error(`failed to load council_data: ${error.message}`);
-  if (!rows || rows.length === 0) {
+  const rows = (await sql`
+    SELECT id, address_id, module, source_url, source_name, raw_response,
+           risk_level, has_consideration, retrieved_at
+    FROM council_data
+    WHERE address_id = ${addressId}
+  `) as CouncilDataRow[];
+  if (rows.length === 0) {
     throw new Error(
       `no council_data rows for address ${addressId}. Run fetchOverlaysForAddress first.`,
     );
@@ -295,15 +307,14 @@ export async function generateReportForAddress(
     }),
   );
 
-  const ins = await sb
-    .from("reports")
-    .insert({ address_id: addressId, narrative })
-    .select("id")
-    .single();
-  if (ins.error) throw new Error(`failed to insert report: ${ins.error.message}`);
+  const inserted = (await sql`
+    INSERT INTO reports (address_id, narrative)
+    VALUES (${addressId}, ${JSON.stringify(narrative)}::jsonb)
+    RETURNING id
+  `) as Array<{ id: string }>;
 
   return {
-    reportId: ins.data.id,
+    reportId: inserted[0].id,
     addressId,
     narrative,
     elapsedMs: Math.round(performance.now() - t0),

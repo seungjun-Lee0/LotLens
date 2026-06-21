@@ -17,7 +17,7 @@
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
-import type { RiskLevel } from "@/lib/supabase";
+import type { RiskLevel } from "@/lib/db";
 
 const HIGH_VOLTAGE =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Regional_infrastructure_corridors_and_substations_overlay_High_voltage_easements/FeatureServer/0/query";

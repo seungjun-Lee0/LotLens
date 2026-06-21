@@ -9,7 +9,7 @@
 import type { LucideIcon } from "lucide-react";
 import { Flame, Landmark, LayoutGrid, ScrollText, Waves } from "lucide-react";
 
-import type { Module } from "@/lib/supabase";
+import type { Module } from "@/lib/db";
 
 export type LegendItem = {
   label: string;

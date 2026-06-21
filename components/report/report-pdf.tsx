@@ -18,7 +18,7 @@ import {
 import type { ModuleNarrative } from "@/lib/anthropic";
 import { MODULE_META, APPLE_HEX } from "@/lib/module-meta";
 import type { ReportPayload } from "@/lib/pipeline";
-import type { Module, RiskLevel } from "@/lib/supabase";
+import type { Module, RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
 // ── Apple-ish tokens (mirrors apple.com / iCloud system surfaces) ────────

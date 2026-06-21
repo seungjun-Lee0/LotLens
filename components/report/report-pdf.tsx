@@ -573,10 +573,32 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
             <Text style={styles.metaLabel}>Address</Text>
             <Text style={styles.metaValue}>{address.address_text}</Text>
           </View>
+          {payload.parcel?.lotPlan && (
+            <View style={styles.metaBlock}>
+              <Text style={styles.metaLabel}>Lot / Plan</Text>
+              <Text style={[styles.metaValue, { fontFamily: "Helvetica" }]}>
+                {payload.parcel.lotNumber ?? payload.parcel.lotPlan} / {payload.parcel.planNumber ?? ""}
+              </Text>
+            </View>
+          )}
+          {payload.parcel?.areaM2 && (
+            <View style={styles.metaBlock}>
+              <Text style={styles.metaLabel}>Lot area</Text>
+              <Text style={styles.metaValue}>
+                {payload.parcel.areaM2.toLocaleString("en-AU")} m²{payload.parcel.tenure ? ` · ${payload.parcel.tenure}` : ""}
+              </Text>
+            </View>
+          )}
           <View style={styles.metaBlock}>
             <Text style={styles.metaLabel}>Council</Text>
             <Text style={styles.metaValue}>Brisbane City Council</Text>
           </View>
+          {payload.parcel?.ward && (
+            <View style={styles.metaBlock}>
+              <Text style={styles.metaLabel}>Ward</Text>
+              <Text style={styles.metaValue}>{payload.parcel.ward}</Text>
+            </View>
+          )}
           {zoneText && (
             <View style={styles.metaBlock}>
               <Text style={styles.metaLabel}>Zoning</Text>

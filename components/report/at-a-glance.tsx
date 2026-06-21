@@ -120,7 +120,25 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
         <aside className="flex flex-col gap-4 border-l-0 border-t border-border/40 pt-6 sm:gap-5 sm:pt-7 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
           <Meta label="Date of report">{formatDate(report.generated_at)}</Meta>
           <Meta label="Address"><span className="break-words">{address.address_text}</span></Meta>
+          {payload.parcel?.lotPlan && (
+            <Meta label="Lot / Plan">
+              <span className="font-mono text-[13.5px]">
+                {payload.parcel.lotNumber ?? payload.parcel.lotPlan} / {payload.parcel.planNumber ?? ""}
+              </span>
+            </Meta>
+          )}
+          {payload.parcel?.areaM2 && (
+            <Meta label="Lot area">
+              {payload.parcel.areaM2.toLocaleString("en-AU")} m²
+              {payload.parcel.tenure && (
+                <span className="ml-1.5 text-muted-foreground">· {payload.parcel.tenure}</span>
+              )}
+            </Meta>
+          )}
           <Meta label="Council">Brisbane City Council</Meta>
+          {payload.parcel?.ward && (
+            <Meta label="Ward">{payload.parcel.ward}</Meta>
+          )}
           {zoneText && (
             <Meta label="Zoning">
               <ul className="mt-0.5 list-inside list-disc text-[13.5px] [&>li]:leading-snug">

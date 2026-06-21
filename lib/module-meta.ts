@@ -56,6 +56,21 @@ export const APPLE_HEX = {
   gray:   "#8e8e93",
 };
 
+// Develo-mirrored overlay palette (kept in sync with lib/overlays.ts).
+// We re-declare here to avoid a circular import — module-meta is consumed
+// by the PDF too. Both files must move together when changing colours.
+const D = {
+  floodHigh: "#1e3a8a", floodMedium: "#2563eb", floodLow: "#60a5fa", floodVeryLow: "#bfdbfe",
+  overlandHigh: "#c2410c", overlandMedium: "#f97316", overlandLow: "#fbbf24", overlandVeryLow: "#fde68a",
+  stormHigh: "#0e7490", stormMedium: "#06b6d4", stormLow: "#67e8f9", stormVeryLow: "#cffafe",
+  histFeb2022: "#c026d3", histJan2011: "#a855f7",
+  fireVeryHigh: "#b91c1c", fireHigh: "#dc2626", fireBuffer: "#ea580c", fireMedium: "#f59e0b",
+  heritageState: "#7e22ce", heritageLocal: "#db2777", heritageCharacter: "#a855f7",
+  easementHV: "#db2777",
+  vegWaterway: "#0284c7", vegMSES: "#ea580c", vegBiodiversity: "#84cc16", vegCorridor: "#16a34a",
+  zoneCentre: "#dc2626", zoneMixed: "#f97316", zoneResidential: "#facc15", zoneOpenSpace: "#16a34a", zoneOther: "#6366f1",
+};
+
 export const MODULE_META: Record<Module, ModuleMeta> = {
   flooding: {
     name: "Flooding",
@@ -70,10 +85,12 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "Government flood risk models are broad guides that estimate flood probability and acceptable risk but do not guarantee site-specific accuracy. Newly subdivided lots may have already considered flooding risk and been built above acceptable flood levels. For specific concerns, consult your local authority or a qualified professional.",
     legend: [
-      { label: "High risk",     color: "var(--apple-red)",    colorHex: APPLE_HEX.red },
-      { label: "Medium risk",   color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
-      { label: "Low risk",      color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
-      { label: "Very low risk", color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
+      { label: "High possibility (5.0% AEP)",     color: D.floodHigh,    colorHex: D.floodHigh },
+      { label: "Moderate possibility (1.0% AEP)", color: D.floodMedium,  colorHex: D.floodMedium },
+      { label: "Low possibility (0.2% AEP)",      color: D.floodLow,     colorHex: D.floodLow },
+      { label: "Very low (0.05% AEP)",            color: D.floodVeryLow, colorHex: D.floodVeryLow },
+      { label: "Feb 2022 historic event",         color: D.histFeb2022,  colorHex: D.histFeb2022 },
+      { label: "Jan 2011 historic event",         color: D.histJan2011,  colorHex: D.histJan2011 },
     ],
   },
 
@@ -90,10 +107,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "Overland flow models are broad guides and may not reflect site-specific conditions. Flooding can still occur outside mapped areas due to local factors. Newly subdivided lots may have engineered drainage that supersedes the mapping.",
     legend: [
-      { label: "High risk",     color: "var(--apple-red)",    colorHex: APPLE_HEX.red },
-      { label: "Medium risk",   color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
-      { label: "Low risk",      color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
-      { label: "Very low risk", color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
+      { label: "High impact",     color: D.overlandHigh,    colorHex: D.overlandHigh },
+      { label: "Moderate impact", color: D.overlandMedium,  colorHex: D.overlandMedium },
+      { label: "Low impact",      color: D.overlandLow,     colorHex: D.overlandLow },
+      { label: "Very low",        color: D.overlandVeryLow, colorHex: D.overlandVeryLow },
     ],
   },
 
@@ -110,10 +127,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "Storm-tide modelling combines historical events, projected sea-level rise, and bathymetry. Site-specific factors (sea walls, elevation surveys) may change the practical risk. Confirm with the council or a qualified coastal engineer before relying on this for a major decision.",
     legend: [
-      { label: "High risk",     color: "var(--apple-red)",    colorHex: APPLE_HEX.red },
-      { label: "Medium risk",   color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
-      { label: "Low risk",      color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
-      { label: "Very low risk", color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
+      { label: "High risk",     color: D.stormHigh,    colorHex: D.stormHigh },
+      { label: "Medium risk",   color: D.stormMedium,  colorHex: D.stormMedium },
+      { label: "Low risk",      color: D.stormLow,     colorHex: D.stormLow },
+      { label: "Very low risk", color: D.stormVeryLow, colorHex: D.stormVeryLow },
     ],
   },
 
@@ -130,10 +147,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "BCC's overlay is council-scope. Some properties on the statewide Queensland Fire Department mapping fall outside the council overlay. For high-stakes decisions, also check the QFD bushfire prone area map.",
     legend: [
-      { label: "Very high potential",   color: "var(--apple-red)",    colorHex: APPLE_HEX.red },
-      { label: "High hazard area",      color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
-      { label: "High hazard buffer",    color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
-      { label: "Medium hazard area",    color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
+      { label: "Very high potential",   color: D.fireVeryHigh, colorHex: D.fireVeryHigh },
+      { label: "High hazard area",      color: D.fireHigh,     colorHex: D.fireHigh },
+      { label: "High hazard buffer",    color: D.fireBuffer,   colorHex: D.fireBuffer },
+      { label: "Medium hazard area",    color: D.fireMedium,   colorHex: D.fireMedium },
     ],
   },
 
@@ -150,10 +167,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "The overlay does not include every individual tree of value. Pre-1947 dwellings, Natural Assets Local Law trees, and protected wetlands may impose extra controls. For any work near trees or waterways, an arborist report or council pre-lodgement meeting is the safer path.",
     legend: [
-      { label: "Waterway / wetland",       color: "var(--apple-blue)",   colorHex: APPLE_HEX.blue },
-      { label: "Matters of state interest", color: "var(--apple-red)",   colorHex: APPLE_HEX.red },
-      { label: "Biodiversity area",        color: "var(--apple-green)",  colorHex: APPLE_HEX.green },
-      { label: "Ecological corridor",      color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
+      { label: "Waterway / wetland",        color: D.vegWaterway,     colorHex: D.vegWaterway },
+      { label: "Matters of state interest", color: D.vegMSES,         colorHex: D.vegMSES },
+      { label: "Biodiversity area",         color: D.vegBiodiversity, colorHex: D.vegBiodiversity },
+      { label: "Ecological corridor",       color: D.vegCorridor,     colorHex: D.vegCorridor },
     ],
   },
 
@@ -170,9 +187,9 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "Even properties outside both overlays can carry character significance if the house was built before 1947. Council can take an interest in pre-1947 demolition applications case-by-case.",
     legend: [
-      { label: "State heritage area",  color: "var(--apple-purple)", colorHex: APPLE_HEX.purple },
-      { label: "Local heritage area",  color: "var(--apple-pink)",   colorHex: APPLE_HEX.pink },
-      { label: "Character (pre-1947)", color: "var(--apple-indigo)", colorHex: APPLE_HEX.indigo },
+      { label: "State heritage area",  color: D.heritageState,     colorHex: D.heritageState },
+      { label: "Local heritage area",  color: D.heritageLocal,     colorHex: D.heritageLocal },
+      { label: "Character (pre-1947)", color: D.heritageCharacter, colorHex: D.heritageCharacter },
     ],
   },
 
@@ -189,7 +206,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "This module shows only Council-mapped high-voltage easements. The majority of easements — drainage, sewerage, access, party walls — are recorded on land title and require a QLD Title Search via a conveyancer to discover. The absence of a result here is not proof the property has no easements.",
     legend: [
-      { label: "High-voltage easement", color: "var(--apple-teal)", colorHex: APPLE_HEX.teal },
+      { label: "High-voltage easement", color: D.easementHV, colorHex: D.easementHV },
     ],
   },
 
@@ -206,11 +223,11 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "Zone codes alone don't tell the full story. Each zone has a code in the City Plan that specifies development standards. Read it alongside any precinct overlay before making any subdivision or building decision.",
     legend: [
-      { label: "Centre",                  color: "var(--apple-red)",    colorHex: APPLE_HEX.red },
-      { label: "Mixed use",               color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
-      { label: "General residential",     color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
-      { label: "Open space / Recreation", color: "var(--apple-green)",  colorHex: APPLE_HEX.green },
-      { label: "Industry / Other",        color: "var(--apple-indigo)", colorHex: APPLE_HEX.indigo },
+      { label: "Centre",                  color: D.zoneCentre,      colorHex: D.zoneCentre },
+      { label: "Mixed use",               color: D.zoneMixed,       colorHex: D.zoneMixed },
+      { label: "General residential",     color: D.zoneResidential, colorHex: D.zoneResidential },
+      { label: "Open space / Recreation", color: D.zoneOpenSpace,   colorHex: D.zoneOpenSpace },
+      { label: "Industry / Other",        color: D.zoneOther,       colorHex: D.zoneOther },
     ],
   },
 };

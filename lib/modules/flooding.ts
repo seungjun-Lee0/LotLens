@@ -122,6 +122,13 @@ export async function fetchFloodingData(
     inSR: 4326,
     returnGeometry: false,
   };
+  // Historic flood polygons are based on the actual lot footprint while we
+  // only have the geocoded street-centre point. Without a small buffer
+  // (~8 m) we miss properties whose lot just touches the polygon edge —
+  // produces a Develo-vs-us discrepancy on borderline addresses. 8 m is
+  // smaller than typical Brisbane lot frontages so this won't falsely
+  // include neighbours.
+  const histPointParams = { ...pointParams, bufferDegrees: 0.00008 };
   const contextParams = {
     geometry: point,
     geometryType: "esriGeometryPoint" as const,
@@ -140,9 +147,9 @@ export async function fetchFloodingData(
 
   const [overall, h2022, h2011, overallCtx, h2022Ctx, h2011Ctx] =
     await Promise.all([
-      queryArcGIS(FAM_OVERALL,   { ...pointParams,   outFields: fieldsOverall }),
-      queryArcGIS(HISTORIC_2022, { ...pointParams,   outFields: fieldsHist }),
-      queryArcGIS(HISTORIC_2011, { ...pointParams,   outFields: fieldsHist }),
+      queryArcGIS(FAM_OVERALL,   { ...pointParams,     outFields: fieldsOverall }),
+      queryArcGIS(HISTORIC_2022, { ...histPointParams, outFields: fieldsHist }),
+      queryArcGIS(HISTORIC_2011, { ...histPointParams, outFields: fieldsHist }),
       queryArcGIS(FAM_OVERALL,   { ...contextParams, outFields: fieldsOverall }),
       queryArcGIS(HISTORIC_2022, { ...contextParams, outFields: fieldsHist }),
       queryArcGIS(HISTORIC_2011, { ...contextParams, outFields: fieldsHist }),

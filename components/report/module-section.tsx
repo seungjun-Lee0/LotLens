@@ -38,6 +38,23 @@ function ModuleFacts({
         </dl>
       );
     }
+    case "overland_flow":
+    case "storm_tide": {
+      const ft = raw.floodType as string | null;
+      const r = raw.riskLevel as string | null;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">Risk level</dt>
+          <dd className="font-medium">{r ?? "—"}</dd>
+          {ft && (
+            <>
+              <dt className="text-muted-foreground">Type</dt>
+              <dd className="font-medium">{ft}</dd>
+            </>
+          )}
+        </dl>
+      );
+    }
     case "bushfire": {
       const cat = raw.hazardCategory as string | null;
       const code = raw.hazardCode as string | null;
@@ -47,6 +64,23 @@ function ModuleFacts({
           <dd className="font-medium">{cat ?? "—"}</dd>
           <dt className="text-muted-foreground">Code</dt>
           <dd className="font-mono text-[11px]">{code ?? "—"}</dd>
+        </dl>
+      );
+    }
+    case "vegetation": {
+      const cat = raw.category as string | null;
+      const code = raw.code as string | null;
+      if (!cat) return null;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">Category</dt>
+          <dd className="font-medium">{cat}</dd>
+          {code && (
+            <>
+              <dt className="text-muted-foreground">Code</dt>
+              <dd className="font-mono text-[11px]">{code}</dd>
+            </>
+          )}
         </dl>
       );
     }

@@ -7,7 +7,7 @@
 // two stay in sync.
 
 import type { LucideIcon } from "lucide-react";
-import { Flame, Landmark, LayoutGrid, ScrollText, Waves } from "lucide-react";
+import { CloudRain, Flame, Landmark, LayoutGrid, Leaf, ScrollText, Waves, Wind } from "lucide-react";
 
 import type { Module } from "@/lib/db";
 
@@ -77,6 +77,46 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
   },
 
+  overland_flow: {
+    name: "Overland Flow",
+    question: "Are there any major rainfall issues for this property?",
+    tint: "var(--apple-teal)",
+    tintHex: APPLE_HEX.teal,
+    icon: CloudRain,
+    sourceLabel: "Brisbane City Council — Overland Flow mapping",
+    thingsToKnow: [
+      "Overland flow is water running over the ground's surface during heavy rain — distinct from creek or river flooding. It happens when stormwater systems are overwhelmed, drainage paths are blocked, or the land cannot absorb water quickly enough.",
+      "Overland flow is usually localised but can damage structures and flood yards and low-lying areas. Urban properties with hard surfaces nearby (roads, concrete) are particularly vulnerable. Future development of an overland-flow lot may require specific drainage and landscaping measures.",
+    ],
+    note: "Overland flow models are broad guides and may not reflect site-specific conditions. Flooding can still occur outside mapped areas due to local factors. Newly subdivided lots may have engineered drainage that supersedes the mapping.",
+    legend: [
+      { label: "High risk",     color: "var(--apple-red)",    colorHex: APPLE_HEX.red },
+      { label: "Medium risk",   color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
+      { label: "Low risk",      color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
+      { label: "Very low risk", color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
+    ],
+  },
+
+  storm_tide: {
+    name: "Storm Tide",
+    question: "Is the property exposed to coastal storm-tide flooding?",
+    tint: "var(--apple-indigo)",
+    tintHex: APPLE_HEX.indigo,
+    icon: Wind,
+    sourceLabel: "Brisbane City Council — Storm Tide mapping",
+    thingsToKnow: [
+      "Storm tide is the sea-level rise caused by a severe storm combined with the normal astronomical tide. Bayside Brisbane (Wynnum, Manly, Sandgate) and tidal creek mouths are exposed to storm-tide inundation during cyclones and east-coast lows.",
+      "Building in a storm-tide area triggers council planning controls — habitable floor levels must sit above the defined storm-tide level, and there can be requirements around the building envelope's resilience to wave action and saltwater inundation.",
+    ],
+    note: "Storm-tide modelling combines historical events, projected sea-level rise, and bathymetry. Site-specific factors (sea walls, elevation surveys) may change the practical risk. Confirm with the council or a qualified coastal engineer before relying on this for a major decision.",
+    legend: [
+      { label: "High risk",     color: "var(--apple-red)",    colorHex: APPLE_HEX.red },
+      { label: "Medium risk",   color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
+      { label: "Low risk",      color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
+      { label: "Very low risk", color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
+    ],
+  },
+
   bushfire: {
     name: "Bushfire",
     question: "Is the property in a potential bushfire area?",
@@ -94,6 +134,26 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
       { label: "High hazard area",      color: "var(--apple-orange)", colorHex: APPLE_HEX.orange },
       { label: "High hazard buffer",    color: "var(--apple-yellow)", colorHex: APPLE_HEX.yellow },
       { label: "Medium hazard area",    color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
+    ],
+  },
+
+  vegetation: {
+    name: "Vegetation",
+    question: "Is the property covered by protected vegetation or biodiversity overlays?",
+    tint: "var(--apple-green)",
+    tintHex: APPLE_HEX.green,
+    icon: Leaf,
+    sourceLabel: "Brisbane City Council — Biodiversity areas overlay",
+    thingsToKnow: [
+      "The Biodiversity areas overlay protects native vegetation that supports threatened species, wildlife corridors, and ecological communities. Council assessment is required before removing significant trees, clearing understorey, or substantially altering habitat in these areas.",
+      "Owning a property in the overlay does not stop you renovating or extending, but it constrains where buildings can sit, what trees can be removed, and what landscaping can replace cleared vegetation. Many Brisbane renovations are stalled mid-project by overlooked vegetation controls.",
+    ],
+    note: "The overlay does not include every individual tree of value. Pre-1947 dwellings, Natural Assets Local Law trees, and protected wetlands may impose extra controls. For any work near trees or waterways, an arborist report or council pre-lodgement meeting is the safer path.",
+    legend: [
+      { label: "Waterway / wetland",       color: "var(--apple-blue)",   colorHex: APPLE_HEX.blue },
+      { label: "Matters of state interest", color: "var(--apple-red)",   colorHex: APPLE_HEX.red },
+      { label: "Biodiversity area",        color: "var(--apple-green)",  colorHex: APPLE_HEX.green },
+      { label: "Ecological corridor",      color: "var(--apple-teal)",   colorHex: APPLE_HEX.teal },
     ],
   },
 

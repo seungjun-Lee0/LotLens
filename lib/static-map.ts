@@ -13,10 +13,13 @@ import StaticMaps from "staticmaps";
 
 import type { OverlayFeature } from "@/lib/overlays";
 
-// Esri World Imagery — free satellite tile service, no API key. URL uses
-// {z}/{y}/{x} order (ArcGIS REST convention) rather than OSM's {z}/{x}/{y}.
-const SAT_TILES =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+// Tile source: prefer Mapbox Satellite Streets (Develo-grade imagery)
+// when NEXT_PUBLIC_MAPBOX_TOKEN is set, fall back to free Esri World
+// Imagery so the PDF still renders without a token.
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+const SAT_TILES = MAPBOX_TOKEN
+  ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`
+  : "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const TILE_UA = "PropAI/0.1 Brisbane-DD-prototype (contact: jun@propai.dev)";
 
 // 8-digit hex with alpha for staticmaps fill colours.

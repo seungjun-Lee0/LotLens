@@ -18,7 +18,10 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
 export type Module =
   | "flooding"
+  | "overland_flow"
+  | "storm_tide"
   | "bushfire"
+  | "vegetation"
   | "heritage"
   | "easements"
   | "zoning";

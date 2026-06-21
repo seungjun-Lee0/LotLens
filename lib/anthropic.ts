@@ -34,11 +34,14 @@ export async function generateModuleNarrative(
   // Kept `async` to match the signature Task 4b will need. Stub returns
   // immediately.
   switch (input.module) {
-    case "flooding":   return renderStubFlooding(input);
-    case "bushfire":   return renderStubBushfire(input);
-    case "heritage":   return renderStubHeritage(input);
-    case "easements":  return renderStubEasements(input);
-    case "zoning":     return renderStubZoning(input);
+    case "flooding":      return renderStubFlooding(input);
+    case "overland_flow": return renderStubOverlandFlow(input);
+    case "storm_tide":    return renderStubStormTide(input);
+    case "bushfire":      return renderStubBushfire(input);
+    case "vegetation":    return renderStubVegetation(input);
+    case "heritage":      return renderStubHeritage(input);
+    case "easements":     return renderStubEasements(input);
+    case "zoning":        return renderStubZoning(input);
   }
 }
 
@@ -103,6 +106,93 @@ function renderStubFlooding(
       "What habitable floor level does the property currently sit at, vs the defined flood event level?",
       "Has the property been physically flooded in recent events? Request photos and insurance claim history.",
       "What does flood insurance cost on this address — get a quote before contract.",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubOverlandFlow(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const risk = (raw.riskLevel as string) ?? "none";
+  if (risk === "none") {
+    return {
+      summary: `No overland flow consideration was identified at ${input.address}.`,
+      detail:
+        "Brisbane City Council's Overland Flow mapping does not place this address inside any polygon. The lot is unlikely to be affected by mapped stormwater run-off.",
+      questions_to_ask: [
+        "Ask about local drainage problems anyway — overland flow models can miss yard-scale ponding.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+  return {
+    summary: `${input.address} carries ${risk} overland flow risk per BCC mapping.`,
+    detail: `Brisbane City Council classifies this property as "${risk}" on the Overland Flow overlay. Building or extending may require specific drainage measures so stormwater can pass through the lot safely.`,
+    questions_to_ask: [
+      "Are there visible drainage marks, gullies or yard erosion from past storms?",
+      "Have any extensions on this lot needed Council overland-flow assessment?",
+      "What does the stormwater pathway look like at the back of the lot — fence-line drains, easements, neighbour batters?",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubStormTide(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const risk = (raw.riskLevel as string) ?? "none";
+  if (risk === "none") {
+    return {
+      summary: `No storm tide consideration was identified at ${input.address}.`,
+      detail:
+        "Brisbane City Council's Storm Tide mapping does not place this address inside any polygon. The lot is unlikely to be exposed to coastal storm-tide inundation as currently modelled.",
+      questions_to_ask: [
+        "If the property is near the bay, ask about historic king tide / east-coast low events anyway.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+  return {
+    summary: `${input.address} sits in a ${risk} storm tide area per BCC mapping.`,
+    detail: `Brisbane City Council classifies this property as "${risk}" on the Storm Tide overlay. Habitable floor levels, building envelope resilience, and certain materials may be regulated. Insurance premiums for coastal storm-exposed properties can be materially higher.`,
+    questions_to_ask: [
+      "What is the habitable floor level versus the defined storm tide event level?",
+      "Has insurance been quoted with explicit storm tide / cyclone coverage?",
+      "Is there a sea wall, levee, or natural buffer affecting the practical risk?",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubVegetation(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const cat = (raw.category as string | null) ?? null;
+  if (!cat) {
+    return {
+      summary: `No biodiversity overlay applies to ${input.address}.`,
+      detail:
+        "BCC's Biodiversity areas overlay does not cover this address. Standard tree-removal and landscaping rules still apply (Natural Assets Local Law can catch individual significant trees even outside the overlay).",
+      questions_to_ask: [
+        "Is there a large or old tree on the lot that might trigger Natural Assets Local Law protections?",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+  return {
+    summary: `${input.address} is mapped as "${cat}" on the BCC Biodiversity areas overlay.`,
+    detail: `The property sits inside a "${cat}" polygon under BCC's City Plan 2014. Council assessment is required before clearing protected vegetation, and building envelopes may be constrained by the overlay's vegetation rules.`,
+    questions_to_ask: [
+      "What native species are on the lot, and are any protected at the state level?",
+      "Are there existing approved disturbance areas — driveway, building envelope, fire trail?",
+      "Would a renovation require an arborist report or a Council pre-lodgement meeting?",
     ],
     sources: sourcesFromRaw(raw),
   };

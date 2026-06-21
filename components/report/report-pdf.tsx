@@ -325,10 +325,23 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       if (events.length > 0) rows.push({ key: "Historic events", val: events.map((e) => String(e.event)).join(", ") });
       return rows;
     }
+    case "overland_flow":
+    case "storm_tide": {
+      const rows: { key: string; val: string }[] = [];
+      if (raw.riskLevel) rows.push({ key: "Risk level", val: String(raw.riskLevel) });
+      if (raw.floodType) rows.push({ key: "Type", val: String(raw.floodType) });
+      return rows;
+    }
     case "bushfire": {
       const rows: { key: string; val: string }[] = [];
       if (raw.hazardCategory) rows.push({ key: "Hazard category", val: String(raw.hazardCategory) });
       if (raw.hazardCode) rows.push({ key: "Code", val: String(raw.hazardCode) });
+      return rows;
+    }
+    case "vegetation": {
+      const rows: { key: string; val: string }[] = [];
+      if (raw.category) rows.push({ key: "Category", val: String(raw.category) });
+      if (raw.code) rows.push({ key: "Code", val: String(raw.code) });
       return rows;
     }
     case "heritage": {
@@ -487,7 +500,16 @@ function ModulePage({
   );
 }
 
-const MODULE_ORDER: Module[] = ["flooding", "bushfire", "heritage", "easements", "zoning"];
+const MODULE_ORDER: Module[] = [
+  "flooding",
+  "overland_flow",
+  "storm_tide",
+  "bushfire",
+  "vegetation",
+  "heritage",
+  "easements",
+  "zoning",
+];
 function moduleIndex(m: Module): number {
   return MODULE_ORDER.indexOf(m) + 1;
 }

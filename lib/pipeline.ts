@@ -16,6 +16,9 @@ import { fetchBushfireData } from "@/lib/modules/bushfire";
 import { fetchEasementsData } from "@/lib/modules/easements";
 import { fetchFloodingData } from "@/lib/modules/flooding";
 import { fetchHeritageData } from "@/lib/modules/heritage";
+import { fetchOverlandFlowData } from "@/lib/modules/overland-flow";
+import { fetchStormTideData } from "@/lib/modules/storm-tide";
+import { fetchVegetationData } from "@/lib/modules/vegetation";
 import { fetchZoningData } from "@/lib/modules/zoning";
 
 import { generateModuleNarrative, type ModuleNarrative } from "@/lib/anthropic";
@@ -71,13 +74,17 @@ export async function fetchOverlaysForAddress(
   const sql = getDb();
   const addr = await loadAddress(addressId);
 
-  const [flood, fire, herit, ease, zone] = await Promise.all([
-    fetchFloodingData(addr.lat, addr.lng),
-    fetchBushfireData(addr.lat, addr.lng),
-    fetchHeritageData(addr.lat, addr.lng),
-    fetchEasementsData(addr.lat, addr.lng),
-    fetchZoningData(addr.lat, addr.lng),
-  ]);
+  const [flood, overland, stormTide, fire, veg, herit, ease, zone] =
+    await Promise.all([
+      fetchFloodingData(addr.lat, addr.lng),
+      fetchOverlandFlowData(addr.lat, addr.lng),
+      fetchStormTideData(addr.lat, addr.lng),
+      fetchBushfireData(addr.lat, addr.lng),
+      fetchVegetationData(addr.lat, addr.lng),
+      fetchHeritageData(addr.lat, addr.lng),
+      fetchEasementsData(addr.lat, addr.lng),
+      fetchZoningData(addr.lat, addr.lng),
+    ]);
 
   const overlays: ModuleOverlay[] = [
     {
@@ -89,12 +96,36 @@ export async function fetchOverlaysForAddress(
       raw: flood,
     },
     {
+      module: "overland_flow",
+      riskLevel: overland.riskLevel,
+      hasConsideration: overland.hasConsideration,
+      sourceName: overland.sources[0].name,
+      sourceUrl: overland.sources[0].url,
+      raw: overland,
+    },
+    {
+      module: "storm_tide",
+      riskLevel: stormTide.riskLevel,
+      hasConsideration: stormTide.hasConsideration,
+      sourceName: stormTide.sources[0].name,
+      sourceUrl: stormTide.sources[0].url,
+      raw: stormTide,
+    },
+    {
       module: "bushfire",
       riskLevel: fire.riskLevel,
       hasConsideration: fire.hasConsideration,
       sourceName: fire.sources[0].name,
       sourceUrl: fire.sources[0].url,
       raw: fire,
+    },
+    {
+      module: "vegetation",
+      riskLevel: veg.riskLevel,
+      hasConsideration: veg.hasConsideration,
+      sourceName: veg.sources[0].name,
+      sourceUrl: veg.sources[0].url,
+      raw: veg,
     },
     {
       module: "heritage",
@@ -230,7 +261,10 @@ export async function loadReportPayload(
 
   const ordered: Module[] = [
     "flooding",
+    "overland_flow",
+    "storm_tide",
     "bushfire",
+    "vegetation",
     "heritage",
     "easements",
     "zoning",

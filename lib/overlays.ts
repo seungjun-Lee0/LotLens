@@ -56,6 +56,17 @@ function floodColor(props: Record<string, unknown>) {
   return { fillColor: APPLE_HEX.gray, legendLabel: "Unclassified" };
 }
 
+function vegetationColor(props: Record<string, unknown>) {
+  const d = String(props.OVL2_DESC ?? "").toLowerCase();
+  if (d.includes("waterway") || d.includes("wetland"))
+    return { fillColor: APPLE_HEX.blue,  legendLabel: "Waterway / wetland" };
+  if (d.includes("matter"))
+    return { fillColor: APPLE_HEX.red,   legendLabel: "Matters of state interest" };
+  if (d.includes("corridor"))
+    return { fillColor: APPLE_HEX.teal,  legendLabel: "Ecological corridor" };
+  return { fillColor: APPLE_HEX.green, legendLabel: "Biodiversity area" };
+}
+
 function bushfireColor(props: Record<string, unknown>) {
   const d = String(props.OVL2_DESC ?? "").toLowerCase();
   if (d.includes("very high"))       return { fillColor: APPLE_HEX.red,    legendLabel: "Very high potential" };
@@ -99,8 +110,17 @@ export function extractOverlays(module: Module, raw: unknown): OverlayFeature[] 
       }));
       return out;
     }
+    case "overland_flow":
+      pushFC(out, inner, floodColor);
+      return out;
+    case "storm_tide":
+      pushFC(out, inner, floodColor);
+      return out;
     case "bushfire":
       pushFC(out, inner, bushfireColor);
+      return out;
+    case "vegetation":
+      pushFC(out, inner, vegetationColor);
       return out;
     case "heritage": {
       const i = inner as Record<string, unknown>;

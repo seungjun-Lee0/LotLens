@@ -28,6 +28,7 @@ import {
   type Module,
   type RiskLevel,
 } from "@/lib/db";
+import { fetchPropertyParcel, type ParcelInfo } from "@/lib/property";
 
 type Address = {
   id: string;
@@ -213,11 +214,15 @@ export type ReportPayload = {
   address: Address;
   modules: ReportModuleRow[];
   considerationCount: number;
-  /** GeoJSON Polygon/MultiPolygon of the cadastre lot the property sits on,
-   * extracted from the zoning module's point-query result. null when no
-   * parcel was matched (very rare in Brisbane LGA — every parcel is zoned).
-   * Used as the yellow "selected property" outline on every module map. */
+  /** GeoJSON Polygon/MultiPolygon of the actual cadastre lot the property
+   * sits on — fetched from BCC's property_boundaries_parcel layer. Used
+   * as the yellow "selected property" outline on every map. Falls back to
+   * the zoning module polygon when the parcel lookup fails. */
   propertyPolygon: unknown | null;
+  /** Per-lot cadastre metadata (lot/plan, area, freehold tenure, suburb).
+   * Surfaced in the At a glance sidebar so the report mirrors Develo's
+   * sidebar facts. null when the parcel lookup returned nothing. */
+  parcel: ParcelInfo | null;
   /** True if the user has paid for the report. When false the report page
    * shows Flooding as a free preview and paywalls the other 7 modules. */
   paid: boolean;
@@ -288,9 +293,15 @@ export async function loadReportPayload(
       };
     });
 
-  // Extract the cadastre lot polygon from the zoning module's point-query
-  // result. Zoning_opendata returns one feature per lot; the polygon IS
-  // the lot outline.
+  // Fetch the actual cadastre lot polygon + metadata from BCC's
+  // property_boundaries_parcel layer. ~150 ms extra per page load,
+  // dwarfed by the rest of the pipeline. Cleanly replaces our previous
+  // hack of using the zoning module's polygon (which actually spans
+  // the whole zone-precinct area — hundreds of metres across).
+  const parcel = await fetchPropertyParcel(address.lat, address.lng);
+
+  // Zoning polygon as the final fallback when the parcel lookup misses
+  // (e.g. geocoded coord on a road centreline).
   const zoning = modules.find((m) => m.module === "zoning");
   const zRaw =
     zoning?.raw && typeof zoning.raw === "object"
@@ -300,7 +311,8 @@ export async function loadReportPayload(
     zRaw?.raw && typeof zRaw.raw === "object"
       ? (zRaw.raw as { features?: Array<{ geometry?: unknown }> })
       : null;
-  const propertyPolygon = zInner?.features?.[0]?.geometry ?? null;
+  const propertyPolygon =
+    parcel.polygon ?? zInner?.features?.[0]?.geometry ?? null;
 
   return {
     report: {
@@ -312,6 +324,7 @@ export async function loadReportPayload(
     modules,
     considerationCount: modules.filter((m) => m.hasConsideration).length,
     propertyPolygon,
+    parcel: parcel.polygon ? parcel : null,
     paid: Boolean(address.paid_at),
   };
 }

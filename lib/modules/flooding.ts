@@ -123,12 +123,15 @@ export async function fetchFloodingData(
     returnGeometry: false,
   };
   // Historic flood polygons are based on the actual lot footprint while we
-  // only have the geocoded street-centre point. Without a small buffer
-  // (~8 m) we miss properties whose lot just touches the polygon edge —
-  // produces a Develo-vs-us discrepancy on borderline addresses. 8 m is
-  // smaller than typical Brisbane lot frontages so this won't falsely
-  // include neighbours.
-  const histPointParams = { ...pointParams, bufferDegrees: 0.00008 };
+  // only have the geocoded street-centre point. Typical Brisbane lots run
+  // 30-50 m deep from the road edge, so a ~50 m half-width envelope
+  // (0.00045°) is the smallest buffer that reliably catches lot-edge
+  // matches — verified against Develo's report for 61 Tingalpa Street
+  // where Feb 2022 sits ~50 m from the geocoded coord on the back fence
+  // line. False positives are rare in practice because historic flood
+  // polygons are large and contiguous: if a neighbour's lot is in the
+  // polygon yours almost certainly is too.
+  const histPointParams = { ...pointParams, bufferDegrees: 0.00045 };
   const contextParams = {
     geometry: point,
     geometryType: "esriGeometryPoint" as const,

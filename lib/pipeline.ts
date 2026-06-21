@@ -34,6 +34,7 @@ type Address = {
   address_text: string;
   lat: number;
   lng: number;
+  paid_at?: string | null;
 };
 
 // ── Phase 1: fetch + persist overlays ─────────────────────────────────────
@@ -217,6 +218,9 @@ export type ReportPayload = {
    * parcel was matched (very rare in Brisbane LGA — every parcel is zoned).
    * Used as the yellow "selected property" outline on every module map. */
   propertyPolygon: unknown | null;
+  /** True if the user has paid for the report. When false the report page
+   * shows Flooding as a free preview and paywalls the other 7 modules. */
+  paid: boolean;
 };
 
 export async function loadReportPayload(
@@ -240,7 +244,7 @@ export async function loadReportPayload(
 
   const [addrRows, dataRows] = await Promise.all([
     sql`
-      SELECT id, address_text, lat, lng
+      SELECT id, address_text, lat, lng, paid_at
       FROM addresses
       WHERE id = ${report.address_id}
       LIMIT 1
@@ -308,6 +312,7 @@ export async function loadReportPayload(
     modules,
     considerationCount: modules.filter((m) => m.hasConsideration).length,
     propertyPolygon,
+    paid: Boolean(address.paid_at),
   };
 }
 

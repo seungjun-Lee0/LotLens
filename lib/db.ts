@@ -36,6 +36,8 @@ export type AddressRow = {
   lat: number;
   lng: number;
   lot_plan: string | null;
+  paid_at: string | null;
+  stripe_session_id: string | null;
   created_at: string;
 };
 

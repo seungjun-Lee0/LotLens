@@ -224,12 +224,13 @@ export function ModuleMap({
   }
 
   return (
-    <div
-      className={`${className} relative overflow-hidden rounded-2xl border border-border/40`}
-      style={{ background: "var(--muted)" }}
-      aria-label="Property location map"
-    >
-      <div ref={containerRef} className="absolute inset-0" />
+    <div className="relative">
+      <div
+        ref={containerRef}
+        className={`${className} overflow-hidden rounded-2xl border border-border/40`}
+        style={{ background: "var(--muted)" }}
+        aria-label="Property location map"
+      />
       {legendItems.length > 0 && (
         <div className="pointer-events-none absolute bottom-2.5 right-2.5 z-10 max-w-[55%] sm:bottom-3 sm:right-3">
           <div

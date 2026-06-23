@@ -34,14 +34,17 @@ export async function generateModuleNarrative(
   // Kept `async` to match the signature Task 4b will need. Stub returns
   // immediately.
   switch (input.module) {
-    case "flooding":      return renderStubFlooding(input);
-    case "overland_flow": return renderStubOverlandFlow(input);
-    case "storm_tide":    return renderStubStormTide(input);
-    case "bushfire":      return renderStubBushfire(input);
-    case "vegetation":    return renderStubVegetation(input);
-    case "heritage":      return renderStubHeritage(input);
-    case "easements":     return renderStubEasements(input);
-    case "zoning":        return renderStubZoning(input);
+    case "flooding":       return renderStubFlooding(input);
+    case "flood_planning": return renderStubFloodPlanning(input);
+    case "overland_flow":  return renderStubOverlandFlow(input);
+    case "storm_tide":     return renderStubStormTide(input);
+    case "bushfire":       return renderStubBushfire(input);
+    case "vegetation":     return renderStubVegetation(input);
+    case "heritage":       return renderStubHeritage(input);
+    case "easements":      return renderStubEasements(input);
+    case "noise":          return renderStubNoise(input);
+    case "schools":        return renderStubSchools(input);
+    case "zoning":         return renderStubZoning(input);
   }
 }
 
@@ -198,6 +201,34 @@ function renderStubVegetation(
   };
 }
 
+function renderStubFloodPlanning(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const river = raw.riverArea as string | null;
+  const creek = raw.creekArea as string | null;
+  if (!river && !creek) {
+    return {
+      summary: `No statutory flood planning overlay applies to ${input.address}.`,
+      detail:
+        "Neither the Brisbane River flood planning area nor the Creek/waterway planning area covers this address. Future building work won't be gated by the planning flood overlay.",
+      questions_to_ask: DISCLAIMER_FALLBACK_QUESTIONS,
+      sources: sourcesFromRaw(raw),
+    };
+  }
+  const areas = [river, creek].filter((x): x is string => Boolean(x));
+  return {
+    summary: `${input.address} sits in ${areas.join(" + ")}.`,
+    detail: `Brisbane City Council's statutory flood planning overlay applies — ${areas.join(" + ")}. The numbered suffix (1 strictest, 4 mildest) determines minimum habitable floor levels, fill volumes, and excluded structures for any new build or extension. This is the legally binding control, distinct from the awareness-mapping risk indicator.`,
+    questions_to_ask: [
+      "What habitable floor level will any new build / extension need to be raised to?",
+      "Are there fill, excavation or excluded-structure limits that affect the build envelope?",
+      "If renovating, will the new floor area trigger the planning provisions?",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
 function renderStubBushfire(
   input: GenerateModuleNarrativeInput,
 ): ModuleNarrative {
@@ -283,6 +314,70 @@ function renderStubHeritage(
       "What demolition / external alteration approvals will be needed?",
       "If buying to renovate, what design constraints apply to the street-facing facade?",
       "Have any heritage exemptions been granted on this property previously?",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubNoise(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const t = raw.transportCorridor as string | null;
+  const a = raw.anefCategory as string | null;
+  if (!t && !a) {
+    return {
+      summary: `No noise corridor applies to ${input.address}.`,
+      detail:
+        "Neither the Transport noise corridor overlay nor the Airport ANEF noise overlay covers this address. New builds won't be triggered into acoustic-attenuation requirements by the overlay.",
+      questions_to_ask: [
+        "Visit the property at peak commute and late evening anyway — modelled noise differs from felt noise.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+  const parts = [t, a].filter((x): x is string => Boolean(x));
+  return {
+    summary: `${input.address} sits in ${parts.join(" + ")}.`,
+    detail: `Brisbane noise overlay flags this property: ${parts.join(" + ")}. New construction will trigger acoustic-attenuation requirements — rated glazing, denser walls, restrictions on habitable rooms facing the source. Practical felt noise depends on prevailing wind, time of day, and traffic mix.`,
+    questions_to_ask: [
+      "What rated windows and walls would a new build require here?",
+      "Is the noise mostly road, rail, or aircraft? — solutions differ.",
+      "Have you visited at peak hours? Modelled noise isn't always perceived noise.",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubSchools(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const schools = asArr<RawAttrs>(raw.schools);
+  if (schools.length === 0) {
+    return {
+      summary: `No state school catchment was matched for ${input.address}.`,
+      detail:
+        "The QLD Department of Education catchment layer returned no polygons for this address. That's unusual — confirm the address sits inside Brisbane LGA and re-run.",
+      questions_to_ask: DISCLAIMER_FALLBACK_QUESTIONS,
+      sources: sourcesFromRaw(raw),
+    };
+  }
+  const lines = schools
+    .map((s) => {
+      const name = String(s.name ?? "?");
+      const yr = Array.isArray(s.yearLevels) ? (s.yearLevels as string[]).join(", ") : "?";
+      return `${name} (years ${yr})`;
+    })
+    .join("; ");
+  return {
+    summary: `${input.address} is zoned for ${schools.map((s) => s.name).join(" + ")}.`,
+    detail: `In-catchment for: ${lines}. State schools must accept in-catchment enrolments — choosing this address gives the listed schools as the guaranteed option. Out-of-catchment placements are place-dependent.`,
+    questions_to_ask: [
+      "Are the catchment schools at NAPLAN / OP performance you're happy with? Check MySchool.",
+      "If you're moving for school, confirm enrolment with the school before contract.",
+      "Are there specialist programs or sibling-priority rules you should know?",
     ],
     sources: sourcesFromRaw(raw),
   };

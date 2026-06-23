@@ -7,7 +7,7 @@
 // two stay in sync.
 
 import type { LucideIcon } from "lucide-react";
-import { CloudRain, Flame, Landmark, LayoutGrid, Leaf, ScrollText, Waves, Wind } from "lucide-react";
+import { CloudRain, Flame, GraduationCap, Landmark, LayoutGrid, Leaf, ScrollText, Volume2, Waves, Wind } from "lucide-react";
 
 import type { Module } from "@/lib/db";
 
@@ -91,6 +91,26 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
       { label: "Very low (0.05% AEP)",            color: D.floodVeryLow, colorHex: D.floodVeryLow },
       { label: "Feb 2022 historic event",         color: D.histFeb2022,  colorHex: D.histFeb2022 },
       { label: "Jan 2011 historic event",         color: D.histJan2011,  colorHex: D.histJan2011 },
+    ],
+  },
+
+  flood_planning: {
+    name: "Flood Planning",
+    question: "What planning overlays will affect future building work?",
+    tint: "var(--apple-indigo)",
+    tintHex: APPLE_HEX.indigo,
+    icon: Waves,
+    sourceLabel: "Brisbane City Council — Flood planning overlays",
+    thingsToKnow: [
+      "Brisbane's City Plan 2014 has statutory flood planning overlays separate from the Flood Awareness Mapping. The planning overlays are the controls Council actually applies when assessing a development application — minimum habitable floor levels, fill volumes, excluded structures, drainage and connection requirements.",
+      "Each planning polygon is labelled 1 through 4 — number 1 is the strictest, 4 is the mildest. A property in area 1 will typically need a substantially raised floor level, while area 4 is a lighter touch. The overlay applies to extensions and new builds as much as new construction.",
+    ],
+    note: "The planning overlay is the statutory layer — i.e. it is what Council will use when assessing your application. Always check it alongside the Flood Awareness Mapping which describes risk probability rather than planning controls.",
+    legend: [
+      { label: "Planning area 1 — strictest", color: D.floodHigh,    colorHex: D.floodHigh },
+      { label: "Planning area 2",             color: D.floodMedium,  colorHex: D.floodMedium },
+      { label: "Planning area 3",             color: D.floodLow,     colorHex: D.floodLow },
+      { label: "Planning area 4 — mildest",   color: D.floodVeryLow, colorHex: D.floodVeryLow },
     ],
   },
 
@@ -207,6 +227,46 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     note: "This module shows only Council-mapped high-voltage easements. The majority of easements — drainage, sewerage, access, party walls — are recorded on land title and require a QLD Title Search via a conveyancer to discover. The absence of a result here is not proof the property has no easements.",
     legend: [
       { label: "High-voltage easement", color: D.easementHV, colorHex: D.easementHV },
+    ],
+  },
+
+  noise: {
+    name: "Noise",
+    question: "Is the property exposed to road, rail or aircraft noise corridors?",
+    tint: "var(--apple-yellow)",
+    tintHex: APPLE_HEX.yellow,
+    icon: Volume2,
+    sourceLabel: "Brisbane City Council — Transport noise + ANEF overlays",
+    thingsToKnow: [
+      "Brisbane has two noise overlays. The Transport noise corridor covers major roads and rail lines and is numbered 1 (loudest) through 4 (mildest). The Australian Noise Exposure Forecast (ANEF) covers the Brisbane Airport flight paths and is given in noise contours — 20 ANEF and above triggers acoustic construction requirements under AS2021.",
+      "Noise overlays don't stop you living there, but they affect new builds: doors and windows need acoustic-rated glass, walls need extra mass, and habitable rooms can be restricted. Insurance for noise-affected properties is not typically more expensive, but resale can suffer.",
+    ],
+    note: "Subjective noise depends on traffic mix, time of day, and prevailing wind direction. Visit at peak commute, late evening, and on a Sunday before relying on a daytime impression. The mapped corridors are based on modelled long-term equivalent noise level (LAeq).",
+    legend: [
+      { label: "Transport corridor 1 — loudest", color: D.fireHigh,    colorHex: D.fireHigh },
+      { label: "Transport corridor 2",           color: D.fireBuffer,  colorHex: D.fireBuffer },
+      { label: "Transport corridor 3-4",         color: D.fireMedium,  colorHex: D.fireMedium },
+      { label: "Aircraft 30+ ANEF",              color: D.fireVeryHigh, colorHex: D.fireVeryHigh },
+      { label: "Aircraft 25-30 ANEF",            color: D.fireHigh,    colorHex: D.fireHigh },
+      { label: "Aircraft 20-25 ANEF",            color: D.fireBuffer,  colorHex: D.fireBuffer },
+    ],
+  },
+
+  schools: {
+    name: "School Catchments",
+    question: "Which state schools is this property zoned for?",
+    tint: "var(--apple-teal)",
+    tintHex: APPLE_HEX.teal,
+    icon: GraduationCap,
+    sourceLabel: "Queensland Department of Education — State school catchments",
+    thingsToKnow: [
+      "Queensland state schools have legal catchment boundaries. If you live inside a school's catchment your child is guaranteed a place there. Out-of-catchment enrolment depends on places being available and is not guaranteed.",
+      "Every Brisbane property typically sits inside one primary and one secondary catchment. Some addresses fall into specialist or selective catchments too. The catchment maps are updated annually so this report reflects the calendar year listed by the QLD Department of Education.",
+    ],
+    note: "Private and Catholic schools are not on this layer. Out-of-catchment applications, sibling rules, and specialist programs (e.g. arts, sport) are handled by the school directly. Confirm enrolment before contract if school choice is decisive.",
+    legend: [
+      { label: "Primary catchment",   color: D.vegBiodiversity, colorHex: D.vegBiodiversity },
+      { label: "Secondary catchment", color: D.vegCorridor,     colorHex: D.vegCorridor },
     ],
   },
 

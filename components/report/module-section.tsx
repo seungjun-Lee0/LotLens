@@ -84,6 +84,78 @@ function ModuleFacts({
         </dl>
       );
     }
+    case "flood_planning": {
+      const river = raw.riverArea as string | null;
+      const creek = raw.creekArea as string | null;
+      if (!river && !creek) return null;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          {river && (
+            <>
+              <dt className="text-muted-foreground">River area</dt>
+              <dd className="font-medium">{river}</dd>
+            </>
+          )}
+          {creek && (
+            <>
+              <dt className="text-muted-foreground">Creek area</dt>
+              <dd className="font-medium">{creek}</dd>
+            </>
+          )}
+        </dl>
+      );
+    }
+    case "noise": {
+      const t = raw.transportCorridor as string | null;
+      const a = raw.anefCategory as string | null;
+      if (!t && !a) return null;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          {t && (
+            <>
+              <dt className="text-muted-foreground">Transport</dt>
+              <dd className="font-medium">{t}</dd>
+            </>
+          )}
+          {a && (
+            <>
+              <dt className="text-muted-foreground">Aircraft</dt>
+              <dd className="font-medium">{a}</dd>
+            </>
+          )}
+        </dl>
+      );
+    }
+    case "schools": {
+      const schools = Array.isArray(raw.schools)
+        ? (raw.schools as { name: string; type: string; yearLevels: string[] }[])
+        : [];
+      if (schools.length === 0) return null;
+      return (
+        <ul className="flex flex-col gap-1 text-[12.5px]">
+          {schools.map((s, i) => (
+            <li key={i} className="flex items-start gap-2">
+              <span
+                className="mt-0.5 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
+                style={{
+                  background:
+                    "color-mix(in oklab, var(--apple-teal) 14%, transparent)",
+                  color: "var(--apple-teal)",
+                }}
+              >
+                {s.type || "Catchment"}
+              </span>
+              <span className="text-foreground/85">
+                <span className="font-medium">{s.name}</span>
+                {s.yearLevels.length > 0 && (
+                  <span className="text-muted-foreground"> · years {s.yearLevels.join(", ")}</span>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
     case "heritage": {
       const entries = Array.isArray(raw.entries)
         ? (raw.entries as { type: string; description: string | null }[])

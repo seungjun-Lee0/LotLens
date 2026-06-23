@@ -160,6 +160,41 @@ function vegetationColor(props: Record<string, unknown>) {
   return { fillColor: DEVELO_HEX.vegBiodiversity,  legendLabel: "Biodiversity area" };
 }
 
+function floodPlanningColor(props: Record<string, unknown>) {
+  const d = String(props.OVL2_DESC ?? "");
+  const n = parseInt(d.replace(/\D/g, ""), 10);
+  if (n === 1) return { fillColor: DEVELO_HEX.floodHigh,    legendLabel: "Planning area 1 — strictest" };
+  if (n === 2) return { fillColor: DEVELO_HEX.floodMedium,  legendLabel: "Planning area 2" };
+  if (n === 3) return { fillColor: DEVELO_HEX.floodLow,     legendLabel: "Planning area 3" };
+  if (n >= 4) return { fillColor: DEVELO_HEX.floodVeryLow, legendLabel: "Planning area 4 — mildest" };
+  return { fillColor: "#94a3b8", legendLabel: d || "Planning area" };
+}
+
+function noiseColor(props: Record<string, unknown>) {
+  const d = String(props.OVL2_DESC ?? "");
+  const isAnef = /anef/i.test(d);
+  const n = parseInt(d.replace(/\D/g, ""), 10);
+  if (isAnef) {
+    if (n >= 30) return { fillColor: DEVELO_HEX.fireVeryHigh, legendLabel: "Aircraft 30+ ANEF" };
+    if (n >= 25) return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "Aircraft 25–30 ANEF" };
+    if (n >= 20) return { fillColor: DEVELO_HEX.fireBuffer,   legendLabel: "Aircraft 20–25 ANEF" };
+    return { fillColor: DEVELO_HEX.fireMedium, legendLabel: d };
+  }
+  if (n === 1) return { fillColor: DEVELO_HEX.fireHigh,    legendLabel: "Transport corridor 1" };
+  if (n === 2) return { fillColor: DEVELO_HEX.fireBuffer,  legendLabel: "Transport corridor 2" };
+  if (n === 3) return { fillColor: DEVELO_HEX.fireMedium,  legendLabel: "Transport corridor 3" };
+  if (n >= 4) return { fillColor: "#fde68a",               legendLabel: "Transport corridor 4" };
+  return { fillColor: "#94a3b8", legendLabel: d || "Noise corridor" };
+}
+
+function schoolsColor(props: Record<string, unknown>) {
+  const t = String(props.CatchmentType ?? "").toLowerCase();
+  if (t.includes("primary")) return { fillColor: DEVELO_HEX.vegBiodiversity, legendLabel: "Primary catchment" };
+  // Treat any secondary type (Junior/Senior Secondary) as one band.
+  if (t.includes("secondary")) return { fillColor: DEVELO_HEX.vegCorridor, legendLabel: "Secondary catchment" };
+  return { fillColor: "#94a3b8", legendLabel: t || "School catchment" };
+}
+
 function zoningColor(props: Record<string, unknown>) {
   const f = String(props.LVL1_ZONE ?? "").toLowerCase();
   if (f.startsWith("centre"))             return { fillColor: DEVELO_HEX.zoneCentre,    legendLabel: "Centre" };
@@ -229,6 +264,21 @@ export function extractOverlays(module: Module, raw: unknown): OverlayFeature[] 
         fillColor: DEVELO_HEX.easementHV,
         legendLabel: "High-voltage easement",
       }));
+      return out;
+    case "flood_planning": {
+      const i = inner as Record<string, unknown>;
+      pushFC(out, i.river, floodPlanningColor);
+      pushFC(out, i.creek, floodPlanningColor);
+      return out;
+    }
+    case "noise": {
+      const i = inner as Record<string, unknown>;
+      pushFC(out, i.transport, noiseColor);
+      pushFC(out, i.anef, noiseColor);
+      return out;
+    }
+    case "schools":
+      pushFC(out, inner, schoolsColor);
       return out;
     case "zoning":
       pushFC(out, inner, zoningColor);

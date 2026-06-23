@@ -344,6 +344,25 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       if (raw.code) rows.push({ key: "Code", val: String(raw.code) });
       return rows;
     }
+    case "flood_planning": {
+      const rows: { key: string; val: string }[] = [];
+      if (raw.riverArea) rows.push({ key: "River area", val: String(raw.riverArea) });
+      if (raw.creekArea) rows.push({ key: "Creek area", val: String(raw.creekArea) });
+      return rows;
+    }
+    case "noise": {
+      const rows: { key: string; val: string }[] = [];
+      if (raw.transportCorridor) rows.push({ key: "Transport", val: String(raw.transportCorridor) });
+      if (raw.anefCategory) rows.push({ key: "Aircraft", val: String(raw.anefCategory) });
+      return rows;
+    }
+    case "schools": {
+      const schools = asArr<{ name: string; type: string; yearLevels: string[] }>(raw.schools);
+      return schools.map((s, i) => ({
+        key: `Catchment ${i + 1}`,
+        val: `${s.name} · ${s.type} (years ${s.yearLevels.join(", ")})`,
+      }));
+    }
     case "heritage": {
       const entries = asArr<RawAttrs>(raw.entries);
       return entries.map((e, i) => ({ key: `Entry ${i + 1}`, val: `[${e.type}] ${e.description ?? "—"}` }));
@@ -502,12 +521,15 @@ function ModulePage({
 
 const MODULE_ORDER: Module[] = [
   "flooding",
+  "flood_planning",
   "overland_flow",
   "storm_tide",
   "bushfire",
   "vegetation",
   "heritage",
   "easements",
+  "noise",
+  "schools",
   "zoning",
 ];
 function moduleIndex(m: Module): number {

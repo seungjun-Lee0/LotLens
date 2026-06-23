@@ -15,8 +15,11 @@
 import { fetchBushfireData } from "@/lib/modules/bushfire";
 import { fetchEasementsData } from "@/lib/modules/easements";
 import { fetchFloodingData } from "@/lib/modules/flooding";
+import { fetchFloodPlanningData } from "@/lib/modules/flood-planning";
 import { fetchHeritageData } from "@/lib/modules/heritage";
+import { fetchNoiseData } from "@/lib/modules/noise";
 import { fetchOverlandFlowData } from "@/lib/modules/overland-flow";
+import { fetchSchoolsData } from "@/lib/modules/schools";
 import { fetchStormTideData } from "@/lib/modules/storm-tide";
 import { fetchVegetationData } from "@/lib/modules/vegetation";
 import { fetchZoningData } from "@/lib/modules/zoning";
@@ -76,83 +79,33 @@ export async function fetchOverlaysForAddress(
   const sql = getDb();
   const addr = await loadAddress(addressId);
 
-  const [flood, overland, stormTide, fire, veg, herit, ease, zone] =
+  const [flood, floodPlan, overland, stormTide, fire, veg, herit, ease, noise, schools, zone] =
     await Promise.all([
       fetchFloodingData(addr.lat, addr.lng),
+      fetchFloodPlanningData(addr.lat, addr.lng),
       fetchOverlandFlowData(addr.lat, addr.lng),
       fetchStormTideData(addr.lat, addr.lng),
       fetchBushfireData(addr.lat, addr.lng),
       fetchVegetationData(addr.lat, addr.lng),
       fetchHeritageData(addr.lat, addr.lng),
       fetchEasementsData(addr.lat, addr.lng),
+      fetchNoiseData(addr.lat, addr.lng),
+      fetchSchoolsData(addr.lat, addr.lng),
       fetchZoningData(addr.lat, addr.lng),
     ]);
 
   const overlays: ModuleOverlay[] = [
-    {
-      module: "flooding",
-      riskLevel: flood.riskLevel,
-      hasConsideration: flood.hasConsideration,
-      sourceName: flood.sources[0].name,
-      sourceUrl: flood.sources[0].url,
-      raw: flood,
-    },
-    {
-      module: "overland_flow",
-      riskLevel: overland.riskLevel,
-      hasConsideration: overland.hasConsideration,
-      sourceName: overland.sources[0].name,
-      sourceUrl: overland.sources[0].url,
-      raw: overland,
-    },
-    {
-      module: "storm_tide",
-      riskLevel: stormTide.riskLevel,
-      hasConsideration: stormTide.hasConsideration,
-      sourceName: stormTide.sources[0].name,
-      sourceUrl: stormTide.sources[0].url,
-      raw: stormTide,
-    },
-    {
-      module: "bushfire",
-      riskLevel: fire.riskLevel,
-      hasConsideration: fire.hasConsideration,
-      sourceName: fire.sources[0].name,
-      sourceUrl: fire.sources[0].url,
-      raw: fire,
-    },
-    {
-      module: "vegetation",
-      riskLevel: veg.riskLevel,
-      hasConsideration: veg.hasConsideration,
-      sourceName: veg.sources[0].name,
-      sourceUrl: veg.sources[0].url,
-      raw: veg,
-    },
-    {
-      module: "heritage",
-      riskLevel: herit.riskLevel,
-      hasConsideration: herit.hasConsideration,
-      sourceName: herit.sources[0].name,
-      sourceUrl: herit.sources[0].url,
-      raw: herit,
-    },
-    {
-      module: "easements",
-      riskLevel: ease.riskLevel,
-      hasConsideration: ease.hasConsideration,
-      sourceName: ease.sources[0].name,
-      sourceUrl: ease.sources[0].url,
-      raw: ease,
-    },
-    {
-      module: "zoning",
-      riskLevel: zone.riskLevel,
-      hasConsideration: zone.hasConsideration,
-      sourceName: zone.sources[0].name,
-      sourceUrl: zone.sources[0].url,
-      raw: zone,
-    },
+    { module: "flooding",       riskLevel: flood.riskLevel,     hasConsideration: flood.hasConsideration,     sourceName: flood.sources[0].name,     sourceUrl: flood.sources[0].url,     raw: flood },
+    { module: "flood_planning", riskLevel: floodPlan.riskLevel, hasConsideration: floodPlan.hasConsideration, sourceName: floodPlan.sources[0].name, sourceUrl: floodPlan.sources[0].url, raw: floodPlan },
+    { module: "overland_flow",  riskLevel: overland.riskLevel,  hasConsideration: overland.hasConsideration,  sourceName: overland.sources[0].name,  sourceUrl: overland.sources[0].url,  raw: overland },
+    { module: "storm_tide",     riskLevel: stormTide.riskLevel, hasConsideration: stormTide.hasConsideration, sourceName: stormTide.sources[0].name, sourceUrl: stormTide.sources[0].url, raw: stormTide },
+    { module: "bushfire",       riskLevel: fire.riskLevel,      hasConsideration: fire.hasConsideration,      sourceName: fire.sources[0].name,      sourceUrl: fire.sources[0].url,      raw: fire },
+    { module: "vegetation",     riskLevel: veg.riskLevel,       hasConsideration: veg.hasConsideration,       sourceName: veg.sources[0].name,       sourceUrl: veg.sources[0].url,       raw: veg },
+    { module: "heritage",       riskLevel: herit.riskLevel,     hasConsideration: herit.hasConsideration,     sourceName: herit.sources[0].name,     sourceUrl: herit.sources[0].url,     raw: herit },
+    { module: "easements",      riskLevel: ease.riskLevel,      hasConsideration: ease.hasConsideration,      sourceName: ease.sources[0].name,      sourceUrl: ease.sources[0].url,      raw: ease },
+    { module: "noise",          riskLevel: noise.riskLevel,     hasConsideration: noise.hasConsideration,     sourceName: noise.sources[0].name,     sourceUrl: noise.sources[0].url,     raw: noise },
+    { module: "schools",        riskLevel: schools.riskLevel,   hasConsideration: schools.hasConsideration,   sourceName: schools.sources[0].name,   sourceUrl: schools.sources[0].url,   raw: schools },
+    { module: "zoning",         riskLevel: zone.riskLevel,      hasConsideration: zone.hasConsideration,      sourceName: zone.sources[0].name,      sourceUrl: zone.sources[0].url,      raw: zone },
   ];
 
   // Idempotent replace. Each invocation drops the address's previous rows
@@ -270,12 +223,15 @@ export async function loadReportPayload(
 
   const ordered: Module[] = [
     "flooding",
+    "flood_planning",
     "overland_flow",
     "storm_tide",
     "bushfire",
     "vegetation",
     "heritage",
     "easements",
+    "noise",
+    "schools",
     "zoning",
   ];
   const byModule = new Map(rows.map((r) => [r.module as Module, r]));

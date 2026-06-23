@@ -18,12 +18,15 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
 export type Module =
   | "flooding"
+  | "flood_planning"
   | "overland_flow"
   | "storm_tide"
   | "bushfire"
   | "vegetation"
   | "heritage"
   | "easements"
+  | "noise"
+  | "schools"
   | "zoning";
 
 export type RiskLevel = "high" | "medium" | "low" | "very_low" | "none";

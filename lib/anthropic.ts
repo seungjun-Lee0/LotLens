@@ -387,26 +387,57 @@ function renderStubEasements(
   input: GenerateModuleNarrativeInput,
 ): ModuleNarrative {
   const raw = readRaw(input);
-  const hit = raw.hasHighVoltageEasement === true;
+  const hv = raw.hasHighVoltageEasement === true;
+  const cadastral = raw.hasCadastralEasement === true;
+  const cadastralList = Array.isArray(raw.cadastralEasements)
+    ? (raw.cadastralEasements as Array<{ lotplan?: string | null }>)
+    : [];
+  const lotplans = cadastralList
+    .map((e) => e.lotplan)
+    .filter((s): s is string => typeof s === "string" && s.length > 0);
   const scope = (raw.scopeNote as string | null) ?? "";
-  if (!hit) {
+
+  if (!hv && !cadastral) {
     return {
-      summary: `No public high-voltage easement overlay applies to ${input.address}.`,
-      detail: `BCC's high-voltage powerline easement overlay does not cover this address. ${scope}`,
+      summary: `No registered easement polygons cover ${input.address}.`,
+      detail: `Neither BCC's high-voltage powerline overlay nor the QSpatial DCDB easement-parcel layer places a polygon on this address. ${scope}`,
       questions_to_ask: [
-        "Order a QLD Title Search — drainage, sewerage, and access easements live there, not on the public overlay.",
+        "Order a QLD Title Search anyway — the polygon coverage misses very narrow or recently registered easements, and only the title shows the legal terms.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
       sources: sourcesFromRaw(raw),
     };
   }
+
+  const parts: string[] = [];
+  if (hv) parts.push("a high-voltage powerline easement (BCC overlay)");
+  if (cadastral) {
+    const lotplanText = lotplans.length
+      ? ` (lot/plan: ${lotplans.slice(0, 3).join(", ")})`
+      : "";
+    parts.push(
+      `${cadastralList.length} registered cadastral easement parcel${cadastralList.length === 1 ? "" : "s"}${lotplanText}`,
+    );
+  }
+  const summary = `${input.address} sits on ${parts.join(" and ")}.`;
+  const detail = [
+    hv &&
+      "The high-voltage overlay restricts what can be built or grown near the conductor — the easement holder can enforce vegetation clearance and prohibit habitable structures.",
+    cadastral &&
+      "QSpatial's DCDB shows registered easement parcels at this location. These are commonly drainage, sewerage, access or party-wall easements — the polygons tell you they exist; only the title shows the conditions.",
+    scope,
+  ]
+    .filter(Boolean)
+    .join(" ");
   return {
-    summary: `${input.address} sits on a high-voltage powerline easement.`,
-    detail: `BCC's Major electricity infrastructure overlay places this address inside a high-voltage easement polygon. Build envelope, vegetation, and dwelling habitability can all be restricted by the easement holder. ${scope}`,
+    summary,
+    detail,
     questions_to_ask: [
-      "What does the easement instrument actually prohibit — ask the conveyancer to read it.",
-      "What is the distance from any dwelling to the live powerline conductor?",
-      "Has the easement holder ever issued a notice on this lot?",
+      "Order a QLD Title Search to read each easement's instrument — type, purpose, benefiting party, and any conditions.",
+      hv
+        ? "What is the distance from any dwelling to the live powerline conductor?"
+        : "Can you build over or fence within the easement, and who pays if the authority needs to dig it up?",
+      "Has the easement holder ever issued a notice or restoration order on this lot?",
     ],
     sources: sourcesFromRaw(raw),
   };

@@ -68,6 +68,7 @@ export const DEVELO_HEX = {
 
   // Easements — magenta/pink
   easementHV: "#db2777",
+  easementCadastre: "#a21caf",
 
   // Vegetation — Develo's multi-colour scheme
   vegWaterway:    "#0284c7",
@@ -259,12 +260,20 @@ export function extractOverlays(module: Module, raw: unknown): OverlayFeature[] 
       }));
       return out;
     }
-    case "easements":
-      pushFC(out, inner, () => ({
+    case "easements": {
+      // Easements has two parallel context layers — high-voltage (BCC) and
+      // cadastral easement parcels (QSpatial). Render both with distinct
+      // legend labels so the map differentiates them.
+      pushFC(out, r.context, () => ({
         fillColor: DEVELO_HEX.easementHV,
         legendLabel: "High-voltage easement",
       }));
+      pushFC(out, r.cadastralContext, () => ({
+        fillColor: DEVELO_HEX.easementCadastre,
+        legendLabel: "Registered easement (cadastre)",
+      }));
       return out;
+    }
     case "flood_planning": {
       const i = inner as Record<string, unknown>;
       pushFC(out, i.river, floodPlanningColor);

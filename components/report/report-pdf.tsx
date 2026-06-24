@@ -369,7 +369,17 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
     }
     case "easements": {
       const rows: { key: string; val: string }[] = [];
-      if (raw.description) rows.push({ key: "Layer", val: String(raw.description) });
+      if (raw.description) rows.push({ key: "High-voltage", val: String(raw.description) });
+      const cadastral = asArr<{ lotplan?: string | null; areaSqm?: number | null }>(
+        raw.cadastralEasements,
+      );
+      cadastral.forEach((e, i) => {
+        const parts = [
+          e.lotplan ?? "Easement parcel",
+          e.areaSqm ? `${Math.round(e.areaSqm)} m²` : null,
+        ].filter(Boolean);
+        rows.push({ key: `Cadastral ${i + 1}`, val: parts.join(" · ") });
+      });
       return rows;
     }
     case "zoning": {

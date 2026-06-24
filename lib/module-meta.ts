@@ -66,7 +66,7 @@ const D = {
   histFeb2022: "#c026d3", histJan2011: "#a855f7",
   fireVeryHigh: "#b91c1c", fireHigh: "#dc2626", fireBuffer: "#ea580c", fireMedium: "#f59e0b",
   heritageState: "#7e22ce", heritageLocal: "#db2777", heritageCharacter: "#a855f7",
-  easementHV: "#db2777",
+  easementHV: "#db2777", easementCadastre: "#a21caf",
   vegWaterway: "#0284c7", vegMSES: "#ea580c", vegBiodiversity: "#84cc16", vegCorridor: "#16a34a",
   zoneCentre: "#dc2626", zoneMixed: "#f97316", zoneResidential: "#facc15", zoneOpenSpace: "#16a34a", zoneOther: "#6366f1",
 };
@@ -219,14 +219,15 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-teal)",
     tintHex: APPLE_HEX.teal,
     icon: ScrollText,
-    sourceLabel: "Brisbane City Council — public overlay (NOT title search)",
+    sourceLabel: "BCC high-voltage overlay + QSpatial cadastre (NOT title search)",
     thingsToKnow: [
       "Easements are legal rights allowing a person or authority to access a specific portion of land for a particular purpose. They are commonly required for the maintenance of utilities — large water and sewer pipes, stormwater drains, and power lines — and may also exist for shared vehicle access or built-to-boundary walls.",
       "Easements are recorded on land title at the time of subdivision and remain on title when the property is sold. A landowner cannot usually build permanent structures within an easement area or obstruct the authorised party's access without approval from the easement owner.",
     ],
-    note: "This module shows only Council-mapped high-voltage easements. The majority of easements — drainage, sewerage, access, party walls — are recorded on land title and require a QLD Title Search via a conveyancer to discover. The absence of a result here is not proof the property has no easements.",
+    note: "This module reads two public sources: BCC's high-voltage powerline overlay and the QSpatial DCDB easement-parcel layer (which catches drainage, sewer, access and other registered easements as separate cadastral parcels). The polygons tell you an easement exists — they don't tell you its legal terms. The benefiting party, conditions and width are only on the land title, which still requires a QLD Title Search via a conveyancer.",
     legend: [
       { label: "High-voltage easement", color: D.easementHV, colorHex: D.easementHV },
+      { label: "Registered easement (cadastre)", color: D.easementCadastre, colorHex: D.easementCadastre },
     ],
   },
 

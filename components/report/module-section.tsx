@@ -273,12 +273,14 @@ export function ModuleSection({
   lat,
   lng,
   propertyPolygon = null,
+  lotLines = null,
 }: {
   row: ReportModuleRow;
   narrative: ModuleNarrative | undefined;
   lat: number;
   lng: number;
   propertyPolygon?: unknown | null;
+  lotLines?: unknown | null;
 }) {
   const meta = MODULE_META[row.module];
   const Icon = meta.icon;
@@ -321,6 +323,7 @@ export function ModuleSection({
           className="h-48 sm:h-64"
           overlays={extractOverlays(row.module, row.raw)}
           propertyPolygon={propertyPolygon}
+          lotLines={lotLines}
         />
       </div>
 

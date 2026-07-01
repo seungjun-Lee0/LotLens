@@ -31,7 +31,11 @@ import {
   type Module,
   type RiskLevel,
 } from "@/lib/db";
-import { fetchPropertyParcel, type ParcelInfo } from "@/lib/property";
+import {
+  fetchParcelLinesNear,
+  fetchPropertyParcel,
+  type ParcelInfo,
+} from "@/lib/property";
 
 type Address = {
   id: string;
@@ -172,6 +176,11 @@ export type ReportPayload = {
    * as the yellow "selected property" outline on every map. Falls back to
    * the zoning module polygon when the parcel lookup fails. */
   propertyPolygon: unknown | null;
+  /** GeoJSON FeatureCollection of every cadastre lot within ~155 m of the
+   * property. Drawn as faint boundary lines on each map so zone fills read
+   * per-lot (Develo-style) instead of as one flat colour wash. null when the
+   * lookup returns nothing. */
+  parcelLines: unknown | null;
   /** Per-lot cadastre metadata (lot/plan, area, freehold tenure, suburb).
    * Surfaced in the At a glance sidebar so the report mirrors Develo's
    * sidebar facts. null when the parcel lookup returned nothing. */
@@ -254,7 +263,10 @@ export async function loadReportPayload(
   // dwarfed by the rest of the pipeline. Cleanly replaces our previous
   // hack of using the zoning module's polygon (which actually spans
   // the whole zone-precinct area — hundreds of metres across).
-  const parcel = await fetchPropertyParcel(address.lat, address.lng);
+  const [parcel, parcelLines] = await Promise.all([
+    fetchPropertyParcel(address.lat, address.lng),
+    fetchParcelLinesNear(address.lat, address.lng),
+  ]);
 
   // Zoning polygon as the final fallback when the parcel lookup misses
   // (e.g. geocoded coord on a road centreline).
@@ -280,6 +292,7 @@ export async function loadReportPayload(
     modules,
     considerationCount: modules.filter((m) => m.hasConsideration).length,
     propertyPolygon,
+    parcelLines,
     parcel: parcel.polygon ? parcel : null,
     paid: Boolean(address.paid_at),
   };

@@ -43,7 +43,7 @@ export default async function ReportPage({
   const payload = await loadReportPayload(id);
   if (!payload) notFound();
 
-  const { report, address, modules, propertyPolygon, paid } = payload;
+  const { report, address, modules, propertyPolygon, parcelLines, paid } = payload;
   const visibleModules = paid
     ? modules
     : modules.filter((m) => m.module === PREVIEW_MODULE);
@@ -88,6 +88,7 @@ export default async function ReportPage({
               lat={address.lat}
               lng={address.lng}
               propertyPolygon={propertyPolygon}
+              lotLines={parcelLines}
             />
           ))}
 

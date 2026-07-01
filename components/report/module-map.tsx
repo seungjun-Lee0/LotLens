@@ -8,6 +8,15 @@ import type { OverlayFeature } from "@/lib/overlays";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
+// Mapbox satellite-streets (and Esri World Imagery) render a little flat /
+// hazy at these zooms. A small contrast + saturation lift on the raster
+// layer punches the imagery back up without touching the overlay polygons
+// or lot lines. Tune these two if it's over/under-cooked.
+const RASTER_PAINT = {
+  "raster-contrast": 0.18,
+  "raster-saturation": 0.25,
+} as const;
+
 /**
  * Prefer Mapbox Satellite Streets (Develo-grade imagery) when the token
  * is configured. Fall back to free Esri World Imagery so the report
@@ -28,7 +37,7 @@ function buildBasemapStyle(): maplibregl.StyleSpecification {
             '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="http://www.openstreetmap.org/about/">OpenStreetMap</a>',
         },
       },
-      layers: [{ id: "mapbox", type: "raster", source: "mapbox" }],
+      layers: [{ id: "mapbox", type: "raster", source: "mapbox", paint: RASTER_PAINT }],
     };
   }
   return {
@@ -44,7 +53,7 @@ function buildBasemapStyle(): maplibregl.StyleSpecification {
           "Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community",
       },
     },
-    layers: [{ id: "esri", type: "raster", source: "esri" }],
+    layers: [{ id: "esri", type: "raster", source: "esri", paint: RASTER_PAINT }],
   };
 }
 

@@ -42,7 +42,9 @@ export async function GET(
           tint: meta.tintHex,
           overlays,
           propertyPolygon: payload.propertyPolygon,
-          lotLines: payload.parcelLines,
+          // Lot lines only benefit the zoning map (per-lot read of the
+          // dissolved zone fill). Skip them on every other module.
+          lotLines: row.module === "zoning" ? payload.parcelLines : null,
         });
         return { module: row.module, png };
       } catch (err) {

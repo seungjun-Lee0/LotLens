@@ -323,7 +323,9 @@ export function ModuleSection({
           className="h-48 sm:h-64"
           overlays={extractOverlays(row.module, row.raw)}
           propertyPolygon={propertyPolygon}
-          lotLines={lotLines}
+          // Lot boundary lines only add value on the zoning map (they make the
+          // dissolved zone fill read per-lot). Other modules don't need them.
+          lotLines={row.module === "zoning" ? lotLines : null}
         />
       </div>
 

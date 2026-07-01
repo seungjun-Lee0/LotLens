@@ -13,8 +13,8 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 // layer punches the imagery back up without touching the overlay polygons
 // or lot lines. Tune these two if it's over/under-cooked.
 const RASTER_PAINT = {
-  "raster-contrast": 0.18,
-  "raster-saturation": 0.25,
+  "raster-contrast": 0.28,
+  "raster-saturation": 0.32,
 } as const;
 
 /**
@@ -226,7 +226,9 @@ export function ModuleMap({
           [lng - PAD, lat - PAD],
           [lng + PAD, lat + PAD],
         ],
-        { padding: 10, maxZoom: 19, duration: 0 },
+        // Cap at z18: Brisbane Mapbox satellite tops out near its native
+        // resolution around here, so z19 overzooms and reads soft/washed.
+        { padding: 10, maxZoom: 18, duration: 0 },
       );
     });
 

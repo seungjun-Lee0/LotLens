@@ -68,7 +68,7 @@ const D = {
   heritageState: "#7e22ce", heritageLocal: "#db2777", heritageCharacter: "#a855f7",
   easementHV: "#db2777", easementCadastre: "#a21caf",
   vegWaterway: "#0284c7", vegMSES: "#ea580c", vegBiodiversity: "#84cc16", vegCorridor: "#16a34a",
-  zoneCentre: "#dc2626", zoneMixed: "#f97316", zoneResidential: "#facc15", zoneOpenSpace: "#16a34a", zoneOther: "#6366f1",
+  zoneCentre: "#dc2626", zoneMixed: "#f97316", zoneLowMediumResidential: "#d97706", zoneResidential: "#facc15", zoneOpenSpace: "#16a34a", zoneOther: "#6366f1",
 };
 
 export const MODULE_META: Record<Module, ModuleMeta> = {
@@ -286,6 +286,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     legend: [
       { label: "Centre",                  color: D.zoneCentre,      colorHex: D.zoneCentre },
       { label: "Mixed use",               color: D.zoneMixed,       colorHex: D.zoneMixed },
+      { label: "Low-medium residential",  color: D.zoneLowMediumResidential, colorHex: D.zoneLowMediumResidential },
       { label: "General residential",     color: D.zoneResidential, colorHex: D.zoneResidential },
       { label: "Open space / Recreation", color: D.zoneOpenSpace,   colorHex: D.zoneOpenSpace },
       { label: "Industry / Other",        color: D.zoneOther,       colorHex: D.zoneOther },

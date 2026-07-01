@@ -18,7 +18,7 @@ import {
 import type { ModuleNarrative } from "@/lib/anthropic";
 import { MODULE_META, APPLE_HEX } from "@/lib/module-meta";
 import type { ReportPayload } from "@/lib/pipeline";
-import type { Module, RiskLevel } from "@/lib/db";
+import type { Module } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
 // ── Apple-ish tokens (mirrors apple.com / iCloud system surfaces) ────────
@@ -30,14 +30,6 @@ const PAGE_BG = "#f5f5f7";      // apple.com page bg
 const SURFACE = "#ffffff";
 const HAIRLINE = "#d2d2d7";     // Apple separator
 const PANEL_BG = "#fbfbfd";     // very light surface for callouts
-
-const RISK_STYLE: Record<RiskLevel, { label: string; tint: string }> = {
-  high:     { label: "High",             tint: APPLE_HEX.red },
-  medium:   { label: "Medium",           tint: APPLE_HEX.orange },
-  low:      { label: "Low",              tint: APPLE_HEX.teal },
-  very_low: { label: "Very low",         tint: APPLE_HEX.yellow },
-  none:     { label: "No consideration", tint: APPLE_HEX.green },
-};
 
 const DISCLAIMER =
   "This report aggregates public data for informational purposes only. It is not legal, financial, or planning advice. Confirm all details with a qualified professional, conveyancer, or the relevant Council before making decisions.";
@@ -385,6 +377,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
     case "zoning": {
       const rows: { key: string; val: string }[] = [];
       if (raw.zonePrecinct) rows.push({ key: "Zone", val: String(raw.zonePrecinct) });
+      if (raw.lvl2Zone) rows.push({ key: "Specific", val: String(raw.lvl2Zone) });
       if (raw.lvl1Zone) rows.push({ key: "Family", val: String(raw.lvl1Zone) });
       return rows;
     }
@@ -395,7 +388,6 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
 
 function ModulePage({
   module,
-  riskLevel,
   hasConsideration,
   narrative,
   raw,
@@ -403,7 +395,6 @@ function ModulePage({
   address,
 }: {
   module: Module;
-  riskLevel: RiskLevel;
   hasConsideration: boolean;
   narrative: ModuleNarrative | undefined;
   raw: RawAttrs | undefined;
@@ -411,7 +402,6 @@ function ModulePage({
   address: string;
 }) {
   const meta = MODULE_META[module];
-  const risk = RISK_STYLE[riskLevel];
   const facts = factsRows(module, raw);
   const sources = Array.from(new Set(narrative?.sources ?? []));
   const statusColor = hasConsideration ? meta.tintHex : APPLE_HEX.green;
@@ -427,6 +417,7 @@ function ModulePage({
       </View>
 
       {/* Hero map */}
+      {/* eslint-disable-next-line jsx-a11y/alt-text -- React-PDF Image has no alt prop. */}
       {mapPng && <Image src={mapPng} style={styles.heroMap} />}
 
       {/* Status + source */}
@@ -557,6 +548,7 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
       ? (zoningRow.raw as RawAttrs)
       : null;
   const zoneText = (zRaw?.zonePrecinct as string | null) ?? (zRaw?.zoneCode as string | null) ?? null;
+  const zoneSpecific = (zRaw?.lvl2Zone as string | null) ?? null;
   const zoneFamily = (zRaw?.lvl1Zone as string | null) ?? null;
 
   return (
@@ -635,6 +627,9 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
             <View style={styles.metaBlock}>
               <Text style={styles.metaLabel}>Zoning</Text>
               <Text style={styles.metaValue}>{zoneText}</Text>
+              {zoneSpecific && zoneSpecific !== zoneText && (
+                <Text style={[styles.metaValue, { color: TEXT_MUTED, fontSize: 8.5 }]}>{zoneSpecific}</Text>
+              )}
               {zoneFamily && zoneFamily !== zoneText && (
                 <Text style={[styles.metaValue, { color: TEXT_MUTED, fontSize: 8.5 }]}>{zoneFamily}</Text>
               )}
@@ -721,7 +716,6 @@ export function ReportPDF({
           <ModulePage
             key={m.module}
             module={m.module}
-            riskLevel={(m.riskLevel ?? "none") as RiskLevel}
             hasConsideration={m.hasConsideration}
             narrative={report.narrative[m.module]}
             raw={raw}

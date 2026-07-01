@@ -168,12 +168,6 @@ export function ModuleMap({
         },
       });
       map.addLayer({
-        id: "selected-property-fill",
-        type: "fill",
-        source: "selected-property",
-        paint: { "fill-color": "#f5c518", "fill-opacity": 0.28 },
-      });
-      map.addLayer({
         id: "selected-property-line",
         type: "line",
         source: "selected-property",

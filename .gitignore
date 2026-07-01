@@ -45,3 +45,6 @@ next-env.d.ts
 # reference / vendor PDFs (Develo reports etc) — keep local, do not commit
 /Develo_Report_*.pdf
 /*reference*.pdf
+
+# Local Jira import/export working files
+/docs/*.csv

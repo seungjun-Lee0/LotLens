@@ -265,6 +265,7 @@ function renderStubZoning(
   const zoneCode = raw.zoneCode as string | null;
   const zonePrecinct = raw.zonePrecinct as string | null;
   const lvl1 = raw.lvl1Zone as string | null;
+  const lvl2 = raw.lvl2Zone as string | null;
   if (!zoneCode && !lvl1) {
     return {
       summary: `Zoning could not be resolved for ${input.address}.`,
@@ -274,9 +275,10 @@ function renderStubZoning(
       sources: sourcesFromRaw(raw),
     };
   }
+  const specific = lvl2 ?? zonePrecinct ?? zoneCode ?? lvl1;
   return {
-    summary: `Zoned ${zonePrecinct ?? zoneCode ?? lvl1} under BCC City Plan 2014.`,
-    detail: `Top-level zone: ${lvl1 ?? "—"}. Precinct: ${zonePrecinct ?? "—"} (${zoneCode ?? "—"}). Zoning governs what can be built, run as a business, or subdivided on the lot. Brisbane's Centre, Mixed use, and Character residential zones each carry different precinct overlays — check the precinct description against your intended use.`,
+    summary: `Zoned ${specific} under BCC City Plan 2014.`,
+    detail: `Specific zone: ${lvl2 ?? "—"}. Top-level zone: ${lvl1 ?? "—"}. Precinct: ${zonePrecinct ?? "—"} (${zoneCode ?? "—"}). Zoning governs what can be built, run as a business, or subdivided on the lot. Brisbane's Centre, Mixed use, and residential zones each carry different precinct overlays — check the specific zone and precinct description against your intended use.`,
     questions_to_ask: [
       "What is the maximum height / GFA / site cover under this zone?",
       "Is a granny flat / dual occupancy permitted as code-assessable or impact-assessable?",

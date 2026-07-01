@@ -12,7 +12,7 @@
 //   LOT_AREA, LOT_VOLUME, TENURE ("FH" = freehold)
 //   HOUSE_NUMBER, CORRIDOR_NAME, SUBURB, POSTCODE, WARD_NAME
 
-import type { Geometry } from "geojson";
+import type { FeatureCollection, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
 
 const PARCEL_LAYER =
@@ -91,5 +91,40 @@ export async function fetchPropertyParcel(
   } catch (err) {
     console.error("[property] parcel lookup failed:", err);
     return EMPTY;
+  }
+}
+
+/**
+ * Fetch every cadastre lot polygon within ~155 m of the point so a map can
+ * draw the individual lot boundary lines (Develo-style).
+ *
+ * BCC's zoning polygons are dissolved by zone-precinct — a single polygon
+ * spans a whole block of lots — so on their own they read as one flat colour
+ * wash. Overlaying the real per-lot cadastre outlines restores the "each lot
+ * is distinct" look of the reference planning map. Geometry only; we don't
+ * need attributes for boundary lines.
+ */
+export async function fetchParcelLinesNear(
+  lat: number,
+  lng: number,
+): Promise<FeatureCollection<Geometry> | null> {
+  try {
+    const fc = await queryArcGIS(PARCEL_LAYER, {
+      geometry: { x: lng, y: lat, spatialReference: 4326 },
+      geometryType: "esriGeometryPoint",
+      inSR: 4326,
+      outFields: "LOTPLAN",
+      returnGeometry: true,
+      bufferDegrees: 0.0014, // ~155 m — comfortably covers the ~115 m viewport
+      maxAllowableOffset: 0.00001,
+    });
+    const features = fc.features.filter(
+      (f): f is typeof f & { geometry: Geometry } => f.geometry != null,
+    );
+    if (features.length === 0) return null;
+    return { type: "FeatureCollection", features };
+  } catch (err) {
+    console.error("[property] parcel-lines lookup failed:", err);
+    return null;
   }
 }

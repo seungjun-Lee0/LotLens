@@ -42,6 +42,7 @@ export async function renderModuleMapPNG({
   tint,
   overlays,
   propertyPolygon = null,
+  lotLines = null,
   width = 1200,
   height = 720,
 }: {
@@ -55,6 +56,9 @@ export async function renderModuleMapPNG({
    * we draw it as the yellow highlight; otherwise we fall back to a
    * ~50 m box around the geocoded point. */
   propertyPolygon?: unknown | null;
+  /** GeoJSON FeatureCollection of nearby cadastre lots, drawn as faint
+   * white boundary lines so zone fills read per-lot. null = skip. */
+  lotLines?: unknown | null;
   width?: number;
   height?: number;
 }): Promise<Buffer> {
@@ -72,7 +76,7 @@ export async function renderModuleMapPNG({
   for (const f of overlays) {
     if (!f.geometry) continue;
     const fillColor = f.properties.fillColor;
-    const fill = withAlpha(fillColor, 0.35);
+    const fill = withAlpha(fillColor, f.properties.fillOpacity ?? 0.35);
     const stroke = fillColor;
     if (f.geometry.type === "Polygon") {
       // staticmaps doesn't support holes; draw outer ring only.
@@ -96,6 +100,36 @@ export async function renderModuleMapPNG({
             fill,
             width: 1.6,
           });
+        }
+      }
+    }
+  }
+
+  // Cadastre lot boundaries — faint white hairlines so zone fills read
+  // per-lot (Develo-style) instead of as one flat colour wash.
+  if (
+    lotLines &&
+    typeof lotLines === "object" &&
+    (lotLines as { type?: string; features?: unknown }).type === "FeatureCollection"
+  ) {
+    const fc = lotLines as {
+      features?: Array<{ geometry?: { type?: string; coordinates?: unknown } }>;
+    };
+    const drawLotRing = (ring: [number, number][]) => {
+      if (ring.length >= 3) {
+        map.addPolygon({ coords: ring, color: "#ffffffcc", width: 0.8, fill: "#ffffff00" });
+      }
+    };
+    for (const f of fc.features ?? []) {
+      const g = f.geometry;
+      if (!g) continue;
+      if (g.type === "Polygon") {
+        const ring = (g.coordinates as number[][][])[0];
+        if (ring) drawLotRing(ring as [number, number][]);
+      } else if (g.type === "MultiPolygon") {
+        for (const poly of g.coordinates as number[][][][]) {
+          const ring = poly[0];
+          if (ring) drawLotRing(ring as [number, number][]);
         }
       }
     }

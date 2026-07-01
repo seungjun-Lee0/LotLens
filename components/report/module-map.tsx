@@ -60,6 +60,7 @@ export function ModuleMap({
   className = "h-44 w-full",
   overlays = [],
   propertyPolygon = null,
+  lotLines = null,
 }: {
   lat: number;
   lng: number;
@@ -70,6 +71,9 @@ export function ModuleMap({
   className?: string;
   /** Module-tagged polygon features. Empty array = pin-only map. */
   overlays?: OverlayFeature[];
+  /** GeoJSON FeatureCollection of nearby cadastre lots, drawn as faint
+   * boundary lines so zone fills read per-lot. null = no lot lines. */
+  lotLines?: unknown | null;
   /** GeoJSON Polygon / MultiPolygon for the cadastre lot the property
    * sits on. When present we use this as the yellow "selected property"
    * highlight; falls back to a ~30 m square otherwise. */
@@ -117,7 +121,9 @@ export function ModuleMap({
           source: "overlays",
           paint: {
             "fill-color": ["get", "fillColor"],
-            "fill-opacity": 0.35,
+            // Per-feature opacity when set (zoning fills are faint so the
+            // satellite imagery + lot lines stay legible), else the default.
+            "fill-opacity": ["coalesce", ["get", "fillOpacity"], 0.35],
             "fill-antialias": true,
           },
         });
@@ -133,6 +139,31 @@ export function ModuleMap({
             "line-color": ["get", "fillColor"],
             "line-width": 1.8,
             "line-opacity": 0.95,
+          },
+        });
+      }
+
+      // Cadastre lot boundaries — faint white hairlines so zone fills read
+      // per-lot (Develo-style) instead of as one flat colour wash. Drawn
+      // above the overlay fill but below the selected-property outline.
+      if (
+        lotLines &&
+        typeof lotLines === "object" &&
+        (lotLines as { type?: string }).type === "FeatureCollection"
+      ) {
+        map.addSource("lot-lines", {
+          type: "geojson",
+          data: lotLines as GeoJSON.FeatureCollection,
+        });
+        map.addLayer({
+          id: "lot-lines",
+          type: "line",
+          source: "lot-lines",
+          layout: { "line-join": "round" },
+          paint: {
+            "line-color": "#ffffff",
+            "line-width": 0.8,
+            "line-opacity": 0.55,
           },
         });
       }

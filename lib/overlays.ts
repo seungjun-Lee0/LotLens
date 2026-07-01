@@ -27,8 +27,10 @@ import type { Module } from "@/lib/db";
 
 export type OverlayFeature = Feature<
   Geometry,
-  { fillColor: string; legendLabel: string }
+  { fillColor: string; legendLabel: string; fillOpacity?: number }
 >;
+
+type Classified = { fillColor: string; legendLabel: string; fillOpacity?: number };
 
 // ── Develo-style overlay palette ─────────────────────────────────────────
 
@@ -98,17 +100,16 @@ function isFC(v: unknown): v is FeatureCollection<Geometry, Record<string, unkno
 function pushFC(
   out: OverlayFeature[],
   fc: unknown,
-  classify: (props: Record<string, unknown>) => { fillColor: string; legendLabel: string },
+  classify: (props: Record<string, unknown>) => Classified,
 ) {
   if (!isFC(fc)) return;
   for (const f of fc.features) {
     if (!f.geometry) continue;
     const props = (f.properties ?? {}) as Record<string, unknown>;
-    const { fillColor, legendLabel } = classify(props);
     out.push({
       type: "Feature",
       geometry: f.geometry,
-      properties: { fillColor, legendLabel },
+      properties: classify(props),
     });
   }
 }
@@ -197,7 +198,13 @@ function schoolsColor(props: Record<string, unknown>) {
   return { fillColor: "#94a3b8", legendLabel: t || "School catchment" };
 }
 
-function zoningColor(props: Record<string, unknown>) {
+// Zone polygons are dissolved by zone-precinct — a single feature spans a
+// whole block of lots, so they blanket the whole viewport. Keep the fill
+// faint (the per-lot cadastre lines carry the structure) so the satellite
+// imagery stays legible instead of drowning under a pink wash.
+const ZONE_FILL_OPACITY = 0.18;
+
+function zoningColor(props: Record<string, unknown>): Classified {
   const f = String(props.LVL1_ZONE ?? "").toLowerCase();
   const z = [
     props.LVL2_ZONE,
@@ -206,14 +213,15 @@ function zoningColor(props: Record<string, unknown>) {
   ]
     .map((v) => String(v ?? "").toLowerCase())
     .join(" ");
-  if (f.startsWith("centre"))             return { fillColor: DEVELO_HEX.zoneCentre,    legendLabel: "Centre" };
-  if (f.startsWith("mixed"))              return { fillColor: DEVELO_HEX.zoneMixed,     legendLabel: "Mixed use" };
+  const o = ZONE_FILL_OPACITY;
+  if (f.startsWith("centre"))             return { fillColor: DEVELO_HEX.zoneCentre,    legendLabel: "Centre", fillOpacity: o };
+  if (f.startsWith("mixed"))              return { fillColor: DEVELO_HEX.zoneMixed,     legendLabel: "Mixed use", fillOpacity: o };
   if (z.includes("low-medium") || z.includes("low medium") || z.includes("2 or 3 storey"))
-                                          return { fillColor: DEVELO_HEX.zoneLowMediumResidential, legendLabel: "Low-medium density residential" };
-  if (f.includes("residential"))          return { fillColor: DEVELO_HEX.zoneResidential, legendLabel: "General residential" };
+                                          return { fillColor: DEVELO_HEX.zoneLowMediumResidential, legendLabel: "Low-medium density residential", fillOpacity: o };
+  if (f.includes("residential"))          return { fillColor: DEVELO_HEX.zoneResidential, legendLabel: "General residential", fillOpacity: o };
   if (f.includes("open space") || f.includes("recreation"))
-                                          return { fillColor: DEVELO_HEX.zoneOpenSpace, legendLabel: "Open space / Recreation" };
-  return { fillColor: DEVELO_HEX.zoneOther, legendLabel: String(props.LVL1_ZONE ?? "Other") };
+                                          return { fillColor: DEVELO_HEX.zoneOpenSpace, legendLabel: "Open space / Recreation", fillOpacity: o };
+  return { fillColor: DEVELO_HEX.zoneOther, legendLabel: String(props.LVL1_ZONE ?? "Other"), fillOpacity: o };
 }
 
 // ── Public extractor ─────────────────────────────────────────────────────

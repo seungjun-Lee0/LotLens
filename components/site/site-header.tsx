@@ -20,7 +20,7 @@ export function SiteHeader() {
           />
           PropAI
           <span className="ml-1 hidden text-[11px] font-normal text-muted-foreground sm:inline">
-            Brisbane DD prototype
+            Brisbane
           </span>
         </Link>
         <nav className="flex items-center gap-2 text-[13px] text-muted-foreground">

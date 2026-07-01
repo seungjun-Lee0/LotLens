@@ -112,7 +112,7 @@ export async function renderModuleMapPNG({
       coords: ring,
       color: "#f5c518",
       width: 3,
-      fill: withAlpha("#f5c518", 0.28),
+      fill: "#f5c51800",
     });
   };
 

@@ -216,10 +216,17 @@ function ModuleFacts({
       const code = raw.zoneCode as string | null;
       const prec = raw.zonePrecinct as string | null;
       const lvl1 = raw.lvl1Zone as string | null;
+      const lvl2 = raw.lvl2Zone as string | null;
       return (
         <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           <dt className="text-muted-foreground">Zone</dt>
           <dd className="font-medium">{prec ?? code ?? "—"}</dd>
+          {lvl2 && (
+            <>
+              <dt className="text-muted-foreground">Specific</dt>
+              <dd className="font-medium">{lvl2}</dd>
+            </>
+          )}
           <dt className="text-muted-foreground">Family</dt>
           <dd className="font-medium">{lvl1 ?? "—"}</dd>
         </dl>

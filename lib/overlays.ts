@@ -79,6 +79,7 @@ export const DEVELO_HEX = {
   // Zoning — keep multi-family
   zoneCentre:   "#dc2626",
   zoneMixed:    "#f97316",
+  zoneLowMediumResidential: "#d97706",
   zoneResidential: "#facc15",
   zoneOpenSpace: "#16a34a",
   zoneOther:    "#6366f1",
@@ -198,8 +199,17 @@ function schoolsColor(props: Record<string, unknown>) {
 
 function zoningColor(props: Record<string, unknown>) {
   const f = String(props.LVL1_ZONE ?? "").toLowerCase();
+  const z = [
+    props.LVL2_ZONE,
+    props.ZONE_PREC_DESC,
+    props.ZONE_CODE,
+  ]
+    .map((v) => String(v ?? "").toLowerCase())
+    .join(" ");
   if (f.startsWith("centre"))             return { fillColor: DEVELO_HEX.zoneCentre,    legendLabel: "Centre" };
   if (f.startsWith("mixed"))              return { fillColor: DEVELO_HEX.zoneMixed,     legendLabel: "Mixed use" };
+  if (z.includes("low-medium") || z.includes("low medium") || z.includes("2 or 3 storey"))
+                                          return { fillColor: DEVELO_HEX.zoneLowMediumResidential, legendLabel: "Low-medium density residential" };
   if (f.includes("residential"))          return { fillColor: DEVELO_HEX.zoneResidential, legendLabel: "General residential" };
   if (f.includes("open space") || f.includes("recreation"))
                                           return { fillColor: DEVELO_HEX.zoneOpenSpace, legendLabel: "Open space / Recreation" };

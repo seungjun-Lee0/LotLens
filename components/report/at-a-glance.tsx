@@ -46,6 +46,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
     (zoningRaw?.zonePrecinct as string | null) ??
     (zoningRaw?.zoneCode as string | null) ??
     null;
+  const zoneSpecific = (zoningRaw?.lvl2Zone as string | null) ?? null;
   const zoneFamily = (zoningRaw?.lvl1Zone as string | null) ?? null;
 
   return (
@@ -143,6 +144,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
             <Meta label="Zoning">
               <ul className="mt-0.5 list-inside list-disc text-[13.5px] [&>li]:leading-snug">
                 <li>{zoneText}</li>
+                {zoneSpecific && zoneSpecific !== zoneText && <li>{zoneSpecific}</li>}
                 {zoneFamily && zoneFamily !== zoneText && <li>{zoneFamily}</li>}
               </ul>
             </Meta>

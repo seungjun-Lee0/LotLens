@@ -4,8 +4,9 @@ import { RiskBadge } from "@/components/report/risk-badge";
 import { ModuleMap } from "@/components/report/module-map";
 import type { ModuleNarrative } from "@/lib/anthropic";
 import { MODULE_META } from "@/lib/module-meta";
-import { extractOverlays } from "@/lib/overlays";
+import { extractOverlays, type OverlayFeature } from "@/lib/overlays";
 import type { ReportModuleRow } from "@/lib/pipeline";
+import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
 import type { Module, RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
@@ -267,6 +268,35 @@ function StatusPill({
 
 // ── Section ───────────────────────────────────────────────────────────────
 
+function legendItemsFromOverlays(overlays: OverlayFeature[]): { color: string; label: string }[] {
+  const seen = new Set<string>();
+  const items: { color: string; label: string }[] = [];
+  for (const f of overlays) {
+    const key = `${f.properties.fillColor}|${f.properties.legendLabel}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({
+      color: f.properties.fillColor,
+      label: f.properties.legendLabel,
+    });
+  }
+  return items;
+}
+
+function splitLegendItems(
+  visibleOverlays: OverlayFeature[],
+  applicableOverlays: OverlayFeature[],
+) {
+  const applicableKeys = new Set(
+    applicableOverlays.map((f) => `${f.properties.fillColor}|${f.properties.legendLabel}`),
+  );
+  const visibleItems = legendItemsFromOverlays(visibleOverlays);
+  return {
+    applies: visibleItems.filter((item) => applicableKeys.has(`${item.color}|${item.label}`)),
+    nearby: visibleItems.filter((item) => !applicableKeys.has(`${item.color}|${item.label}`)),
+  };
+}
+
 export function ModuleSection({
   row,
   narrative,
@@ -289,6 +319,9 @@ export function ModuleSection({
     row.raw && typeof row.raw === "object"
       ? (row.raw as Record<string, unknown>)
       : undefined;
+  const mapOverlays = extractOverlays(row.module, row.raw);
+  const applicableOverlays = extractOverlays(row.module, row.raw, { scope: "property" });
+  const legendItems = splitLegendItems(mapOverlays, applicableOverlays);
 
   return (
     <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(15,23,42,0.12)]">
@@ -319,9 +352,9 @@ export function ModuleSection({
         <ModuleMap
           lat={lat}
           lng={lng}
-          tint={meta.tint}
-          className="h-48 sm:h-64"
-          overlays={extractOverlays(row.module, row.raw)}
+          className="h-64 sm:h-80 lg:h-96"
+          overlays={mapOverlays}
+          applicableOverlays={applicableOverlays}
           propertyPolygon={propertyPolygon}
           // Lot boundary lines only add value on the zoning map (they make the
           // dissolved zone fill read per-lot). Other modules don't need them.
@@ -425,23 +458,38 @@ export function ModuleSection({
                 <span
                   className="size-3 rounded-sm"
                   style={{
-                    background: meta.tint,
+                    background: SELECTED_PROPERTY_STYLE.color,
                     boxShadow: "0 0 0 1.5px white",
-                    outline: `1px solid color-mix(in oklab, ${meta.tint} 60%, transparent)`,
+                    outline: `1px solid color-mix(in oklab, ${SELECTED_PROPERTY_STYLE.color} 70%, transparent)`,
                   }}
                 />
-                <span className="text-foreground/80">Selected property</span>
+                <span className="text-foreground/80">{SELECTED_PROPERTY_STYLE.label}</span>
               </li>
-              {meta.legend.map((l) => (
-                <li key={l.label} className="flex items-center gap-2">
+              {legendItems.applies.map((item) => (
+                <li key={`applies-${item.color}-${item.label}`} className="flex items-center gap-2">
                   <span
                     className="size-3 rounded-sm"
                     style={{
-                      background: `color-mix(in oklab, ${l.color} 65%, transparent)`,
-                      outline: `1px solid color-mix(in oklab, ${l.color} 70%, transparent)`,
+                      background: `color-mix(in oklab, ${item.color} 65%, transparent)`,
+                      outline: `1px solid color-mix(in oklab, ${item.color} 70%, transparent)`,
                     }}
                   />
-                  <span className="text-foreground/80">{l.label}</span>
+                  <span className="text-foreground/80">{item.label}</span>
+                </li>
+              ))}
+              {legendItems.nearby.map((item) => (
+                <li
+                  key={`nearby-${item.color}-${item.label}`}
+                  className="flex items-center gap-2 opacity-55"
+                >
+                  <span
+                    className="size-3 rounded-sm"
+                    style={{
+                      background: `color-mix(in oklab, ${item.color} 45%, transparent)`,
+                      outline: `1px solid color-mix(in oklab, ${item.color} 55%, transparent)`,
+                    }}
+                  />
+                  <span className="text-foreground/70">{item.label} (nearby only)</span>
                 </li>
               ))}
             </ul>

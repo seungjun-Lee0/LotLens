@@ -315,7 +315,7 @@ export default function Home() {
           <p className="text-center text-[12px] text-muted-foreground">
             Buying multiple properties?{" "}
             <a
-              href="mailto:hello@propai.au"
+              href="mailto:hello@lotlens.au"
               className="underline underline-offset-2 hover:text-foreground"
             >
               Email us
@@ -382,7 +382,7 @@ export default function Home() {
 
       <footer className="border-t border-border/40 bg-background/40 backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-6 text-center text-[11.5px] text-muted-foreground sm:flex-row sm:px-6 sm:text-left sm:text-[12px]">
-          <span>© PropAI — Brisbane Due Diligence</span>
+          <span>© LotLens — Brisbane Due Diligence</span>
           <span>Public data only · No valuation · No title search</span>
         </div>
       </footer>

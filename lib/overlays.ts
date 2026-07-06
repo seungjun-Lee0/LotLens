@@ -31,6 +31,7 @@ export type OverlayFeature = Feature<
 >;
 
 type Classified = { fillColor: string; legendLabel: string; fillOpacity?: number };
+type OverlayScope = "context" | "property";
 
 // ── Develo-style overlay palette ─────────────────────────────────────────
 
@@ -121,25 +122,25 @@ function floodingColor(props: Record<string, unknown>) {
   if (r === "high")     return { fillColor: DEVELO_HEX.floodHigh,    legendLabel: "High possibility (5.0% AEP)" };
   if (r === "medium")   return { fillColor: DEVELO_HEX.floodMedium,  legendLabel: "Moderate possibility (1.0% AEP)" };
   if (r === "low")      return { fillColor: DEVELO_HEX.floodLow,     legendLabel: "Low possibility (0.2% AEP)" };
-  if (r === "very low") return { fillColor: DEVELO_HEX.floodVeryLow, legendLabel: "Very low possibility (0.05% AEP)" };
+  if (r === "very low") return { fillColor: DEVELO_HEX.floodVeryLow, legendLabel: "Very low (0.05% AEP)" };
   return { fillColor: "#94a3b8", legendLabel: "Unclassified" };
 }
 
 function overlandFlowColor(props: Record<string, unknown>) {
   const r = String(props.FLOOD_RISK ?? "").toLowerCase();
-  if (r === "high")     return { fillColor: DEVELO_HEX.overlandHigh,    legendLabel: "Overland flow — high impact" };
-  if (r === "medium")   return { fillColor: DEVELO_HEX.overlandMedium,  legendLabel: "Overland flow — moderate impact" };
-  if (r === "low")      return { fillColor: DEVELO_HEX.overlandLow,     legendLabel: "Overland flow — low impact" };
-  if (r === "very low") return { fillColor: DEVELO_HEX.overlandVeryLow, legendLabel: "Overland flow — very low" };
+  if (r === "high")     return { fillColor: DEVELO_HEX.overlandHigh,    legendLabel: "High impact" };
+  if (r === "medium")   return { fillColor: DEVELO_HEX.overlandMedium,  legendLabel: "Moderate impact" };
+  if (r === "low")      return { fillColor: DEVELO_HEX.overlandLow,     legendLabel: "Low impact" };
+  if (r === "very low") return { fillColor: DEVELO_HEX.overlandVeryLow, legendLabel: "Very low" };
   return { fillColor: "#94a3b8", legendLabel: "Overland flow" };
 }
 
 function stormTideColor(props: Record<string, unknown>) {
   const r = String(props.FLOOD_RISK ?? "").toLowerCase();
-  if (r === "high")     return { fillColor: DEVELO_HEX.stormHigh,    legendLabel: "Storm tide — high" };
-  if (r === "medium")   return { fillColor: DEVELO_HEX.stormMedium,  legendLabel: "Storm tide — medium" };
-  if (r === "low")      return { fillColor: DEVELO_HEX.stormLow,     legendLabel: "Storm tide — low" };
-  if (r === "very low") return { fillColor: DEVELO_HEX.stormVeryLow, legendLabel: "Storm tide — very low" };
+  if (r === "high")     return { fillColor: DEVELO_HEX.stormHigh,    legendLabel: "High risk" };
+  if (r === "medium")   return { fillColor: DEVELO_HEX.stormMedium,  legendLabel: "Medium risk" };
+  if (r === "low")      return { fillColor: DEVELO_HEX.stormLow,     legendLabel: "Low risk" };
+  if (r === "very low") return { fillColor: DEVELO_HEX.stormVeryLow, legendLabel: "Very low risk" };
   return { fillColor: "#94a3b8", legendLabel: "Storm tide" };
 }
 
@@ -166,10 +167,10 @@ function vegetationColor(props: Record<string, unknown>) {
 function floodPlanningColor(props: Record<string, unknown>) {
   const d = String(props.OVL2_DESC ?? "");
   const n = parseInt(d.replace(/\D/g, ""), 10);
-  if (n === 1) return { fillColor: DEVELO_HEX.floodHigh,    legendLabel: "Planning area 1 — strictest" };
+  if (n === 1) return { fillColor: DEVELO_HEX.floodHigh,    legendLabel: "Planning area 1 - strictest" };
   if (n === 2) return { fillColor: DEVELO_HEX.floodMedium,  legendLabel: "Planning area 2" };
   if (n === 3) return { fillColor: DEVELO_HEX.floodLow,     legendLabel: "Planning area 3" };
-  if (n >= 4) return { fillColor: DEVELO_HEX.floodVeryLow, legendLabel: "Planning area 4 — mildest" };
+  if (n >= 4) return { fillColor: DEVELO_HEX.floodVeryLow, legendLabel: "Planning area 4 - mildest" };
   return { fillColor: "#94a3b8", legendLabel: d || "Planning area" };
 }
 
@@ -179,14 +180,13 @@ function noiseColor(props: Record<string, unknown>) {
   const n = parseInt(d.replace(/\D/g, ""), 10);
   if (isAnef) {
     if (n >= 30) return { fillColor: DEVELO_HEX.fireVeryHigh, legendLabel: "Aircraft 30+ ANEF" };
-    if (n >= 25) return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "Aircraft 25–30 ANEF" };
-    if (n >= 20) return { fillColor: DEVELO_HEX.fireBuffer,   legendLabel: "Aircraft 20–25 ANEF" };
+    if (n >= 25) return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "Aircraft 25-30 ANEF" };
+    if (n >= 20) return { fillColor: DEVELO_HEX.fireBuffer,   legendLabel: "Aircraft 20-25 ANEF" };
     return { fillColor: DEVELO_HEX.fireMedium, legendLabel: d };
   }
-  if (n === 1) return { fillColor: DEVELO_HEX.fireHigh,    legendLabel: "Transport corridor 1" };
+  if (n === 1) return { fillColor: DEVELO_HEX.fireHigh,    legendLabel: "Transport corridor 1 - loudest" };
   if (n === 2) return { fillColor: DEVELO_HEX.fireBuffer,  legendLabel: "Transport corridor 2" };
-  if (n === 3) return { fillColor: DEVELO_HEX.fireMedium,  legendLabel: "Transport corridor 3" };
-  if (n >= 4) return { fillColor: "#fde68a",               legendLabel: "Transport corridor 4" };
+  if (n === 3 || n >= 4) return { fillColor: DEVELO_HEX.fireMedium, legendLabel: "Transport corridor 3-4" };
   return { fillColor: "#94a3b8", legendLabel: d || "Noise corridor" };
 }
 
@@ -226,14 +226,17 @@ function zoningColor(props: Record<string, unknown>): Classified {
 
 // ── Public extractor ─────────────────────────────────────────────────────
 
-export function extractOverlays(module: Module, raw: unknown): OverlayFeature[] {
+export function extractOverlays(
+  module: Module,
+  raw: unknown,
+  { scope = "context" }: { scope?: OverlayScope } = {},
+): OverlayFeature[] {
   const out: OverlayFeature[] = [];
   if (!raw || typeof raw !== "object") return out;
-  // Prefer `context` (envelope query — ~280 m around property, always has
-  // features when any exist nearby) over `raw` (point query — only has
-  // features the property is inside).
+  // Use context for visible map polygons, but property scope for legends:
+  // customers should only see legend entries that actually affect the lot.
   const r = raw as Record<string, unknown>;
-  const inner = r.context ?? r.raw;
+  const inner = scope === "context" ? r.context ?? r.raw : r.raw;
   if (inner === undefined) return out;
 
   switch (module) {
@@ -279,14 +282,14 @@ export function extractOverlays(module: Module, raw: unknown): OverlayFeature[] 
       return out;
     }
     case "easements": {
-      // Easements has two parallel context layers — high-voltage (BCC) and
+      // Easements has two parallel layers: high-voltage (BCC) and
       // cadastral easement parcels (QSpatial). Render both with distinct
       // legend labels so the map differentiates them.
-      pushFC(out, r.context, () => ({
+      pushFC(out, scope === "context" ? r.context : r.raw, () => ({
         fillColor: DEVELO_HEX.easementHV,
         legendLabel: "High-voltage easement",
       }));
-      pushFC(out, r.cadastralContext, () => ({
+      pushFC(out, scope === "context" ? r.cadastralContext : r.cadastralRaw, () => ({
         fillColor: DEVELO_HEX.easementCadastre,
         legendLabel: "Registered easement (cadastre)",
       }));

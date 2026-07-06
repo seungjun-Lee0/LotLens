@@ -113,6 +113,7 @@
   --apple-teal: #5ac8fa;
   --apple-yellow: #ffcc00;
   --apple-gray: #8e8e93;
+  --selected-property: #ffcc00;
 
   /* Glassmorphism — tuned for subtle use on light surfaces */
   --glass-bg: rgba(255, 255, 255, 0.65);
@@ -170,6 +171,7 @@
   --apple-teal: #64d2ff;
   --apple-yellow: #ffd60a;
   --apple-gray: #98989d;
+  --selected-property: #ffd60a;
 
   --glass-bg: rgba(20, 22, 30, 0.55);
   --glass-bg-strong: rgba(20, 22, 30, 0.92);

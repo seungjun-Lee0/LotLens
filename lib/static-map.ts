@@ -12,6 +12,7 @@
 import StaticMaps from "staticmaps";
 
 import type { OverlayFeature } from "@/lib/overlays";
+import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
 
 // Tile source: prefer Mapbox Satellite Streets (Develo-grade imagery)
 // when NEXT_PUBLIC_MAPBOX_TOKEN is set, fall back to free Esri World
@@ -20,7 +21,7 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 const SAT_TILES = MAPBOX_TOKEN
   ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`
   : "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const TILE_UA = "PropAI/0.1 Brisbane-DD-prototype (contact: jun@propai.dev)";
+const TILE_UA = "LotLens/0.1 Brisbane-DD (contact: hello@lotlens.au)";
 
 // 8-digit hex with alpha for staticmaps fill colours.
 function withAlpha(hex: string, alpha: number): string {
@@ -39,7 +40,6 @@ function withAlpha(hex: string, alpha: number): string {
 export async function renderModuleMapPNG({
   lat,
   lng,
-  tint,
   overlays,
   propertyPolygon = null,
   lotLines = null,
@@ -48,8 +48,6 @@ export async function renderModuleMapPNG({
 }: {
   lat: number;
   lng: number;
-  /** Property pin colour. */
-  tint: string;
   /** Module-tagged polygon features from extractOverlays(). */
   overlays: OverlayFeature[];
   /** GeoJSON Polygon / MultiPolygon for the cadastre lot. When present
@@ -141,12 +139,17 @@ export async function renderModuleMapPNG({
   // when zoning didn't match (rare for Brisbane LGA addresses).
   const drawPropertyRing = (ring: [number, number][]) => {
     // White halo first for legibility against dark satellite imagery.
-    map.addPolygon({ coords: ring, color: "#ffffff", width: 5, fill: "#ffffff00" });
     map.addPolygon({
       coords: ring,
-      color: "#f5c518",
-      width: 3,
-      fill: "#f5c51800",
+      color: SELECTED_PROPERTY_STYLE.haloHex,
+      width: SELECTED_PROPERTY_STYLE.haloWidth,
+      fill: `${SELECTED_PROPERTY_STYLE.haloHex}00`,
+    });
+    map.addPolygon({
+      coords: ring,
+      color: SELECTED_PROPERTY_STYLE.colorHex,
+      width: SELECTED_PROPERTY_STYLE.lineWidth,
+      fill: `${SELECTED_PROPERTY_STYLE.colorHex}00`,
     });
   };
 
@@ -188,8 +191,8 @@ export async function renderModuleMapPNG({
   map.addCircle({
     coord: [lng, lat],
     radius: 3.5,
-    color: tint,
-    fill: tint,
+    color: SELECTED_PROPERTY_STYLE.colorHex,
+    fill: SELECTED_PROPERTY_STYLE.colorHex,
     width: 0,
   });
 

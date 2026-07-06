@@ -107,10 +107,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "The planning overlay is the statutory layer — i.e. it is what Council will use when assessing your application. Always check it alongside the Flood Awareness Mapping which describes risk probability rather than planning controls.",
     legend: [
-      { label: "Planning area 1 — strictest", color: D.floodHigh,    colorHex: D.floodHigh },
+      { label: "Planning area 1 - strictest", color: D.floodHigh,    colorHex: D.floodHigh },
       { label: "Planning area 2",             color: D.floodMedium,  colorHex: D.floodMedium },
       { label: "Planning area 3",             color: D.floodLow,     colorHex: D.floodLow },
-      { label: "Planning area 4 — mildest",   color: D.floodVeryLow, colorHex: D.floodVeryLow },
+      { label: "Planning area 4 - mildest",   color: D.floodVeryLow, colorHex: D.floodVeryLow },
     ],
   },
 
@@ -244,7 +244,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "Subjective noise depends on traffic mix, time of day, and prevailing wind direction. Visit at peak commute, late evening, and on a Sunday before relying on a daytime impression. The mapped corridors are based on modelled long-term equivalent noise level (LAeq).",
     legend: [
-      { label: "Transport corridor 1 — loudest", color: D.fireHigh,    colorHex: D.fireHigh },
+      { label: "Transport corridor 1 - loudest", color: D.fireHigh,    colorHex: D.fireHigh },
       { label: "Transport corridor 2",           color: D.fireBuffer,  colorHex: D.fireBuffer },
       { label: "Transport corridor 3-4",         color: D.fireMedium,  colorHex: D.fireMedium },
       { label: "Aircraft 30+ ANEF",              color: D.fireVeryHigh, colorHex: D.fireVeryHigh },

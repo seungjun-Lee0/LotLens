@@ -1,4 +1,4 @@
-# PropAI — Brisbane Property Due Diligence (prototype)
+# LotLens — Brisbane Property Due Diligence
 
 An end-to-end Brisbane LGA property due diligence report generator.
 Type an address → the backend geocodes, queries five public ArcGIS

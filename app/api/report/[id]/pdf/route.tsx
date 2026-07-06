@@ -8,7 +8,6 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 
 import { ReportPDF, type ModuleMapPng } from "@/components/report/report-pdf";
-import { MODULE_META } from "@/lib/module-meta";
 import { extractOverlays } from "@/lib/overlays";
 import { loadReportPayload } from "@/lib/pipeline";
 import { renderModuleMapPNG } from "@/lib/static-map";
@@ -33,13 +32,11 @@ export async function GET(
   // a null entry so the PDF still ships without that map.
   const maps: ModuleMapPng[] = await Promise.all(
     payload.modules.map(async (row) => {
-      const meta = MODULE_META[row.module];
       const overlays = extractOverlays(row.module, row.raw);
       try {
         const png = await renderModuleMapPNG({
           lat: payload.address.lat,
           lng: payload.address.lng,
-          tint: meta.tintHex,
           overlays,
           propertyPolygon: payload.propertyPolygon,
           // Lot lines only benefit the zoning map (per-lot read of the
@@ -61,7 +58,7 @@ export async function GET(
     .trim()
     .replace(/\s+/g, "_")
     .slice(0, 80);
-  const filename = `propai-${safeAddr || payload.report.id.slice(0, 8)}.pdf`;
+  const filename = `lotlens-${safeAddr || payload.report.id.slice(0, 8)}.pdf`;
 
   return new Response(new Uint8Array(buffer), {
     headers: {

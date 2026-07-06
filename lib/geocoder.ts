@@ -18,7 +18,7 @@ const BBOX = {
 };
 
 const NOMINATIM_UA =
-  "PropAI/0.1 Brisbane-DD-prototype (contact: jun@propai.dev)";
+  "LotLens/0.1 Brisbane-DD (contact: hello@lotlens.au)";
 
 export type Suggestion = {
   id: string;

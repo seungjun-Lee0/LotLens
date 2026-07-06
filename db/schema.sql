@@ -1,4 +1,4 @@
--- PropAI prototype schema (Vercel Postgres / Neon).
+-- LotLens schema (Vercel Postgres / Neon).
 --
 -- Run this in the Vercel Storage → Postgres → "Query" tab once after
 -- provisioning, or paste into Neon's SQL Editor for a standalone Neon

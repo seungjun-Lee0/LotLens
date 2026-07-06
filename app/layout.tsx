@@ -17,7 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PropAI — Brisbane Property Due Diligence",
+  title: "LotLens — Brisbane Property Due Diligence",
   description:
     "AI-generated due diligence reports for Brisbane properties. Plain-English summaries of flood, bushfire, heritage, easements, and zoning overlays.",
 };

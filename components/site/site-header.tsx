@@ -18,7 +18,7 @@ export function SiteHeader() {
               boxShadow: "0 0 12px color-mix(in oklab, var(--apple-blue) 50%, transparent)",
             }}
           />
-          PropAI
+          LotLens
           <span className="ml-1 hidden text-[11px] font-normal text-muted-foreground sm:inline">
             Brisbane
           </span>

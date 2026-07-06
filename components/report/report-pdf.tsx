@@ -17,7 +17,9 @@ import {
 
 import type { ModuleNarrative } from "@/lib/anthropic";
 import { MODULE_META, APPLE_HEX } from "@/lib/module-meta";
+import { extractOverlays, type OverlayFeature } from "@/lib/overlays";
 import type { ReportPayload } from "@/lib/pipeline";
+import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
 import type { Module } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
@@ -69,6 +71,35 @@ function formatDate(iso: string): string {
 type RawAttrs = Record<string, unknown>;
 function asArr<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
+}
+
+function legendItemsFromOverlays(overlays: OverlayFeature[]): { color: string; label: string }[] {
+  const seen = new Set<string>();
+  const items: { color: string; label: string }[] = [];
+  for (const f of overlays) {
+    const key = `${f.properties.fillColor}|${f.properties.legendLabel}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({
+      color: f.properties.fillColor,
+      label: f.properties.legendLabel,
+    });
+  }
+  return items;
+}
+
+function splitLegendItems(
+  visibleOverlays: OverlayFeature[],
+  applicableOverlays: OverlayFeature[],
+) {
+  const applicableKeys = new Set(
+    applicableOverlays.map((f) => `${f.properties.fillColor}|${f.properties.legendLabel}`),
+  );
+  const visibleItems = legendItemsFromOverlays(visibleOverlays);
+  return {
+    applies: visibleItems.filter((item) => applicableKeys.has(`${item.color}|${item.label}`)),
+    nearby: visibleItems.filter((item) => !applicableKeys.has(`${item.color}|${item.label}`)),
+  };
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────
@@ -406,6 +437,10 @@ function ModulePage({
   const sources = Array.from(new Set(narrative?.sources ?? []));
   const statusColor = hasConsideration ? meta.tintHex : APPLE_HEX.green;
   const statusLabel = hasConsideration ? "Considerations identified" : "No considerations identified";
+  const legendItems = splitLegendItems(
+    extractOverlays(module, raw),
+    extractOverlays(module, raw, { scope: "property" }),
+  );
 
   return (
     <Page size="A4" style={styles.page}>
@@ -491,13 +526,26 @@ function ModulePage({
 
           <Text style={styles.sectionLabel}>Legend</Text>
           <View style={styles.legendRow}>
-            <View style={[styles.legendSwatch, { backgroundColor: meta.tintHex }]} />
-            <Text style={styles.legendLabel}>Selected property</Text>
+            <View
+              style={[
+                styles.legendSwatch,
+                { backgroundColor: SELECTED_PROPERTY_STYLE.colorHex },
+              ]}
+            />
+            <Text style={styles.legendLabel}>{SELECTED_PROPERTY_STYLE.label}</Text>
           </View>
-          {meta.legend.map((l) => (
-            <View key={l.label} style={styles.legendRow}>
-              <View style={[styles.legendSwatch, { backgroundColor: l.colorHex }]} />
-              <Text style={styles.legendLabel}>{l.label}</Text>
+          {legendItems.applies.map((item) => (
+            <View key={`applies-${item.color}-${item.label}`} style={styles.legendRow}>
+              <View style={[styles.legendSwatch, { backgroundColor: item.color }]} />
+              <Text style={styles.legendLabel}>{item.label}</Text>
+            </View>
+          ))}
+          {legendItems.nearby.map((item) => (
+            <View key={`nearby-${item.color}-${item.label}`} style={styles.legendRow}>
+              <View style={[styles.legendSwatch, { backgroundColor: item.color, opacity: 0.55 }]} />
+              <Text style={[styles.legendLabel, { color: TEXT_MUTED }]}>
+                {item.label} (nearby only)
+              </Text>
             </View>
           ))}
 
@@ -686,7 +734,7 @@ function DisclaimerPage({ address }: { address: string }) {
 function Footer({ address }: { address: string }) {
   return (
     <View style={styles.footer} fixed>
-      <Text>PropAI · {address.length > 60 ? address.slice(0, 57) + "…" : address}</Text>
+      <Text>LotLens · {address.length > 60 ? address.slice(0, 57) + "…" : address}</Text>
       <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
     </View>
   );
@@ -707,7 +755,7 @@ export function ReportPDF({
   for (const m of maps) mapByModule.set(m.module, m.png);
 
   return (
-    <Document title={`PropAI Fact Pack · ${address.address_text}`}>
+    <Document title={`LotLens Fact Pack · ${address.address_text}`}>
       <AtAGlancePage payload={payload} />
       {modules.map((m) => {
         const raw =

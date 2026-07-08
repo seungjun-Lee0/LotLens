@@ -282,3 +282,90 @@
     to   { transform: translateX(-50%); }
   }
 }
+
+/* ── Landing hero: loupe, cycling module chips, layer washes ──────────────
+   The hero shows a blurred aerial with a sharp circular "loupe". Around it,
+   module chips pop in/out in three groups (4+4+3 = all 11 modules) on a
+   shared 14 s cycle; inside the loupe a matching overlay wash fades in sync.
+   Groups: g1 water/flood · g2 hazard/heritage · g3 planning/lifestyle. */
+@layer utilities {
+  .loupe-scan {
+    position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 5;
+    background: linear-gradient(90deg, transparent,
+      color-mix(in oklab, var(--apple-blue) 90%, white), transparent);
+    box-shadow: 0 0 12px 1px color-mix(in oklab, var(--apple-blue) 70%, transparent);
+    animation: loupe-scan 3.4s ease-in-out infinite;
+  }
+  .loupe-radar {
+    position: absolute; inset: 0; border-radius: 9999px; pointer-events: none; z-index: 2;
+    background: conic-gradient(from 0deg,
+      color-mix(in oklab, var(--apple-blue) 22%, transparent) 0deg, transparent 42deg);
+    opacity: 0.5;
+    animation: loupe-spin 6s linear infinite;
+  }
+  .hero-beam {
+    position: absolute; left: 0; right: 0; top: -120px; height: 120px;
+    background: linear-gradient(180deg, transparent,
+      color-mix(in oklab, var(--apple-blue) 22%, transparent), transparent);
+    opacity: 0.55; mix-blend-mode: screen;
+    animation: hero-beam 7s linear infinite;
+  }
+  .cycle-g1, .cycle-g2, .cycle-g3, .lay-g1, .lay-g2, .lay-g3 { opacity: 0; }
+  .cycle-g1 { animation: lens-cyc1 14s infinite; animation-delay: calc(var(--i, 0) * 0.13s); }
+  .cycle-g2 { animation: lens-cyc2 14s infinite; animation-delay: calc(var(--i, 0) * 0.13s); }
+  .cycle-g3 { animation: lens-cyc3 14s infinite; animation-delay: calc(var(--i, 0) * 0.13s); }
+  .lay-g1 { animation: lens-lay1 14s infinite; }
+  .lay-g2 { animation: lens-lay2 14s infinite; }
+  .lay-g3 { animation: lens-lay3 14s infinite; }
+
+  /* Module cards — colour glow keyed off the per-card --c custom property */
+  .mod-card {
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .mod-card:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in oklab, var(--c) 55%, var(--border));
+    box-shadow: 0 30px 50px -30px color-mix(in oklab, var(--c) 40%, transparent);
+  }
+
+  /* pop in → hold → pop out; three staggered windows over the 14 s cycle */
+  @keyframes lens-cyc1 {
+    0% { opacity: 0; transform: scale(0.7) translateY(8px); }
+    2.5% { opacity: 1; transform: scale(1.05) translateY(0); }
+    4% { transform: scale(1); }
+    28% { opacity: 1; transform: scale(1); }
+    31% { opacity: 0; transform: scale(0.82) translateY(-6px); }
+    100% { opacity: 0; transform: scale(0.82); }
+  }
+  @keyframes lens-cyc2 {
+    0%, 33% { opacity: 0; transform: scale(0.7) translateY(8px); }
+    35.5% { opacity: 1; transform: scale(1.05) translateY(0); }
+    37% { transform: scale(1); }
+    61% { opacity: 1; transform: scale(1); }
+    64% { opacity: 0; transform: scale(0.82) translateY(-6px); }
+    100% { opacity: 0; transform: scale(0.82); }
+  }
+  @keyframes lens-cyc3 {
+    0%, 66% { opacity: 0; transform: scale(0.7) translateY(8px); }
+    68.5% { opacity: 1; transform: scale(1.05) translateY(0); }
+    70% { transform: scale(1); }
+    94% { opacity: 1; transform: scale(1); }
+    97% { opacity: 0; transform: scale(0.82) translateY(-6px); }
+    100% { opacity: 0; transform: scale(0.82); }
+  }
+  @keyframes lens-lay1 { 0% { opacity: 0; } 3% { opacity: 0.55; } 28% { opacity: 0.55; } 32% { opacity: 0; } 100% { opacity: 0; } }
+  @keyframes lens-lay2 { 0%, 33% { opacity: 0; } 36% { opacity: 0.5; } 61% { opacity: 0.5; } 65% { opacity: 0; } 100% { opacity: 0; } }
+  @keyframes lens-lay3 { 0%, 66% { opacity: 0; } 69% { opacity: 0.5; } 94% { opacity: 0.5; } 98% { opacity: 0; } 100% { opacity: 0; } }
+  @keyframes loupe-scan { 0% { top: 6%; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { top: 94%; opacity: 0; } }
+  @keyframes loupe-spin { to { transform: rotate(360deg); } }
+  @keyframes hero-beam { 0% { top: -120px; } 100% { top: 100%; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .loupe-scan, .hero-beam { display: none; }
+    .loupe-radar { animation: none; opacity: 0.25; }
+    .cycle-g1 { animation: none; opacity: 1; }
+    .lay-g1 { animation: none; opacity: 0.5; }
+    .cycle-g2, .cycle-g3, .lay-g2, .lay-g3 { animation: none; display: none; }
+    .mod-card { transition: none; }
+  }
+}

@@ -25,12 +25,6 @@ export function SiteHeader() {
         </Link>
         <nav className="flex items-center gap-2 text-[13px] text-muted-foreground">
           <a
-            href="#how"
-            className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground sm:inline"
-          >
-            How it works
-          </a>
-          <a
             href="#modules"
             className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground sm:inline"
           >

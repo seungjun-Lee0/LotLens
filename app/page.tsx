@@ -1,15 +1,11 @@
 import {
   CloudRain,
-  Download,
-  FileText,
   Flame,
   GraduationCap,
   Landmark,
-  Layers,
   LayoutGrid,
   Leaf,
   ScrollText,
-  Search,
   Volume2,
   Waves,
   Wind,
@@ -150,33 +146,6 @@ const LOUPE_CHIPS: {
   { group: "cycle-g3", pos: "left-[-4%] top-[8%]", i: 0, hex: "#f59e0b", label: "Noise", note: "corridor 3" },
   { group: "cycle-g3", pos: "right-[-6%] top-[26%]", i: 1, hex: "#14b8a6", label: "Schools", note: "2 catchments" },
   { group: "cycle-g3", pos: "left-[-1%] bottom-[10%]", i: 2, hex: "#6366f1", label: "Zoning", note: "LMR · 2–3 storey" },
-];
-
-const STEPS = [
-  {
-    n: "01",
-    icon: Search,
-    title: "Enter an address",
-    body: "Any property in the Brisbane City Council area.",
-  },
-  {
-    n: "02",
-    icon: Layers,
-    title: "We pull 11 layers",
-    body: "Council & state overlays queried live against the parcel, in seconds.",
-  },
-  {
-    n: "03",
-    icon: FileText,
-    title: "Read plain English",
-    body: "Every finding on one map — no planning jargon, every claim cited.",
-  },
-  {
-    n: "04",
-    icon: Download,
-    title: "Download the PDF",
-    body: "A branded A4 fact pack to share with your conveyancer.",
-  },
 ];
 
 const FAQS = [
@@ -406,62 +375,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── SOURCES STRIP ── */}
-      <div className="border-y border-border/50 py-6">
-        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-          <div className="text-center font-mono text-[10.5px] uppercase tracking-[0.2em] text-muted-foreground">
-            Sourced directly from
-          </div>
-          <div className="mt-3.5 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-[14px] font-medium text-foreground/60">
-            <span>Brisbane City Council</span>
-            <span>Queensland Government</span>
-            <span>QSpatial</span>
-            <span>Translink</span>
-            <span>Dept of Education</span>
-          </div>
-        </div>
-      </div>
-
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-16 px-4 pb-16 pt-14 sm:gap-24 sm:px-6 sm:pb-24 sm:pt-20">
-        {/* ── HOW IT WORKS ── */}
-        <section id="how" className="flex flex-col gap-8">
-          <div className="mx-auto max-w-xl text-center">
-            <div className="text-[10.5px] font-medium uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
-              How it works
-            </div>
-            <h2 className="mt-2 text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
-              An address in. A full picture out.
-            </h2>
-            <p className="mx-auto mt-3 max-w-md text-pretty text-[14px] leading-relaxed text-muted-foreground">
-              No logins, no 40-page council PDFs. Type an address and LotLens
-              does the digging across every public layer.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {STEPS.map((s) => (
-              <div
-                key={s.n}
-                className="rounded-2xl border border-border/60 bg-card/60 p-5 backdrop-blur-sm"
-              >
-                <div
-                  className="font-mono text-[12px]"
-                  style={{ color: "var(--apple-blue)" }}
-                >
-                  {s.n}
-                </div>
-                <s.icon className="mb-3 mt-2 size-5 text-foreground" />
-                <div className="text-[15px] font-semibold tracking-tight">
-                  {s.title}
-                </div>
-                <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
-                  {s.body}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── MODULES — distinctive cards with live layer previews ── */}
+        {/* ── MODULES — map-tile cards: the layer IS the card ── */}
         <section id="modules" className="flex flex-col gap-8">
           <div className="mx-auto max-w-xl text-center">
             <div className="text-[10.5px] font-medium uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
@@ -471,82 +386,83 @@ export default function Home() {
               Eleven layers, one report.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-pretty text-[14px] leading-relaxed text-muted-foreground">
-              Each card shows how that overlay actually renders on your
-              report&rsquo;s map — same colours, same lot outline.
+              Every tile is that overlay exactly as it renders on your
+              report&rsquo;s map — same colours, same amber lot outline.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {MODULES.map((m, i) => (
               <div
                 key={m.name}
-                className="mod-card group relative overflow-hidden rounded-2xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm"
-                style={{ ["--c" as string]: m.hex }}
+                className="mod-card group relative h-[136px] overflow-hidden rounded-2xl border border-border/60"
+                style={{ ["--c" as string]: m.hex, background: MINI_TILE_BG }}
               >
-                {/* soft colour glow, brightens on hover */}
+                {/* the module's overlay polygon, straight off the report map */}
                 <div
-                  aria-hidden
-                  className="pointer-events-none absolute -left-[20%] -top-[40%] -z-10 h-[80%] w-[70%] rounded-full opacity-[0.12] blur-[14px] transition-opacity duration-200 group-hover:opacity-[0.28]"
+                  className="absolute inset-0 opacity-[0.34] transition-opacity duration-200 group-hover:opacity-[0.52]"
+                  style={{ background: m.hex, clipPath: m.clip }}
+                />
+                <div
+                  className="absolute inset-0 opacity-70"
                   style={{
-                    background: `radial-gradient(circle, color-mix(in oklab, ${m.hex} 55%, transparent), transparent 70%)`,
+                    clipPath: m.clip,
+                    boxShadow: `inset 0 0 0 1.5px ${m.hex}`,
                   }}
                 />
-                <div className="flex items-center justify-between">
-                  <span
-                    className="flex size-8 items-center justify-center rounded-[10px]"
-                    style={{
-                      color: m.hex,
-                      background: `color-mix(in oklab, ${m.hex} 16%, transparent)`,
-                      boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${m.hex} 30%, transparent)`,
-                    }}
-                  >
-                    <m.icon className="size-4" />
-                  </span>
-                  <span className="font-mono text-[11px] text-muted-foreground">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                </div>
-                <h3 className="mt-3 text-[15px] font-semibold tracking-tight">
-                  {m.name}
-                </h3>
-                <p className="mt-1.5 min-h-[37px] text-[12.5px] leading-relaxed text-muted-foreground">
-                  {m.blurb}
-                </p>
-                {/* mini layer preview — the module's overlay on a map tile */}
+                {/* selected lot */}
                 <div
-                  className="relative mt-3 h-14 overflow-hidden rounded-[10px] border"
+                  className="absolute left-[14%] top-[30%] h-[24%] w-[15%] rounded-[2px] border-[1.5px]"
                   style={{
-                    borderColor: `color-mix(in oklab, ${m.hex} 22%, var(--border))`,
-                    background: MINI_TILE_BG,
+                    borderColor: "var(--selected-property)",
+                    background:
+                      "color-mix(in oklab, var(--selected-property) 10%, transparent)",
                   }}
-                >
-                  <div
-                    className="absolute inset-0 opacity-40 transition-opacity duration-200 group-hover:opacity-60"
-                    style={{ background: m.hex, clipPath: m.clip }}
-                  />
-                  <div
-                    className="absolute inset-0 opacity-80"
-                    style={{
-                      clipPath: m.clip,
-                      boxShadow: `inset 0 0 0 1.5px ${m.hex}`,
-                    }}
-                  />
-                  <div
-                    className="absolute left-[12%] top-[28%] h-[42%] w-[20%] rounded-[2px] border-[1.5px]"
-                    style={{
-                      borderColor: "var(--selected-property)",
-                      background:
-                        "color-mix(in oklab, var(--selected-property) 10%, transparent)",
-                    }}
-                  />
-                  <span className="absolute bottom-1 right-1.5 rounded-full bg-black/45 px-1.5 py-0.5 font-mono text-[8.5px] tracking-wide text-white backdrop-blur-[2px]">
-                    {m.tag}
-                  </span>
+                />
+                {/* scrim so the type reads over any polygon colour */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-black/25" />
+
+                <div className="absolute inset-0 flex flex-col justify-between p-3.5">
+                  <div className="flex items-center justify-between">
+                    <span
+                      className="flex size-7 items-center justify-center rounded-lg bg-black/40 backdrop-blur-[2px]"
+                      style={{
+                        color: `color-mix(in oklab, ${m.hex} 60%, white)`,
+                        boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${m.hex} 45%, transparent)`,
+                      }}
+                    >
+                      <m.icon className="size-3.5" />
+                    </span>
+                    <span className="font-mono text-[10px] text-white/50">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-[13.5px] font-semibold tracking-tight text-white sm:text-[14px]">
+                      {m.name}
+                    </div>
+                    <div className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/55">
+                      {m.tag}
+                    </div>
+                    {/* blurb slides open on hover */}
+                    <p className="max-h-0 overflow-hidden text-[11.5px] leading-snug text-white/80 opacity-0 transition-all duration-200 group-hover:mt-1 group-hover:max-h-16 group-hover:opacity-100">
+                      {m.blurb}
+                    </p>
+                  </div>
                 </div>
               </div>
             ))}
-            <div className="flex items-center justify-center rounded-2xl border border-dashed border-border/60 p-4 text-[13.5px] text-muted-foreground">
-              + more layers added each sprint
+            {/* 12th tile — keeps the grid a clean 4×3 */}
+            <div
+              className="relative flex h-[136px] items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border/70 px-4 text-center"
+              style={{ background: MINI_TILE_BG }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-black/45" />
+              <span className="relative text-[12.5px] font-medium leading-snug text-white/75">
+                + more layers
+                <br />
+                added each sprint
+              </span>
             </div>
           </div>
         </section>

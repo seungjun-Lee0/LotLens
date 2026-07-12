@@ -6,7 +6,7 @@ import { Loader2, Lock } from "lucide-react";
 export function UnlockButton({
   addressId,
   reportId,
-  priceLabel = "$29",
+  priceLabel = "$19",
 }: {
   addressId: string;
   reportId: string;
@@ -58,7 +58,7 @@ export function UnlockButton({
         Unlock the full report for {priceLabel}
       </button>
       <p className="text-[11.5px] text-muted-foreground">
-        Stripe Checkout · secure card payment · all 8 modules instantly
+        Beta price ($29 after launch) · Stripe Checkout · all 11 modules instantly
       </p>
       {error && (
         <p className="text-[12px] text-[var(--apple-red)]">{error}</p>

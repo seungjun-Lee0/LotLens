@@ -34,6 +34,53 @@ async function markPaid(session: Stripe.Checkout.Session) {
   `;
 }
 
+// Newer Stripe API versions expose current_period_end on the subscription
+// item rather than the subscription itself — read whichever is present.
+function periodEnd(sub: Stripe.Subscription): string | null {
+  const raw =
+    (sub as unknown as { current_period_end?: number }).current_period_end ??
+    sub.items?.data?.[0]?.current_period_end;
+  return typeof raw === "number" ? new Date(raw * 1000).toISOString() : null;
+}
+
+/** Persist subscription state onto the user row (idempotent). */
+async function syncSubscription(sub: Stripe.Subscription) {
+  const userId = sub.metadata?.userId;
+  const plan = sub.metadata?.plan;
+  if (!userId || (plan !== "basic" && plan !== "pro")) {
+    console.warn("[checkout/webhook] subscription missing userId/plan metadata", sub.id);
+    return;
+  }
+  const active = sub.status === "active" || sub.status === "trialing";
+  const sql = getDb();
+  await sql`
+    UPDATE users
+    SET plan = ${active ? plan : "free"},
+        subscription_status = ${sub.status},
+        stripe_subscription_id = ${sub.id},
+        current_period_end = ${periodEnd(sub)}
+    WHERE id = ${userId}
+  `;
+}
+
+/** checkout.session.completed router — one-time report vs subscription. */
+async function handleSessionCompleted(
+  stripe: Stripe,
+  session: Stripe.Checkout.Session,
+) {
+  if (session.mode === "subscription") {
+    const subId =
+      typeof session.subscription === "string"
+        ? session.subscription
+        : session.subscription?.id;
+    if (!subId) return;
+    const sub = await stripe.subscriptions.retrieve(subId);
+    await syncSubscription(sub);
+    return;
+  }
+  await markPaid(session);
+}
+
 export async function POST(req: Request) {
   if (!isStripeConfigured()) {
     return NextResponse.json({ error: "stripe not configured" }, { status: 503 });
@@ -62,16 +109,24 @@ export async function POST(req: Request) {
     );
   }
 
-  if (event.type === "checkout.session.completed") {
-    try {
-      await markPaid(event.data.object as Stripe.Checkout.Session);
-    } catch (err) {
-      console.error("[checkout/webhook] markPaid failed:", err);
-      return NextResponse.json(
-        { error: (err as Error).message },
-        { status: 500 },
+  try {
+    if (event.type === "checkout.session.completed") {
+      await handleSessionCompleted(
+        stripe,
+        event.data.object as Stripe.Checkout.Session,
       );
+    } else if (
+      event.type === "customer.subscription.updated" ||
+      event.type === "customer.subscription.deleted"
+    ) {
+      await syncSubscription(event.data.object as Stripe.Subscription);
     }
+  } catch (err) {
+    console.error(`[checkout/webhook] ${event.type} failed:`, err);
+    return NextResponse.json(
+      { error: (err as Error).message },
+      { status: 500 },
+    );
   }
   return NextResponse.json({ received: true });
 }
@@ -88,8 +143,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ paid: false }, { status: 200 });
   }
   try {
-    const session = await getStripe().checkout.sessions.retrieve(sessionId);
-    await markPaid(session);
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    await handleSessionCompleted(stripe, session);
     return NextResponse.json({ paid: session.payment_status === "paid" });
   } catch (err) {
     console.error("[checkout/webhook GET] retrieve failed:", err);

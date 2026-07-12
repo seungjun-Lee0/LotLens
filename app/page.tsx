@@ -13,25 +13,24 @@ import {
 
 import { SiteHeader } from "@/components/site/site-header";
 import { AddressForm } from "@/components/site/address-form";
+import { SubscribeButton } from "@/components/site/billing-buttons";
+import { HeroShowcase, type HeroDemoData } from "@/components/site/hero-showcase";
 
-// ── QLD Government aerial imagery (same ImageServer the report maps use) ──
-// Web-Mercator bboxes centred on a Paddington-ish Brisbane block. The hero
-// gets a wide crop (blurred via CSS); the loupe gets a tight, sharp crop.
-const QLD_EXPORT =
-  "https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/exportImage";
-const HERO_AERIAL = `${QLD_EXPORT}?bbox=17030370,-3175190,17033170,-3173610&bboxSR=3857&imageSR=3857&size=1600,900&format=jpeg&transparent=false&f=image`;
-const LOUPE_AERIAL = `${QLD_EXPORT}?bbox=17031610,-3174560,17031930,-3174240&bboxSR=3857&imageSR=3857&size=900,900&format=jpeg&transparent=false&f=image`;
+// Real report data for the hero's demo lot (Stafford, 10SP348436) — actual
+// cadastre parcel + per-module council overlays, snapshotted by
+// `npx tsx scripts/generate-hero-demo.ts`. The aerial crops are derived from
+// the bboxes stored in the fixture so imagery and geometry always align.
+import heroDemoJson from "@/lib/hero-demo-data.json";
+
+const heroDemo = heroDemoJson as unknown as HeroDemoData;
 
 // ── Landing module registry ───────────────────────────────────────────────
-// `hex` mirrors the overlay colour the report map paints for that module;
-// `clip` shapes the mini layer-preview polygon; `tag` labels the preview.
+// `hex` mirrors the overlay colour the report map paints for that module.
 type LandingModule = {
   icon: typeof Waves;
   name: string;
   blurb: string;
   hex: string;
-  clip: string;
-  tag: string;
 };
 
 const MODULES: LandingModule[] = [
@@ -40,112 +39,67 @@ const MODULES: LandingModule[] = [
     name: "Flooding",
     blurb: "River, creek & storm-tide risk, plus 2011 & 2022 historic events.",
     hex: "#3b82f6",
-    clip: "polygon(0 58%,22% 46%,45% 60%,68% 47%,100% 60%,100% 100%,0 100%)",
-    tag: "BCC flood overlay",
   },
   {
     icon: Waves,
     name: "Flood Planning",
     blurb: "Which statutory flood planning area the lot sits in, and what it restricts.",
     hex: "#2563eb",
-    clip: "polygon(0 70%,30% 58%,60% 72%,100% 56%,100% 100%,0 100%)",
-    tag: "Planning area",
   },
   {
     icon: CloudRain,
     name: "Overland Flow",
     blurb: "Stormwater run-off paths crossing the property.",
     hex: "#f97316",
-    clip: "polygon(38% 0,52% 0,44% 38%,58% 36%,40% 100%,30% 100%,40% 55%,28% 58%)",
-    tag: "Flow path",
   },
   {
     icon: Wind,
     name: "Storm Tide",
     blurb: "Coastal storm-tide inundation exposure for bayside lots.",
     hex: "#06b6d4",
-    clip: "polygon(0 76%,25% 68%,55% 78%,100% 66%,100% 100%,0 100%)",
-    tag: "Tide extent",
   },
   {
     icon: Flame,
     name: "Bushfire",
     blurb: "Queensland bushfire hazard rating for the site.",
     hex: "#dc2626",
-    clip: "polygon(58% 0,100% 0,100% 62%,74% 74%,55% 40%)",
-    tag: "Hazard area",
   },
   {
     icon: Leaf,
     name: "Vegetation",
     blurb: "Protected vegetation, waterway & biodiversity overlays.",
     hex: "#16a34a",
-    clip: "polygon(64% 12%,88% 4%,100% 30%,92% 66%,68% 74%,52% 48%)",
-    tag: "Biodiversity",
   },
   {
     icon: Landmark,
     name: "Heritage & Character",
     blurb: "State/local heritage & pre-1947 character controls.",
     hex: "#7e22ce",
-    clip: "polygon(6% 18%,40% 10%,46% 52%,34% 88%,4% 78%)",
-    tag: "Character area",
   },
   {
     icon: ScrollText,
     name: "Easements",
     blurb: "High-voltage & registered cadastral easements on the lot.",
     hex: "#db2777",
-    clip: "polygon(0 40%,100% 30%,100% 46%,0 56%)",
-    tag: "Easement strip",
   },
   {
     icon: Volume2,
     name: "Noise",
     blurb: "Transport-corridor & aircraft (ANEF) noise bands.",
     hex: "#f59e0b",
-    clip: "polygon(0 22%,100% 6%,100% 34%,0 50%)",
-    tag: "Corridor band",
   },
   {
     icon: GraduationCap,
     name: "School Catchments",
     blurb: "State primary & secondary catchment zones.",
     hex: "#14b8a6",
-    clip: "polygon(0 0,100% 0,100% 100%,0 100%)",
-    tag: "Catchment-wide",
   },
   {
     icon: LayoutGrid,
     name: "Zoning",
     blurb: "City Plan zone, precinct & what you're allowed to build.",
     hex: "#6366f1",
-    clip: "polygon(0 0,52% 0,52% 100%,0 100%)",
-    tag: "Zone fill",
   },
-];
-
-// Chips that orbit the loupe — three groups pop in/out on a 14 s cycle so
-// all eleven modules get shown. `pos` picks one of four fixed anchor slots.
-const LOUPE_CHIPS: {
-  group: "cycle-g1" | "cycle-g2" | "cycle-g3";
-  pos: string;
-  i: number;
-  hex: string;
-  label: string;
-  note: string;
-}[] = [
-  { group: "cycle-g1", pos: "left-[-4%] top-[8%]", i: 0, hex: "#3b82f6", label: "Flooding", note: "none mapped" },
-  { group: "cycle-g1", pos: "right-[-6%] top-[26%]", i: 1, hex: "#2563eb", label: "Flood Planning", note: "outside area" },
-  { group: "cycle-g1", pos: "right-[-2%] bottom-[26%]", i: 2, hex: "#f97316", label: "Overland Flow", note: "clear" },
-  { group: "cycle-g1", pos: "left-[-1%] bottom-[10%]", i: 3, hex: "#06b6d4", label: "Storm Tide", note: "not exposed" },
-  { group: "cycle-g2", pos: "left-[-4%] top-[8%]", i: 0, hex: "#dc2626", label: "Bushfire", note: "not in hazard" },
-  { group: "cycle-g2", pos: "right-[-6%] top-[26%]", i: 1, hex: "#16a34a", label: "Vegetation", note: "no overlay" },
-  { group: "cycle-g2", pos: "right-[-2%] bottom-[26%]", i: 2, hex: "#7e22ce", label: "Heritage", note: "not listed" },
-  { group: "cycle-g2", pos: "left-[-1%] bottom-[10%]", i: 3, hex: "#db2777", label: "Easements", note: "1 registered" },
-  { group: "cycle-g3", pos: "left-[-4%] top-[8%]", i: 0, hex: "#f59e0b", label: "Noise", note: "corridor 3" },
-  { group: "cycle-g3", pos: "right-[-6%] top-[26%]", i: 1, hex: "#14b8a6", label: "Schools", note: "2 catchments" },
-  { group: "cycle-g3", pos: "left-[-1%] bottom-[10%]", i: 2, hex: "#6366f1", label: "Zoning", note: "LMR · 2–3 storey" },
 ];
 
 const FAQS = [
@@ -174,10 +128,6 @@ const FAQS = [
 const DISCLAIMER =
   "This report aggregates public data for informational purposes only. It is not legal, financial, or planning advice. Confirm all details with a qualified professional, conveyancer, or the relevant Council before making decisions.";
 
-// Satellite-styled mini tile used behind each module's layer preview.
-const MINI_TILE_BG =
-  "repeating-linear-gradient(90deg, rgba(255,255,255,.055) 0 1px, transparent 1px 30px), repeating-linear-gradient(0deg, rgba(255,255,255,.055) 0 1px, transparent 1px 22px), linear-gradient(115deg, #26301f, #161d19)";
-
 export default function Home() {
   return (
     <>
@@ -188,25 +138,7 @@ export default function Home() {
         id="top"
         className="relative -mt-16 overflow-hidden pt-16 sm:-mt-[72px] sm:pt-[72px]"
       >
-        <div aria-hidden className="absolute inset-0 -z-10">
-          {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size remote render, next/image adds nothing here */}
-          <img
-            src={HERO_AERIAL}
-            alt=""
-            className="h-full w-full scale-105 object-cover blur-[9px] brightness-[1.0] saturate-[1.02] dark:brightness-[0.5] dark:saturate-[0.95]"
-          />
-          {/* veil: fade the aerial into the page background on all edges */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(180deg, color-mix(in oklab, var(--background) 62%, transparent) 0%, transparent 26%, transparent 62%, var(--background) 100%), linear-gradient(90deg, color-mix(in oklab, var(--background) 72%, transparent) 0%, color-mix(in oklab, var(--background) 34%, transparent) 45%, transparent 78%)",
-            }}
-          />
-          <div className="hero-beam" />
-        </div>
-
-        <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 pb-14 pt-10 sm:px-6 sm:pt-16 lg:grid-cols-[1.02fr_0.98fr] lg:pb-20">
+        <HeroShowcase data={heroDemo}>
           {/* copy + live address form */}
           <div className="flex flex-col items-start gap-6">
             <span className="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11.5px] font-medium text-foreground/70 sm:text-[12px]">
@@ -257,122 +189,11 @@ export default function Home() {
               <b className="font-medium text-foreground">
                 Flooding preview free
               </b>{" "}
-              · full report $29 · no signup to preview
+              · full report $19 during beta · no signup to preview
             </p>
           </div>
 
-          {/* loupe: sharp aerial in a circle + cycling module chips */}
-          <div
-            aria-hidden
-            className="relative mx-auto h-[340px] w-full max-w-[460px] sm:h-[420px]"
-          >
-            <div
-              className="absolute left-1/2 top-[47%] aspect-square w-[min(340px,78%)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full"
-              style={{
-                boxShadow:
-                  "0 50px 90px -38px rgba(0,0,0,.8), 0 0 0 1px color-mix(in oklab, var(--foreground) 16%, transparent), 0 0 80px -26px color-mix(in oklab, var(--apple-blue) 45%, transparent)",
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size remote render, next/image adds nothing here */}
-              <img
-                src={LOUPE_AERIAL}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
-              />
-
-              {/* layer washes — synced to the chip groups */}
-              <div
-                className="lay-g1 absolute inset-0 z-[1]"
-                style={{
-                  background:
-                    "linear-gradient(200deg, transparent 38%, color-mix(in oklab, #2563eb 55%, transparent) 74%, color-mix(in oklab, #06b6d4 55%, transparent) 100%)",
-                  clipPath:
-                    "polygon(0 52%,18% 47%,34% 55%,52% 48%,70% 58%,86% 50%,100% 60%,100% 100%,0 100%)",
-                }}
-              />
-              <div
-                className="lay-g2 absolute inset-0 z-[1]"
-                style={{
-                  background:
-                    "radial-gradient(38% 30% at 74% 26%, color-mix(in oklab, #dc2626 60%, transparent), transparent 72%), radial-gradient(30% 26% at 22% 30%, color-mix(in oklab, #7e22ce 55%, transparent), transparent 72%), radial-gradient(34% 28% at 30% 74%, color-mix(in oklab, #16a34a 55%, transparent), transparent 72%)",
-                }}
-              />
-              <div
-                className="lay-g3 absolute inset-0 z-[1]"
-                style={{
-                  background: "color-mix(in oklab, #6366f1 34%, transparent)",
-                  WebkitMaskImage:
-                    "repeating-linear-gradient(90deg, #000 0 34px, rgba(0,0,0,.55) 34px 35px), repeating-linear-gradient(0deg, #000 0 26px, rgba(0,0,0,.55) 26px 27px)",
-                  maskImage:
-                    "repeating-linear-gradient(90deg, #000 0 34px, rgba(0,0,0,.55) 34px 35px), repeating-linear-gradient(0deg, #000 0 26px, rgba(0,0,0,.55) 26px 27px)",
-                }}
-              />
-
-              <div className="loupe-radar" />
-              {/* vignette + selected lot + crosshair ticks + scan line */}
-              <div
-                className="absolute inset-0 rounded-full"
-                style={{
-                  background:
-                    "radial-gradient(circle at 50% 42%, transparent 54%, rgba(0,0,0,.3) 100%)",
-                }}
-              />
-              <div
-                className="absolute left-1/2 top-1/2 z-[3] h-[29%] w-[44%] -translate-x-1/2 -translate-y-1/2 -rotate-[17deg] rounded-[2px] border-2"
-                style={{
-                  borderColor: "var(--selected-property)",
-                  background:
-                    "color-mix(in oklab, var(--selected-property) 12%, transparent)",
-                  boxShadow:
-                    "0 0 0 1px rgba(0,0,0,.45), 0 0 20px -6px var(--selected-property)",
-                }}
-              />
-              <div
-                className="pointer-events-none absolute inset-0 z-[4] opacity-50"
-                style={{
-                  background:
-                    "linear-gradient(var(--foreground),var(--foreground)) 50% 10px/1px 10px no-repeat, linear-gradient(var(--foreground),var(--foreground)) 50% calc(100% - 10px)/1px 10px no-repeat, linear-gradient(var(--foreground),var(--foreground)) 10px 50%/10px 1px no-repeat, linear-gradient(var(--foreground),var(--foreground)) calc(100% - 10px) 50%/10px 1px no-repeat",
-                }}
-              />
-              <div className="loupe-scan" />
-            </div>
-
-            {/* cycling chips — all 11 modules across three groups */}
-            {LOUPE_CHIPS.map((c) => (
-              <span
-                key={`${c.group}-${c.label}`}
-                className={`${c.group} ${c.pos} glass absolute z-[6] hidden items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[12px] font-medium text-foreground sm:inline-flex`}
-                style={{ ["--i" as string]: c.i }}
-              >
-                <span
-                  className="size-[7px] rounded-full"
-                  style={{
-                    background: c.hex,
-                    boxShadow: `0 0 8px color-mix(in oklab, ${c.hex} 70%, transparent)`,
-                  }}
-                />
-                {c.label}{" "}
-                <span className="font-normal text-muted-foreground">
-                  {c.note}
-                </span>
-              </span>
-            ))}
-
-            {/* cycling caption */}
-            {[
-              { g: "cycle-g1", t: "Water & flood layers · 1/3" },
-              { g: "cycle-g2", t: "Hazard & heritage layers · 2/3" },
-              { g: "cycle-g3", t: "Planning & lifestyle layers · 3/3" },
-            ].map((c) => (
-              <span
-                key={c.g}
-                className={`${c.g} absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap font-mono text-[10.5px] uppercase tracking-[0.18em] text-muted-foreground`}
-              >
-                {c.t}
-              </span>
-            ))}
-          </div>
-        </div>
+        </HeroShowcase>
       </section>
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-16 px-4 pb-16 pt-14 sm:gap-24 sm:px-6 sm:pb-24 sm:pt-20">
@@ -391,78 +212,30 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
             {MODULES.map((m, i) => (
               <div
                 key={m.name}
-                className="mod-card group relative h-[136px] overflow-hidden rounded-2xl border border-border/60"
-                style={{ ["--c" as string]: m.hex, background: MINI_TILE_BG }}
+                className="mod-card group relative rounded-2xl border border-border/60 bg-card/70 p-5 backdrop-blur-sm"
+                style={{ ["--c" as string]: m.hex }}
               >
-                {/* the module's overlay polygon, straight off the report map */}
-                <div
-                  className="absolute inset-0 opacity-[0.34] transition-opacity duration-200 group-hover:opacity-[0.52]"
-                  style={{ background: m.hex, clipPath: m.clip }}
-                />
-                <div
-                  className="absolute inset-0 opacity-70"
-                  style={{
-                    clipPath: m.clip,
-                    boxShadow: `inset 0 0 0 1.5px ${m.hex}`,
-                  }}
-                />
-                {/* selected lot */}
-                <div
-                  className="absolute left-[14%] top-[30%] h-[24%] w-[15%] rounded-[2px] border-[1.5px]"
-                  style={{
-                    borderColor: "var(--selected-property)",
-                    background:
-                      "color-mix(in oklab, var(--selected-property) 10%, transparent)",
-                  }}
-                />
-                {/* scrim so the type reads over any polygon colour */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-black/25" />
-
-                <div className="absolute inset-0 flex flex-col justify-between p-3.5">
-                  <div className="flex items-center justify-between">
-                    <span
-                      className="flex size-7 items-center justify-center rounded-lg bg-black/40 backdrop-blur-[2px]"
-                      style={{
-                        color: `color-mix(in oklab, ${m.hex} 60%, white)`,
-                        boxShadow: `inset 0 0 0 1px color-mix(in oklab, ${m.hex} 45%, transparent)`,
-                      }}
-                    >
-                      <m.icon className="size-3.5" />
-                    </span>
-                    <span className="font-mono text-[10px] text-white/50">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="text-[13.5px] font-semibold tracking-tight text-white sm:text-[14px]">
-                      {m.name}
-                    </div>
-                    <div className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/55">
-                      {m.tag}
-                    </div>
-                    {/* blurb slides open on hover */}
-                    <p className="max-h-0 overflow-hidden text-[11.5px] leading-snug text-white/80 opacity-0 transition-all duration-200 group-hover:mt-1 group-hover:max-h-16 group-hover:opacity-100">
-                      {m.blurb}
-                    </p>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <m.icon className="size-[18px]" style={{ color: m.hex }} />
+                  <span className="font-mono text-[10px] text-muted-foreground/60">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
                 </div>
+                <h3 className="mt-4 text-[14.5px] font-semibold tracking-tight">
+                  {m.name}
+                </h3>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                  {m.blurb}
+                </p>
               </div>
             ))}
-            {/* 12th tile — keeps the grid a clean 4×3 */}
-            <div
-              className="relative flex h-[136px] items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border/70 px-4 text-center"
-              style={{ background: MINI_TILE_BG }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-black/45" />
-              <span className="relative text-[12.5px] font-medium leading-snug text-white/75">
-                + more layers
-                <br />
-                added each sprint
-              </span>
+            {/* 12th card — keeps the grid a clean 4×3 */}
+            <div className="flex items-center justify-center rounded-2xl border border-dashed border-border/70 p-4 text-center text-[12.5px] leading-snug text-muted-foreground">
+              + more layers added each sprint
             </div>
           </div>
         </section>
@@ -482,32 +255,81 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Free preview */}
-            <div className="flex flex-col gap-5 rounded-3xl border border-border/60 bg-card/60 p-7 backdrop-blur-sm">
+          <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 md:grid-cols-3">
+            {/* Single report — beta price */}
+            <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7 backdrop-blur-sm">
               <div className="flex items-baseline justify-between">
                 <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">
-                  Free preview
+                  Single report
+                </div>
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider"
+                  style={{
+                    background:
+                      "color-mix(in oklab, var(--apple-green) 14%, transparent)",
+                    color: "var(--apple-green)",
+                  }}
+                >
+                  Beta
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-5xl font-semibold tracking-tight">$19</span>
+                <span className="text-[14px] text-muted-foreground line-through">
+                  $29
+                </span>
+                <span className="text-[13px] text-muted-foreground">AUD</span>
+              </div>
+              <p className="text-[12px] text-muted-foreground">
+                One-off · per address · $29 after beta
+              </p>
+              <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-muted-foreground">
+                <li>· All 11 modules for one address</li>
+                <li>· A4 PDF export, branded cover</li>
+                <li>· No subscription, no auto-renewal</li>
+                <li>· Flooding preview always free first</li>
+              </ul>
+              <a
+                href="#top"
+                className="mt-auto inline-flex h-11 w-full items-center justify-center rounded-full border border-border/70 bg-background/50 text-[14px] font-medium transition hover:bg-foreground/5"
+              >
+                Run a report
+              </a>
+            </div>
+
+            {/* Basic */}
+            <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7 backdrop-blur-sm">
+              <div className="flex items-baseline justify-between">
+                <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">
+                  Basic
                 </div>
                 <div className="text-[12px] text-muted-foreground">
-                  No card required
+                  Cancel anytime
                 </div>
               </div>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-5xl font-semibold tracking-tight">$0</span>
-                <span className="text-[13px] text-muted-foreground">AUD</span>
+                <span className="text-5xl font-semibold tracking-tight">$49</span>
+                <span className="text-[13px] text-muted-foreground">
+                  AUD / month
+                </span>
               </div>
+              <p className="text-[12px] text-muted-foreground">
+                For serious house-hunting weeks
+              </p>
               <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-muted-foreground">
-                <li>· Flooding module unlocked (BCC + QLD historic)</li>
-                <li>· Per-lot aerial with the property outlined</li>
-                <li>· Lot, area, suburb metadata</li>
-                <li className="text-foreground/40">· Other 10 modules blurred</li>
+                <li>· 10 full reports per month</li>
+                <li>· Single user</li>
+                <li>· Renews monthly — no automatic top-ups</li>
+                <li>· Manage or cancel in one click</li>
               </ul>
+              <div className="mt-auto">
+                <SubscribeButton plan="basic" label="Start Basic" variant="ghost" />
+              </div>
             </div>
 
-            {/* Paid */}
+            {/* Pro — featured */}
             <div
-              className="relative flex flex-col gap-5 rounded-3xl p-7 text-foreground"
+              className="relative flex flex-col gap-4 rounded-3xl p-7 text-foreground"
               style={{
                 background:
                   "linear-gradient(135deg, color-mix(in oklab, var(--apple-blue) 12%, transparent), color-mix(in oklab, var(--apple-purple) 14%, transparent))",
@@ -520,41 +342,46 @@ export default function Home() {
                   className="text-[11px] font-medium uppercase tracking-[0.18em]"
                   style={{ color: "var(--apple-blue)" }}
                 >
-                  Full report
+                  Pro
                 </div>
                 <div className="text-[12px] text-muted-foreground">
-                  One-time · per address
+                  For professionals
                 </div>
               </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-5xl font-semibold tracking-tight">
-                  $29
+              <div className="flex items-baseline gap-2">
+                <span className="text-5xl font-semibold tracking-tight">$79</span>
+                <span className="text-[14px] text-muted-foreground line-through">
+                  $99
                 </span>
-                <span className="text-[13px] text-muted-foreground">AUD</span>
+                <span className="text-[13px] text-muted-foreground">
+                  AUD / month
+                </span>
               </div>
+              <p className="text-[12px] text-muted-foreground">
+                Beta price · $99/month after beta
+              </p>
               <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-foreground/80">
-                <li>· All 11 modules unlocked</li>
-                <li>· Per-module map with overlay polygons</li>
-                <li>· Cited ArcGIS source rows on every claim</li>
-                <li>· A4 PDF export, branded cover page</li>
-                <li>· Lifetime access to the report URL</li>
+                <li>· 50 full reports per month</li>
+                <li>· Branded PDF reports</li>
+                <li>· Buyer&rsquo;s agents &amp; conveyancers</li>
+                <li>· Renews monthly — no automatic top-ups</li>
               </ul>
-              <div className="text-[12px] text-muted-foreground">
-                Secure checkout via Stripe · Apple Pay &amp; cards accepted
+              <div className="mt-auto">
+                <SubscribeButton plan="pro" label="Start Pro" />
               </div>
             </div>
           </div>
 
           <p className="text-center text-[12px] text-muted-foreground">
-            Buying multiple properties?{" "}
+            Monthly plans renew monthly and never top up without confirmation ·
+            Secure checkout via Stripe · Apple Pay &amp; cards accepted ·{" "}
             <a
               href="mailto:hello@lotlens.au"
               className="underline underline-offset-2 hover:text-foreground"
             >
               Email us
             </a>{" "}
-            for bulk pricing — buyer&rsquo;s agents and conveyancers get a
-            volume discount.
+            for volume pricing beyond Pro.
           </p>
         </section>
 

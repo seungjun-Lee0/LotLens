@@ -1,16 +1,17 @@
 // POST /api/checkout/create-session
-// Body: { addressId: string, reportId: string }
-// Creates a Stripe Checkout Session for $29 AUD and returns the redirect
-// URL. The session carries { addressId, reportId } in metadata so the
-// webhook can mark the address paid afterwards.
+// Body (single report): { addressId, reportId } — one-time $19 beta payment.
+// Body (subscription):  { plan: "basic" | "pro" } — requires a signed-in
+// user; creates a monthly subscription Checkout. Webhook activates the plan.
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getSessionUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import {
   REPORT_CURRENCY,
   REPORT_PRICE_CENTS,
+  SUBSCRIPTION_PLANS,
   getStripe,
   isStripeConfigured,
 } from "@/lib/stripe";
@@ -19,10 +20,74 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-const BodySchema = z.object({
-  addressId: z.string().uuid(),
-  reportId: z.string().uuid(),
-});
+const BodySchema = z.union([
+  z.object({
+    addressId: z.string().uuid(),
+    reportId: z.string().uuid(),
+  }),
+  z.object({
+    plan: z.enum(["basic", "pro"]),
+  }),
+]);
+
+async function createSubscriptionSession(
+  req: Request,
+  plan: "basic" | "pro",
+): Promise<NextResponse> {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "auth required", loginUrl: "/login?next=%2F%23pricing" },
+      { status: 401 },
+    );
+  }
+
+  const origin =
+    req.headers.get("origin") ??
+    process.env.NEXT_PUBLIC_BASE_URL ??
+    "http://localhost:3000";
+  const stripe = getStripe();
+  const sql = getDb();
+
+  // Reuse the Stripe customer so upgrades/cancels stay on one record.
+  let customerId = user.stripeCustomerId;
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: user.email,
+      name: user.name ?? undefined,
+      metadata: { userId: user.id },
+    });
+    customerId = customer.id;
+    await sql`
+      UPDATE users SET stripe_customer_id = ${customerId} WHERE id = ${user.id}
+    `;
+  }
+
+  const planDef = SUBSCRIPTION_PLANS[plan];
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    customer: customerId,
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: REPORT_CURRENCY,
+          unit_amount: planDef.amountCents,
+          recurring: { interval: "month" },
+          product_data: {
+            name: planDef.name,
+            description: planDef.description,
+          },
+        },
+      },
+    ],
+    metadata: { userId: user.id, plan },
+    subscription_data: { metadata: { userId: user.id, plan } },
+    success_url: `${origin}/account?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/#pricing`,
+  });
+  return NextResponse.json({ redirectUrl: session.url });
+}
 
 export async function POST(req: Request) {
   if (!isStripeConfigured()) {
@@ -40,6 +105,18 @@ export async function POST(req: Request) {
       { error: "invalid body", details: String(err) },
       { status: 400 },
     );
+  }
+
+  if ("plan" in parsed) {
+    try {
+      return await createSubscriptionSession(req, parsed.plan);
+    } catch (err) {
+      console.error("[checkout] subscription session failed:", err);
+      return NextResponse.json(
+        { error: `stripe error: ${(err as Error).message}` },
+        { status: 502 },
+      );
+    }
   }
 
   let addressText = "Property report";

@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getSessionUser } from "@/lib/auth";
 import { generateReportForAddress } from "@/lib/pipeline";
 
 export const runtime = "nodejs";
@@ -28,7 +29,8 @@ export async function POST(req: Request) {
     );
   }
   try {
-    const result = await generateReportForAddress(parsed.addressId);
+    const user = await getSessionUser();
+    const result = await generateReportForAddress(parsed.addressId, user?.id);
     return NextResponse.json(result);
   } catch (err) {
     console.error("[generate-narrative] failed:", err);

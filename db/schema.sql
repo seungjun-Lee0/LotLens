@@ -45,3 +45,35 @@ create table if not exists reports (
 create index if not exists council_data_address_id_idx on council_data(address_id);
 create index if not exists council_data_module_idx     on council_data(module);
 create index if not exists reports_address_id_idx      on reports(address_id);
+
+-- ── Accounts & subscriptions (MVP beta) ───────────────────────────────────
+-- Email+password (bcrypt hash) and/or Google OAuth. Subscription state is
+-- denormalised from Stripe via the checkout webhook: plan free|basic|pro.
+
+create table if not exists users (
+  id                     uuid primary key default gen_random_uuid(),
+  email                  text unique not null,
+  password_hash          text,          -- null for Google-only accounts
+  name                   text,
+  google_id              text unique,
+  stripe_customer_id     text unique,
+  plan                   text not null default 'free', -- free | basic | pro
+  subscription_status    text,          -- active | trialing | past_due | canceled …
+  stripe_subscription_id text,
+  current_period_end     timestamptz,
+  created_at             timestamptz not null default now()
+);
+
+-- Who generated a report (nullable — anonymous runs still work).
+alter table reports add column if not exists user_id uuid references users(id) on delete set null;
+create index if not exists reports_user_id_idx on reports(user_id);
+
+-- One row per report a subscriber unlocked against their monthly quota.
+create table if not exists report_usage (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references users(id) on delete cascade,
+  report_id  uuid not null references reports(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists report_usage_user_created_idx on report_usage(user_id, created_at);

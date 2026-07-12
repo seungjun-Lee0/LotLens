@@ -193,19 +193,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-image:
-      radial-gradient(at 12% 8%, color-mix(in oklab, var(--apple-blue) 14%, transparent) 0px, transparent 55%),
-      radial-gradient(at 88% 0%, color-mix(in oklab, var(--apple-purple) 12%, transparent) 0px, transparent 50%),
-      radial-gradient(at 78% 92%, color-mix(in oklab, var(--apple-teal) 14%, transparent) 0px, transparent 55%),
-      radial-gradient(at 8% 100%, color-mix(in oklab, var(--apple-pink) 10%, transparent) 0px, transparent 50%);
-    background-attachment: fixed;
-  }
-  .dark body {
-    background-image:
-      radial-gradient(at 12% 8%, color-mix(in oklab, var(--apple-blue) 22%, transparent) 0px, transparent 55%),
-      radial-gradient(at 88% 0%, color-mix(in oklab, var(--apple-purple) 18%, transparent) 0px, transparent 50%),
-      radial-gradient(at 78% 92%, color-mix(in oklab, var(--apple-teal) 16%, transparent) 0px, transparent 55%),
-      radial-gradient(at 8% 100%, color-mix(in oklab, var(--apple-pink) 14%, transparent) 0px, transparent 50%);
   }
   h1, h2, h3, h4 {
     letter-spacing: -0.022em;
@@ -289,43 +276,46 @@
    shared 14 s cycle; inside the loupe a matching overlay wash fades in sync.
    Groups: g1 water/flood · g2 hazard/heritage · g3 planning/lifestyle. */
 @layer utilities {
-  .loupe-scan {
-    position: absolute; left: 0; right: 0; top: 0; height: 2px; z-index: 5;
-    background: linear-gradient(90deg, transparent,
-      color-mix(in oklab, var(--apple-blue) 90%, white), transparent);
-    box-shadow: 0 0 12px 1px color-mix(in oklab, var(--apple-blue) 70%, transparent);
-    animation: loupe-scan 3.4s ease-in-out infinite;
+  /* Solid frosted look WITHOUT backdrop-filter — cheap to composite while
+     animating (the loupe chips pop on a loop, so per-frame filter recompute
+     is what tanked the frame rate). */
+  .glass-solid {
+    background-color: var(--glass-bg-strong);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
   }
-  .loupe-radar {
-    position: absolute; inset: 0; border-radius: 9999px; pointer-events: none; z-index: 2;
-    background: conic-gradient(from 0deg,
-      color-mix(in oklab, var(--apple-blue) 22%, transparent) 0deg, transparent 42deg);
-    opacity: 0.5;
-    animation: loupe-spin 6s linear infinite;
-  }
-  .hero-beam {
-    position: absolute; left: 0; right: 0; top: -120px; height: 120px;
-    background: linear-gradient(180deg, transparent,
-      color-mix(in oklab, var(--apple-blue) 22%, transparent), transparent);
-    opacity: 0.55; mix-blend-mode: screen;
-    animation: hero-beam 7s linear infinite;
-  }
-  .cycle-g1, .cycle-g2, .cycle-g3, .lay-g1, .lay-g2, .lay-g3 { opacity: 0; }
+  .cycle-g1, .cycle-g2, .cycle-g3 { opacity: 0; }
   .cycle-g1 { animation: lens-cyc1 14s infinite; animation-delay: calc(var(--i, 0) * 0.13s); }
   .cycle-g2 { animation: lens-cyc2 14s infinite; animation-delay: calc(var(--i, 0) * 0.13s); }
   .cycle-g3 { animation: lens-cyc3 14s infinite; animation-delay: calc(var(--i, 0) * 0.13s); }
-  .lay-g1 { animation: lens-lay1 14s infinite; }
-  .lay-g2 { animation: lens-lay2 14s infinite; }
-  .lay-g3 { animation: lens-lay3 14s infinite; }
+
+  /* Loupe overlay layers fade in sync with each chip group (opacity only —
+     the transform-based chip pop doesn't suit SVG <g> elements). */
+  .lens-fade1, .lens-fade2, .lens-fade3 { opacity: 0; }
+  .lens-fade1 { animation: lens-fade1 14s infinite; }
+  .lens-fade2 { animation: lens-fade2 14s infinite; }
+  .lens-fade3 { animation: lens-fade3 14s infinite; }
+  @keyframes lens-fade1 {
+    0% { opacity: 0; } 2.5% { opacity: 1; } 28% { opacity: 1; }
+    31% { opacity: 0; } 100% { opacity: 0; }
+  }
+  @keyframes lens-fade2 {
+    0%, 33% { opacity: 0; } 35.5% { opacity: 1; } 61% { opacity: 1; }
+    64% { opacity: 0; } 100% { opacity: 0; }
+  }
+  @keyframes lens-fade3 {
+    0%, 66% { opacity: 0; } 68.5% { opacity: 1; } 94% { opacity: 1; }
+    97% { opacity: 0; } 100% { opacity: 0; }
+  }
 
   /* Module cards — colour glow keyed off the per-card --c custom property */
   .mod-card {
     transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   }
   .mod-card:hover {
-    transform: translateY(-3px);
-    border-color: color-mix(in oklab, var(--c) 55%, var(--border));
-    box-shadow: 0 30px 50px -30px color-mix(in oklab, var(--c) 40%, transparent);
+    transform: translateY(-2px);
+    border-color: color-mix(in oklab, var(--c) 38%, var(--border));
+    box-shadow: 0 24px 44px -32px color-mix(in oklab, var(--c) 22%, transparent);
   }
 
   /* pop in → hold → pop out; three staggered windows over the 14 s cycle */
@@ -353,19 +343,11 @@
     97% { opacity: 0; transform: scale(0.82) translateY(-6px); }
     100% { opacity: 0; transform: scale(0.82); }
   }
-  @keyframes lens-lay1 { 0% { opacity: 0; } 3% { opacity: 0.55; } 28% { opacity: 0.55; } 32% { opacity: 0; } 100% { opacity: 0; } }
-  @keyframes lens-lay2 { 0%, 33% { opacity: 0; } 36% { opacity: 0.5; } 61% { opacity: 0.5; } 65% { opacity: 0; } 100% { opacity: 0; } }
-  @keyframes lens-lay3 { 0%, 66% { opacity: 0; } 69% { opacity: 0.5; } 94% { opacity: 0.5; } 98% { opacity: 0; } 100% { opacity: 0; } }
-  @keyframes loupe-scan { 0% { top: 6%; opacity: 0; } 12% { opacity: 1; } 88% { opacity: 1; } 100% { top: 94%; opacity: 0; } }
-  @keyframes loupe-spin { to { transform: rotate(360deg); } }
-  @keyframes hero-beam { 0% { top: -120px; } 100% { top: 100%; } }
-
   @media (prefers-reduced-motion: reduce) {
-    .loupe-scan, .hero-beam { display: none; }
-    .loupe-radar { animation: none; opacity: 0.25; }
     .cycle-g1 { animation: none; opacity: 1; }
-    .lay-g1 { animation: none; opacity: 0.5; }
-    .cycle-g2, .cycle-g3, .lay-g2, .lay-g3 { animation: none; display: none; }
+    .cycle-g2, .cycle-g3 { animation: none; display: none; }
+    .lens-fade1 { animation: none; opacity: 1; }
+    .lens-fade2, .lens-fade3 { animation: none; opacity: 0; }
     .mod-card { transition: none; }
   }
 }

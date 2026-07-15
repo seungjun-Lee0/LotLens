@@ -16,6 +16,7 @@
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
 import type { RiskLevel } from "@/lib/db";
+import { unavailableForLga, type Region } from "@/lib/region";
 
 const RIVER_PLANNING =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Flood_overlay_Brisbane_River_flood_planning_area/FeatureServer/0/query";
@@ -33,6 +34,10 @@ export type FloodPlanningResult = {
   sources: Array<{ name: string; url: string; layer: string }>;
   raw: { river: unknown; creek: unknown };
   context: { river: unknown; creek: unknown };
+  /** False outside Brisbane LGA — statutory flood planning areas are
+   * council planning-scheme instruments. */
+  available: boolean;
+  availabilityNote?: string;
 };
 
 function attrs(
@@ -52,10 +57,31 @@ function classify(area: string | null): RiskLevel {
   return "medium"; // unrecognised but classified
 }
 
+const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
+
 export async function fetchFloodPlanningData(
   lat: number,
   lng: number,
+  region?: Region,
 ): Promise<FloodPlanningResult> {
+  if (region && !region.isBrisbane) {
+    return {
+      riskLevel: "none",
+      riverArea: null,
+      creekArea: null,
+      hasConsideration: false,
+      sources: [
+        {
+          name: "Council planning scheme — flood overlay",
+          url: "https://planning.statedevelopment.qld.gov.au/planning-framework/mapping",
+          layer: "",
+        },
+      ],
+      raw: { river: EMPTY_FC, creek: EMPTY_FC },
+      context: { river: EMPTY_FC, creek: EMPTY_FC },
+      ...unavailableForLga(region, "The statutory flood planning overlay"),
+    };
+  }
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   const fields = "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION";
   const pointParams = {
@@ -107,5 +133,6 @@ export async function fetchFloodPlanningData(
     ],
     raw: { river, creek },
     context: { river: riverCtx, creek: creekCtx },
+    available: true,
   };
 }

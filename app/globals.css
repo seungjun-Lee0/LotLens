@@ -193,6 +193,9 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Scaled showcase elements (final CTA at peak) may exceed their
+       container — never let that produce a horizontal scrollbar. */
+    overflow-x: clip;
   }
   h1, h2, h3, h4 {
     letter-spacing: -0.022em;
@@ -211,8 +214,12 @@
   .glass-strong {
     background-color: var(--glass-bg-strong);
     border: 1px solid var(--glass-border);
-    backdrop-filter: saturate(200%) blur(40px);
-    -webkit-backdrop-filter: saturate(200%) blur(40px);
+    /* Kept modest: backdrop-filter re-samples what's behind it on EVERY
+       scrolled frame, and the sticky header sits over the busy hero —
+       blur(40px) here was the main scroll-jank source. Cost scales with
+       radius; 14px reads the same at 92% background opacity. */
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
     box-shadow: var(--glass-shadow);
   }
   /* Colored glass tint — pass --tint as the base color */
@@ -284,28 +291,163 @@
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
   }
-  .cycle-g1, .cycle-g2, .cycle-g3 { opacity: 0; }
-  .cycle-g1 { animation: lens-cyc1 14s infinite; animation-delay: calc(var(--i, 0) * 0.13s); }
-  .cycle-g2 { animation: lens-cyc2 14s infinite; animation-delay: calc(var(--i, 0) * 0.13s); }
-  .cycle-g3 { animation: lens-cyc3 14s infinite; animation-delay: calc(var(--i, 0) * 0.13s); }
+  .cycle-g1, .cycle-g2, .cycle-g3 { opacity: 0; visibility: hidden; }
+  .cycle-g1 { animation: lens-cyc1 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
+  .cycle-g2 { animation: lens-cyc2 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
+  .cycle-g3 { animation: lens-cyc3 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
+
+  /* Pulsing ring on the background map marking the spot the detail circle
+     magnifies. */
+  .hero-marker-pulse {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: hero-marker-pulse 2.6s ease-out infinite;
+  }
+  @keyframes hero-marker-pulse {
+    0%   { transform: scale(1);   opacity: 0.8; }
+    70%  { transform: scale(2.6); opacity: 0; }
+    100% { transform: scale(2.6); opacity: 0; }
+  }
 
   /* Loupe overlay layers fade in sync with each chip group (opacity only —
      the transform-based chip pop doesn't suit SVG <g> elements). */
-  .lens-fade1, .lens-fade2, .lens-fade3 { opacity: 0; }
-  .lens-fade1 { animation: lens-fade1 14s infinite; }
-  .lens-fade2 { animation: lens-fade2 14s infinite; }
-  .lens-fade3 { animation: lens-fade3 14s infinite; }
+  /* will-change promotes each fading layer group to its own compositor
+     layer — the big SVG vector sets get painted ONCE and the 24 s cycle
+     animates opacity on the GPU instead of repainting paths every tick. */
+  .lens-fade1, .lens-fade2, .lens-fade3 { opacity: 0; will-change: opacity; }
+  .lens-fade1 { animation: lens-fade1 24s infinite; }
+  .lens-fade2 { animation: lens-fade2 24s infinite; }
+  .lens-fade3 { animation: lens-fade3 24s infinite; }
+  /* Wide 4-5% ramps (≈1s at 24s) so layers dissolve instead of popping. */
   @keyframes lens-fade1 {
-    0% { opacity: 0; } 2.5% { opacity: 1; } 28% { opacity: 1; }
-    31% { opacity: 0; } 100% { opacity: 0; }
+    0% { opacity: 0; } 4% { opacity: 1; } 27% { opacity: 1; }
+    32% { opacity: 0; } 100% { opacity: 0; }
   }
   @keyframes lens-fade2 {
-    0%, 33% { opacity: 0; } 35.5% { opacity: 1; } 61% { opacity: 1; }
-    64% { opacity: 0; } 100% { opacity: 0; }
+    0%, 33% { opacity: 0; } 37% { opacity: 1; } 60% { opacity: 1; }
+    65% { opacity: 0; } 100% { opacity: 0; }
   }
   @keyframes lens-fade3 {
-    0%, 66% { opacity: 0; } 68.5% { opacity: 1; } 94% { opacity: 1; }
-    97% { opacity: 0; } 100% { opacity: 0; }
+    0%, 66% { opacity: 0; } 70% { opacity: 1; } 93% { opacity: 1; }
+    98% { opacity: 0; } 100% { opacity: 0; }
+  }
+
+  /* Enter-once reveals (module tiles + pricing). Triggered by the <Reveal>
+     wrapper's IntersectionObserver adding `.revealed` — TIME-based, so the
+     animation reads identically at any scroll speed and in every browser.
+     Pre-reveal hiding only applies when scripting is on, so no-JS/bots
+     always see content. */
+  @media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+    .card-reveal:not(.revealed),
+    .rise-reveal:not(.revealed) {
+      opacity: 0;
+    }
+  }
+  .card-reveal.revealed {
+    animation: card-unfold 0.8s cubic-bezier(0.21, 0.7, 0.25, 1) both;
+    animation-delay: var(--reveal-delay, 0s);
+    transform-origin: 50% 90%;
+  }
+  @keyframes card-unfold {
+    from {
+      opacity: 0;
+      transform: perspective(900px) translateY(34px) rotateX(9deg) scale(0.96);
+    }
+    to { opacity: 1; transform: none; }
+  }
+  .rise-reveal.revealed {
+    animation: rise-up 0.7s cubic-bezier(0.21, 0.7, 0.25, 1) both;
+    animation-delay: var(--reveal-delay, 0s);
+  }
+  @keyframes rise-up {
+    from { opacity: 0; transform: translateY(30px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* Final CTA — a pinned grow-and-release. The tall .cta-stage provides
+     scroll distance; the card sticks near the viewport centre, stays at
+     normal size while entering, swells to its viewport-capped peak, holds,
+     then settles back to 1× and unpins so the content below takes over. */
+  @supports (animation-timeline: view()) {
+    .cta-stage {
+      height: 200vh;
+      view-timeline-name: --cta-stage;
+    }
+    .cta-pin {
+      /* Full-viewport sticky frame with the card dead-centred, above the
+         sticky site header (z-30) so the swollen card is never covered. */
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      display: flex;
+      align-items: center;
+      height: 100vh;
+    }
+    .cta-card {
+      /* Growth is LAYOUT-based (width + min-height re-laid-out every frame
+         at native resolution — no blurry upscaled raster) plus a whisper
+         of scale for the zoom feel. Peak width is capped per viewport so
+         the card never outgrows the screen; peak height fills most of it. */
+      --cta-peak: 1.06;
+      --cta-peak-h: 72vh;
+      width: 100%;
+      position: relative;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      animation: cta-grow linear both;
+      animation-timeline: --cta-stage;
+      animation-range: cover 0% cover 100%;
+      transform-origin: 50% 50%;
+    }
+    @media (min-width: 1280px) { .cta-card { --cta-peak: 1.13; } }
+    @media (min-width: 1440px) { .cta-card { --cta-peak: 1.26; } }
+    @media (min-width: 1680px) { .cta-card { --cta-peak: 1.46; } }
+    /* Settles back to exactly 1× by 84% — while still on screen — instead
+       of only reaching it as the stage exits. */
+    @keyframes cta-grow {
+      0%, 22% {
+        width: 100%;
+        min-height: 0vh;
+        transform: translateX(-50%) scale(1);
+      }
+      46%, 68% {
+        width: calc(var(--cta-peak, 1.2) * 100%);
+        min-height: var(--cta-peak-h, 72vh);
+        transform: translateX(-50%) scale(1.06);
+      }
+      84%, 100% {
+        width: 100%;
+        min-height: 0vh;
+        transform: translateX(-50%) scale(1);
+      }
+    }
+    @media (max-width: 767.98px) {
+      .cta-stage { height: 145vh; }
+      .cta-card { --cta-peak: 1.03; --cta-peak-h: 46vh; }
+    }
+  }
+
+  /* Smooth <details> open/close (Chromium's interpolate-size; a no-op
+     instant toggle elsewhere). */
+  @supports (interpolate-size: allow-keywords) {
+    .faq-item { interpolate-size: allow-keywords; }
+    .faq-item::details-content {
+      block-size: 0;
+      overflow: clip;
+      transition: block-size 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+        content-visibility 0.45s allow-discrete;
+    }
+    .faq-item[open]::details-content { block-size: auto; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card-reveal, .rise-reveal, .cta-card { animation: none; }
+    .cta-stage { height: auto; }
+    .cta-pin { position: static; display: block; height: auto; }
+    .faq-item::details-content { transition: none; }
   }
 
   /* Module cards — colour glow keyed off the per-card --c custom property */
@@ -318,36 +460,39 @@
     box-shadow: 0 24px 44px -32px color-mix(in oklab, var(--c) 22%, transparent);
   }
 
-  /* pop in → hold → pop out; three staggered windows over the 14 s cycle */
+  /* ease in → hold → ease out; three staggered windows over the 24 s cycle.
+     `visibility` rides along so a hidden group's chips can't intercept
+     clicks meant for the visible group (all groups share anchor slots). */
   @keyframes lens-cyc1 {
-    0% { opacity: 0; transform: scale(0.7) translateY(8px); }
-    2.5% { opacity: 1; transform: scale(1.05) translateY(0); }
-    4% { transform: scale(1); }
-    28% { opacity: 1; transform: scale(1); }
-    31% { opacity: 0; transform: scale(0.82) translateY(-6px); }
-    100% { opacity: 0; transform: scale(0.82); }
+    0% { opacity: 0; transform: scale(0.85) translateY(6px); visibility: visible; }
+    4% { opacity: 1; transform: scale(1.02) translateY(0); }
+    6% { transform: scale(1); }
+    27% { opacity: 1; transform: scale(1); visibility: visible; }
+    32% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
+    100% { opacity: 0; transform: scale(0.9); visibility: hidden; }
   }
   @keyframes lens-cyc2 {
-    0%, 33% { opacity: 0; transform: scale(0.7) translateY(8px); }
-    35.5% { opacity: 1; transform: scale(1.05) translateY(0); }
-    37% { transform: scale(1); }
-    61% { opacity: 1; transform: scale(1); }
-    64% { opacity: 0; transform: scale(0.82) translateY(-6px); }
-    100% { opacity: 0; transform: scale(0.82); }
+    0%, 33% { opacity: 0; transform: scale(0.85) translateY(6px); visibility: hidden; }
+    37% { opacity: 1; transform: scale(1.02) translateY(0); visibility: visible; }
+    39% { transform: scale(1); }
+    60% { opacity: 1; transform: scale(1); visibility: visible; }
+    65% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
+    100% { opacity: 0; transform: scale(0.9); visibility: hidden; }
   }
   @keyframes lens-cyc3 {
-    0%, 66% { opacity: 0; transform: scale(0.7) translateY(8px); }
-    68.5% { opacity: 1; transform: scale(1.05) translateY(0); }
-    70% { transform: scale(1); }
-    94% { opacity: 1; transform: scale(1); }
-    97% { opacity: 0; transform: scale(0.82) translateY(-6px); }
-    100% { opacity: 0; transform: scale(0.82); }
+    0%, 66% { opacity: 0; transform: scale(0.85) translateY(6px); visibility: hidden; }
+    70% { opacity: 1; transform: scale(1.02) translateY(0); visibility: visible; }
+    72% { transform: scale(1); }
+    93% { opacity: 1; transform: scale(1); visibility: visible; }
+    98% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
+    100% { opacity: 0; transform: scale(0.9); visibility: hidden; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .cycle-g1 { animation: none; opacity: 1; }
+    .cycle-g1 { animation: none; opacity: 1; visibility: visible; }
     .cycle-g2, .cycle-g3 { animation: none; display: none; }
     .lens-fade1 { animation: none; opacity: 1; }
     .lens-fade2, .lens-fade3 { animation: none; opacity: 0; }
+    .hero-marker-pulse { animation: none; opacity: 0; }
     .mod-card { transition: none; }
   }
 }

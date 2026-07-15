@@ -59,7 +59,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
               At a glance
             </h2>
             <p className="mt-2 max-w-md text-pretty text-[13.5px] leading-relaxed text-muted-foreground sm:text-[14px]">
-              Five public-data modules summarising what we found at this
+              Public-data modules summarising what we found at this
               address. {considerationCount === 0
                 ? "Nothing of concern."
                 : `${considerationCount} module${considerationCount > 1 ? "s have" : " has"} something worth reading.`}
@@ -136,9 +136,15 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
               )}
             </Meta>
           )}
-          <Meta label="Council">Brisbane City Council</Meta>
-          {payload.parcel?.ward && (
-            <Meta label="Ward">{payload.parcel.ward}</Meta>
+          {payload.parcel?.lga && (
+            <Meta label="Council">
+              {/council/i.test(payload.parcel.lga)
+                ? payload.parcel.lga
+                : `${payload.parcel.lga} Council`}
+            </Meta>
+          )}
+          {payload.parcel?.suburb && (
+            <Meta label="Locality">{payload.parcel.suburb}</Meta>
           )}
           {zoneText && (
             <Meta label="Zoning">
@@ -154,7 +160,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
               {address.lat.toFixed(4)}, {address.lng.toFixed(4)}
             </span>
           </Meta>
-          <Meta label="Distance to CBD">{distanceKm.toFixed(1)} km</Meta>
+          <Meta label="Distance to Brisbane CBD">{distanceKm.toFixed(1)} km</Meta>
           <Meta label="Report id">
             <code className="rounded bg-foreground/5 px-1.5 py-0.5 font-mono text-[11.5px]">
               {report.id.slice(0, 8)}

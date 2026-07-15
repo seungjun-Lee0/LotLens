@@ -13,7 +13,13 @@
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
+import {
+  councilOf,
+  OVERLAND_ADAPTERS,
+  queryOverlayAdapter,
+} from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
+import { unavailableForLga, type Region } from "@/lib/region";
 
 const OVERLAND_FLOW =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Flood_Awareness_Overland_Flow/FeatureServer/0/query";
@@ -28,6 +34,10 @@ export type OverlandFlowResult = {
   sources: Array<{ name: string; url: string; layer: string }>;
   raw: unknown;
   context: unknown;
+  /** False outside Brisbane LGA — overland-flow mapping is a council
+   * flood-awareness product. */
+  available: boolean;
+  availabilityNote?: string;
 };
 
 function attrs(
@@ -46,10 +56,46 @@ function normalizeRisk(s: string | null | undefined): RiskLevel {
   }
 }
 
+const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
+
 export async function fetchOverlandFlowData(
   lat: number,
   lng: number,
+  region?: Region,
 ): Promise<OverlandFlowResult> {
+  if (region && !region.isBrisbane) {
+    const adapter = OVERLAND_ADAPTERS[councilOf(region) ?? "brisbane"];
+    if (adapter) {
+      const { point, context, label } = await queryOverlayAdapter(adapter, lat, lng);
+      const hit = point.features.length > 0;
+      return {
+        // Overland flow paths are presence overlays for most councils —
+        // being on one is a real consideration but not a graded band.
+        riskLevel: hit ? "medium" : "none",
+        floodType: label ?? (hit ? "Overland flow path" : null),
+        hasConsideration: hit,
+        sources: [{ name: adapter.sourceName, url: adapter.docUrl, layer: adapter.url }],
+        raw: point,
+        context,
+        available: true,
+      };
+    }
+    return {
+      riskLevel: "none",
+      floodType: null,
+      hasConsideration: false,
+      sources: [
+        {
+          name: "Council flood awareness mapping",
+          url: "https://floodcheck.information.qld.gov.au/",
+          layer: "",
+        },
+      ],
+      raw: EMPTY_FC,
+      context: EMPTY_FC,
+      ...unavailableForLga(region, "The overland flow overlay"),
+    };
+  }
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   const outFields = "FLOOD_RISK,FLOOD_TYPE";
   const [fc, ctx] = await Promise.all([
@@ -91,5 +137,6 @@ export async function fetchOverlandFlowData(
     ],
     raw: fc,
     context: ctx,
+    available: true,
   };
 }

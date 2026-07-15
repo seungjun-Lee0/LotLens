@@ -20,20 +20,43 @@ import { fetchPropertyParcel } from "../lib/property";
 import { extractOverlays, type OverlayFeature } from "../lib/overlays";
 import type { Module } from "../lib/db";
 
-// ── Hero framing (Web-Mercator EPSG:3857) — must match app/page.tsx ─────
-const HERO_BBOX = { xmin: 17030370, ymin: -3175190, xmax: 17033170, ymax: -3173610 };
-const LOUPE_BBOX = { xmin: 17031610, ymin: -3174560, xmax: 17031930, ymax: -3174240 };
-
 const R = 6378137;
-const toLon = (x: number) => (x / R) * (180 / Math.PI);
-const toLat = (y: number) => (2 * Math.atan(Math.exp(y / R)) - Math.PI / 2) * (180 / Math.PI);
 const merX = (lon: number) => R * ((lon * Math.PI) / 180);
 const merY = (lat: number) => R * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
 
-// Loupe centre → the demo lot the yellow outline snaps to.
-const CENTER = {
-  lng: toLon((LOUPE_BBOX.xmin + LOUPE_BBOX.xmax) / 2),
-  lat: toLat((LOUPE_BBOX.ymin + LOUPE_BBOX.ymax) / 2),
+// ── Demo lot + hero framing (Web-Mercator EPSG:3857) ─────────────────────
+//
+// The demo lot: Graceville riverside — floods in the river overlay AND the
+// 2011/2022 historic events, sits in the traditional-character belt, near
+// the rail noise corridor. Rich across many modules.
+// Override for experiments: `npx tsx scripts/generate-hero-demo.ts -27.52,152.97`
+const argCenter = process.argv[2]?.split(",").map(Number);
+const CENTER =
+  argCenter && argCenter.length === 2 && argCenter.every(Number.isFinite)
+    ? { lat: argCenter[0], lng: argCenter[1] }
+    : { lat: -27.519, lng: 152.9727 }; // 115RP73818 — Graceville character belt, river flood fringe
+
+// Frame sizes (metres in mercator): hero 2800×1580 (16:9), loupe 320×320.
+// The lot is NOT centred in the hero frame — it sits at (68%, 47%), which
+// is where the loupe circle renders in the desktop layout. The lens
+// therefore hovers over the actual spot it magnifies.
+const HERO_W = 2800;
+const HERO_H = 1580;
+const LOT_FX = 0.68; // fraction from the left edge
+const LOT_FY = 0.47; // fraction from the top edge
+const CX = merX(CENTER.lng);
+const CY = merY(CENTER.lat);
+const HERO_BBOX = {
+  xmin: Math.round(CX - LOT_FX * HERO_W),
+  xmax: Math.round(CX + (1 - LOT_FX) * HERO_W),
+  ymin: Math.round(CY - (1 - LOT_FY) * HERO_H),
+  ymax: Math.round(CY + LOT_FY * HERO_H),
+};
+const LOUPE_BBOX = {
+  xmin: Math.round(CX - 160),
+  xmax: Math.round(CX + 160),
+  ymin: Math.round(CY - 160),
+  ymax: Math.round(CY + 160),
 };
 
 // Envelope half-width in degrees that covers the whole hero aerial
@@ -64,7 +87,19 @@ const SVC = {
   noiseAnef: "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/City_Plan_2014_Airport_environs_overlay_Australian_Noise_Exposure_Forecast_ANEF/FeatureServer/0/query",
   schools: "https://services7.arcgis.com/NFcbS1pD4k19hD9O/arcgis/rest/services/State_school_catchments_by_Year_Level__Current/FeatureServer/0/query",
   zoning: "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Zoning_opendata/FeatureServer/0/query",
+  koalaPriority: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/KoalaPlan/MapServer/1/query",
+  koalaCore: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/KoalaPlan/MapServer/3/query",
+  koalaLocal: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/KoalaPlan/MapServer/5/query",
+  msesWildlife: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Environment/MattersOfStateEnvironmentalSignificance/MapServer/21/query",
+  ass25k: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/GeoscientificInformation/SoilsAndLandResource/MapServer/1902/query",
+  ass100k: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/GeoscientificInformation/SoilsAndLandResource/MapServer/2002/query",
+  tenement: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Economy/MineralTenement/MapServer/0/query",
+  kraResource: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/GeoscientificInformation/MiningResources/MapServer/9/query",
+  kraSeparation: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/GeoscientificInformation/MiningResources/MapServer/10/query",
+  bccLandslide: "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Landslide_overlay/FeatureServer/0/query",
 } as const;
+
+const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
 
 async function context(url: string, outFields: string, offset = OFFSET) {
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -159,7 +194,15 @@ function geometryToRings(geom: Geometry, tol = 0): Ring[] {
   const rings: Ring[] = [];
   for (const poly of polys) {
     for (const raw of poly) {
-      let clipped = clipRing(raw.map(toUV));
+      let pts = raw.map(toUV);
+      // GeoJSON rings repeat the first vertex at the end. Drop it — we treat
+      // rings as cyclic (the clipper wraps, SVG `Z` closes) and a zero-length
+      // RDP anchor chord (first === last) would collapse the whole ring.
+      if (pts.length > 1) {
+        const [f, l] = [pts[0], pts[pts.length - 1]];
+        if (f[0] === l[0] && f[1] === l[1]) pts = pts.slice(0, -1);
+      }
+      let clipped = clipRing(pts);
       if (clipped.length < 3) continue;
       if (tol > 0) clipped = rdp(clipped, tol);
       const rounded: Ring = [];
@@ -246,8 +289,12 @@ function intersectsLoupe(rings: Ring[]): boolean {
 // Dual-resolution simplification: a feature the loupe can show keeps ~0.5 px
 // (at loupe scale) fidelity; background-only silhouettes get ~1 px (at bg
 // scale), which is 10× coarser in hero units.
-const TOL_LOUPE = 6e-5;
+const TOL_LOUPE = 1e-4; // ~0.8 px at loupe scale — visually lossless
 const TOL_BG = 6e-4;
+
+// Per-module feature caps: overland flow is thousands of street-scale
+// slivers — beyond ~120 the extra ones stop changing the picture.
+const MAX_OVERRIDE: Partial<Record<string, number>> = { overland_flow: 120 };
 
 function pack(overlays: OverlayFeature[], moduleKey: string): HeroFeature[] {
   const all = overlays
@@ -270,8 +317,19 @@ function pack(overlays: OverlayFeature[], moduleKey: string): HeroFeature[] {
         return (u1 - u0) * (v1 - v0);
       })();
       const giant = bboxArea > 0.02;
-      const tol = fine ? (giant ? 3.2e-4 : TOL_LOUPE) : giant ? 1.2e-3 : TOL_BG;
-      const rings = tol === TOL_LOUPE ? fineRings : geometryToRings(f.geometry, tol);
+      // Overland flow is hundreds of intricate slivers — squash background
+      // ones extra hard so the street-scale PATTERN survives the vertex
+      // budget instead of three giant blobs eating it.
+      const bgTol = moduleKey === "overland_flow" ? 1.5e-3 : giant ? 1.2e-3 : TOL_BG;
+      const tol = fine ? (giant ? 4e-4 : TOL_LOUPE) : bgTol;
+      let rings = tol === TOL_LOUPE ? fineRings : geometryToRings(f.geometry, tol);
+      // Overland background: no single blob may hog the vertex budget —
+      // the layer's value is the street-scale PATTERN of many slivers.
+      if (moduleKey === "overland_flow" && !fine) {
+        const n = rings.reduce((s, r) => s + r.length, 0);
+        if (n > 200) rings = geometryToRings(f.geometry, 3e-3);
+        if (rings.reduce((s, r) => s + r.length, 0) > 300) return null;
+      }
       return {
         c: f.properties.fillColor,
         ...(f.properties.fillOpacity !== undefined ? { o: f.properties.fillOpacity } : {}),
@@ -295,10 +353,36 @@ function pack(overlays: OverlayFeature[], moduleKey: string): HeroFeature[] {
     if (la !== lb) return lb - la;
     return area(b) - area(a);
   });
-  if (all.length > packed.length || packed.length > MAX_FEATURES) {
-    console.warn(`  ! ${moduleKey}: ${all.length} → ${Math.min(packed.length, MAX_FEATURES)} features (size prune/cap)`);
+  // Hard vertex budget per module so no layer can dominate the fixture —
+  // loupe-relevant features are first in line; an oversized feature is
+  // skipped rather than breaking, so smaller ones can still fill in.
+  // Split the vertex budget between loupe-visible features and background
+  // silhouette so neither starves the other (fine loupe features are ~10×
+  // heavier per feature than coarse background ones). An oversized feature
+  // is skipped rather than breaking, so smaller ones still fill in.
+  const max = MAX_OVERRIDE[moduleKey] ?? MAX_FEATURES;
+  const LOUPE_BUDGET = 1200;
+  const BG_BUDGET = 900;
+  const kept: HeroFeature[] = [];
+  let ptsL = 0;
+  let ptsB = 0;
+  for (const f of packed) {
+    if (kept.length >= max) break;
+    const n = f.p.reduce((s, r) => s + r.length, 0);
+    if (intersectsLoupe(f.p)) {
+      if (kept.length > 0 && ptsL + n > LOUPE_BUDGET) continue;
+      kept.push(f);
+      ptsL += n;
+    } else {
+      if (kept.length > 0 && ptsB + n > BG_BUDGET) continue;
+      kept.push(f);
+      ptsB += n;
+    }
   }
-  return packed.slice(0, MAX_FEATURES);
+  if (kept.length < all.length) {
+    console.warn(`  ! ${moduleKey}: ${all.length} → ${kept.length} features (loupe ${ptsL} + bg ${ptsB} pts)`);
+  }
+  return kept;
 }
 
 function shortLabel(label: string): string {
@@ -357,6 +441,10 @@ async function main() {
     eHV, eCad,
     nTransport, nAnef,
     schools, zoning,
+    kPriority, kCore, kLocal, mWildlife,
+    ass25, ass100,
+    tenements, kraRes, kraSep,
+    landslide,
   ] = await Promise.all([
     context(SVC.floodOverall, "FLOOD_RISK", 0.00014),
     context(SVC.flood2022, "OBJECTID", 0.00014),
@@ -376,10 +464,22 @@ async function main() {
     context(SVC.noiseAnef, "OVL2_DESC"),
     context(SVC.schools, "CatchmentType", 0.0003),
     context(SVC.zoning, "LVL1_ZONE,LVL2_ZONE,ZONE_PREC_DESC,ZONE_CODE"),
+    context(SVC.koalaPriority, "kpa", 0.0003),
+    context(SVC.koalaCore, "objectid"),
+    context(SVC.koalaLocal, "objectid"),
+    context(SVC.msesWildlife, "objectid"),
+    context(SVC.ass25k, "map_code,map_code_meaning"),
+    context(SVC.ass100k, "map_code,map_code_meaning"),
+    context(SVC.tenement, "tenid,tentype,tenmineral,tenowner,tenstatus"),
+    context(SVC.kraResource, "objectid"),
+    context(SVC.kraSeparation, "objectid"),
+    context(SVC.bccLandslide, "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT"),
   ]);
 
   // Assemble raw shapes exactly as extractOverlays() expects them.
-  const rawByModule: Record<Module, unknown> = {
+  // (Partial: the hero demo shows the original 11 modules — the newer
+  // statewide modules can be added here when the loupe needs them.)
+  const rawByModule: Partial<Record<Module, unknown>> = {
     flooding: { context: { overall: floodOverall, historic2022: flood2022, historic2011: flood2011 } },
     flood_planning: { context: { river: fpRiver, creek: fpCreek } },
     overland_flow: { context: overland },
@@ -391,6 +491,14 @@ async function main() {
     noise: { context: { transport: nTransport, anef: nAnef } },
     schools: { context: schools },
     zoning: { context: zoning },
+    environment: {
+      context: { priority: kPriority, core: kCore, local: kLocal, wildlife: mWildlife },
+    },
+    acid_sulfate: { context: { k25: ass25, k50: EMPTY_FC, k100: ass100 } },
+    mining: {
+      context: { tenements, kraResource: kraRes, kraSeparation: kraSep },
+    },
+    steep_land: { context: landslide },
   };
 
   const modules: Record<string, HeroModule> = {};

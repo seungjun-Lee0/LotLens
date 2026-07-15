@@ -23,9 +23,13 @@ export type Module =
   | "storm_tide"
   | "bushfire"
   | "vegetation"
+  | "environment"
   | "heritage"
   | "easements"
   | "noise"
+  | "steep_land"
+  | "acid_sulfate"
+  | "mining"
   | "schools"
   | "zoning";
 

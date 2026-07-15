@@ -1,45 +1,38 @@
-// Bushfire module — BCC City Plan 2014 Bushfire overlay.
+// Bushfire module — statewide Bushfire Prone Area (BPA).
 //
-// We use BCC's own Bushfire_overlay rather than the statewide QFES/QSpatial
-// "Bushfire Prone Area" mapping. Reasons:
-//   - QFES's official BPA is published only as a cached tile MapService
-//     (no /query capability) → not point-queryable.
-//   - QSpatial publishes the BPA only as regional shapefile downloads.
-//   - BCC's Bushfire_overlay is the layer Develo and conveyancers actually
-//     cite for Brisbane LGA addresses, since it sits inside the City Plan
-//     2014 statutory mapping.
+// Source: the Queensland Fire Department / State Planning Policy Bushfire
+// Prone Area mapping, published as a queryable hosted FeatureServer. This
+// replaces the old BCC-only City Plan Bushfire overlay so ANY Queensland
+// address classifies, not just Brisbane LGA.
 //
-// Endpoint:
-//   https://services2.arcgis.com/dEKgZETqwmDAh1rP/.../Bushfire_overlay/FeatureServer/0
-//   Native SRID: EPSG:28356.
-//
+// Endpoint (verified live 2026-07):
+//   https://utility.arcgis.com/usrsvcs/servers/8ac1ba8eccee472fbd0e7a57bf3ad320/
+//     rest/services/Hosted/BPA/FeatureServer/0
 // Fields:
-//   CAT_DESC    e.g. "Development constraints"
-//   OVL_CAT     e.g. "DEV"
-//   OVL2_DESC   e.g. "High hazard buffer area"   ← the meaningful label
-//   OVL2_CAT    e.g. "BHR_HRB"                   ← coded shorthand
-//   DESCRIPTION usually null
+//   class   e.g. "Very High Potential Intensity" / "High Potential Intensity"
+//           / "Medium Potential Intensity" / "Potential Impact Buffer"
+//   region  e.g. "South East Queensland"
+//   lga     e.g. "Moreton"
 //
-// Verified at Moggill (-27.575, 152.870) → "High hazard buffer area".
 // 0 features = "no consideration identified" (riskLevel='none').
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
 import type { RiskLevel } from "@/lib/db";
 
-const BUSHFIRE_OVERLAY =
-  "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Bushfire_overlay/FeatureServer/0/query";
+const BPA_LAYER =
+  "https://utility.arcgis.com/usrsvcs/servers/8ac1ba8eccee472fbd0e7a57bf3ad320/rest/services/Hosted/BPA/FeatureServer/0/query";
 
-const BCC_BUSHFIRE_DOC =
-  "https://cityplan.brisbane.qld.gov.au/eplan/property/0/0/Bushfire";
+const QLD_BUSHFIRE_DOC =
+  "https://www.qld.gov.au/emergency/dealing-disasters/map-hazards/bushfire-prone-areas";
 
 export type BushfireSource = { name: string; url: string; layer: string };
 
 export type BushfireResult = {
   riskLevel: RiskLevel;
-  /** Raw OVL2_DESC string, e.g. "High hazard buffer area". */
+  /** Raw BPA class string, e.g. "High Potential Intensity". */
   hazardCategory: string | null;
-  /** Short code, e.g. "BHR_HRB". */
+  /** BPA region label, e.g. "South East Queensland". */
   hazardCode: string | null;
   hasConsideration: boolean;
   sources: BushfireSource[];
@@ -55,18 +48,30 @@ function attrs(
   return (f?.properties ?? {}) as Record<string, unknown>;
 }
 
-// Map the BCC vocabulary to our 5-tier RiskLevel. The exact OVL2_DESC values
-// vary; this matcher is forgiving and falls back to 'medium' when a hazard
-// area is present but the wording is novel.
+// Map the BPA vocabulary to our 5-tier RiskLevel. Forgiving matcher — falls
+// back to 'medium' when a hazard polygon is present but the wording is novel.
 function classifyHazard(desc: string | null): RiskLevel {
   if (!desc) return "none";
   const s = desc.toLowerCase();
   if (s.includes("very high")) return "high";
-  if (s.includes("high hazard area")) return "high";
-  if (s.includes("high hazard")) return "high"; // includes "High hazard buffer area"
-  if (s.includes("medium hazard")) return "medium";
-  if (s.includes("low hazard") || s.includes("potential impact")) return "low";
+  if (s.includes("high")) return "high";
+  if (s.includes("medium")) return "medium";
+  if (s.includes("buffer") || s.includes("impact")) return "low";
   return "medium";
+}
+
+/** Prefer the worst class when the point sits under stacked polygons. */
+function worstFeature(
+  features: Feature<Geometry | null, GeoJsonProperties>[],
+): Feature<Geometry | null, GeoJsonProperties> | undefined {
+  const rank = (f: Feature<Geometry | null, GeoJsonProperties>) => {
+    const c = String(attrs(f).class ?? "").toLowerCase();
+    if (c.includes("very high")) return 4;
+    if (c.includes("high")) return 3;
+    if (c.includes("medium")) return 2;
+    return 1;
+  };
+  return [...features].sort((a, b) => rank(b) - rank(a))[0];
 }
 
 export async function fetchBushfireData(
@@ -74,16 +79,16 @@ export async function fetchBushfireData(
   lng: number,
 ): Promise<BushfireResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
-  const fields = "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION";
+  const fields = "class,region,lga";
   const [fc, ctx] = await Promise.all([
-    queryArcGIS(BUSHFIRE_OVERLAY, {
+    queryArcGIS(BPA_LAYER, {
       geometry: point,
       geometryType: "esriGeometryPoint",
       inSR: 4326,
       outFields: fields,
       returnGeometry: false,
     }),
-    queryArcGIS(BUSHFIRE_OVERLAY, {
+    queryArcGIS(BPA_LAYER, {
       geometry: point,
       geometryType: "esriGeometryPoint",
       inSR: 4326,
@@ -93,10 +98,9 @@ export async function fetchBushfireData(
       maxAllowableOffset: 0.00003,
     }),
   ]);
-  const a = attrs(fc.features[0]);
-  const hazardCategory =
-    typeof a.OVL2_DESC === "string" ? a.OVL2_DESC : null;
-  const hazardCode = typeof a.OVL2_CAT === "string" ? a.OVL2_CAT : null;
+  const a = attrs(worstFeature(fc.features));
+  const hazardCategory = typeof a.class === "string" ? a.class : null;
+  const hazardCode = typeof a.region === "string" ? a.region : null;
   const riskLevel = classifyHazard(hazardCategory);
 
   return {
@@ -106,9 +110,9 @@ export async function fetchBushfireData(
     hasConsideration: riskLevel !== "none",
     sources: [
       {
-        name: "BCC City Plan 2014 — Bushfire overlay",
-        url: BCC_BUSHFIRE_DOC,
-        layer: BUSHFIRE_OVERLAY,
+        name: "Queensland Bushfire Prone Area (State Planning Policy)",
+        url: QLD_BUSHFIRE_DOC,
+        layer: BPA_LAYER,
       },
     ],
     raw: fc,

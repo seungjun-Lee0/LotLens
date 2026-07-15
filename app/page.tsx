@@ -1,11 +1,15 @@
 import {
   CloudRain,
+  Droplets,
   Flame,
   GraduationCap,
   Landmark,
   LayoutGrid,
   Leaf,
+  Mountain,
+  PawPrint,
   ScrollText,
+  TrendingUp,
   Volume2,
   Waves,
   Wind,
@@ -13,6 +17,8 @@ import {
 
 import { SiteHeader } from "@/components/site/site-header";
 import { AddressForm } from "@/components/site/address-form";
+import { FaqScroller } from "@/components/site/faq-scroller";
+import { Reveal } from "@/components/site/reveal";
 import { SubscribeButton } from "@/components/site/billing-buttons";
 import { HeroShowcase, type HeroDemoData } from "@/components/site/hero-showcase";
 
@@ -54,8 +60,8 @@ const MODULES: LandingModule[] = [
   },
   {
     icon: Wind,
-    name: "Storm Tide",
-    blurb: "Coastal storm-tide inundation exposure for bayside lots.",
+    name: "Coastal Hazards",
+    blurb: "Storm-tide inundation & erosion prone areas, QLD-wide.",
     hex: "#06b6d4",
   },
   {
@@ -67,8 +73,14 @@ const MODULES: LandingModule[] = [
   {
     icon: Leaf,
     name: "Vegetation",
-    blurb: "Protected vegetation, waterway & biodiversity overlays.",
+    blurb: "Regulated vegetation (VMA), waterway & biodiversity overlays.",
     hex: "#16a34a",
+  },
+  {
+    icon: PawPrint,
+    name: "Environment & Koala",
+    blurb: "Core koala habitat & state wildlife habitat mapping.",
+    hex: "#10b981",
   },
   {
     icon: Landmark,
@@ -87,6 +99,24 @@ const MODULES: LandingModule[] = [
     name: "Noise",
     blurb: "Transport-corridor & aircraft (ANEF) noise bands.",
     hex: "#f59e0b",
+  },
+  {
+    icon: TrendingUp,
+    name: "Steep Land",
+    blurb: "Landslide hazard & steep-land overlays from your council.",
+    hex: "#f59e0b",
+  },
+  {
+    icon: Droplets,
+    name: "Acid Sulfate Soils",
+    blurb: "Coastal-lowland soils that turn acidic when excavated.",
+    hex: "#eab308",
+  },
+  {
+    icon: Mountain,
+    name: "Mining & Resources",
+    blurb: "Resource tenures & quarry buffer areas over the lot.",
+    hex: "#a855f7",
   },
   {
     icon: GraduationCap,
@@ -109,11 +139,11 @@ const FAQS = [
   },
   {
     q: "How accurate is the data?",
-    a: "Every layer is queried live, straight from Brisbane City Council and Queensland Government sources at the moment you run the report — not a stale cached copy. Each finding cites its exact source layer.",
+    a: "Every layer is queried live, straight from local council and Queensland Government sources at the moment you run the report — not a stale cached copy. Each finding cites its exact source layer.",
   },
   {
     q: "Which areas are covered?",
-    a: "The Brisbane City Council local government area today, on authoritative Queensland state aerial imagery. Coverage across South-East Queensland is rolling out next.",
+    a: "Any Queensland address. Statewide layers (cadastre, bushfire, coastal hazards, heritage register, vegetation, koala habitat, acid sulfate soils, mining, school catchments) run everywhere. Detailed council overlays (flood risk bands, zoning, transport noise, landslide) are live for Brisbane, Gold Coast, Moreton Bay, Sunshine Coast and Redland — and the report tells you honestly when a council layer isn't integrated yet for other LGAs.",
   },
   {
     q: "Do I get a PDF I can share?",
@@ -141,16 +171,16 @@ export default function Home() {
         <HeroShowcase data={heroDemo}>
           {/* copy + live address form */}
           <div className="flex flex-col items-start gap-6">
-            <span className="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11.5px] font-medium text-foreground/70 sm:text-[12px]">
+            {/* <span className="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11.5px] font-medium text-foreground/70 sm:text-[12px]">
               <span
                 className="size-1.5 rounded-full"
                 style={{ background: "var(--apple-green)" }}
               />
               Public council + Queensland state data
-            </span>
+            </span> */}
 
             <h1 className="text-balance text-[2.5rem] font-semibold leading-[1.03] tracking-tight sm:text-6xl">
-              Brisbane property,
+              Queensland property,
               <br />
               brought into{" "}
               <span
@@ -204,7 +234,7 @@ export default function Home() {
               What&rsquo;s checked
             </div>
             <h2 className="mt-2 text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
-              Eleven layers, one report.
+              Fifteen layers, one report.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-pretty text-[14px] leading-relaxed text-muted-foreground">
               Every tile is that overlay exactly as it renders on your
@@ -214,29 +244,32 @@ export default function Home() {
 
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
             {MODULES.map((m, i) => (
-              <div
-                key={m.name}
-                className="mod-card group relative rounded-2xl border border-border/60 bg-card/70 p-5 backdrop-blur-sm"
-                style={{ ["--c" as string]: m.hex }}
-              >
-                <div className="flex items-center justify-between">
-                  <m.icon className="size-[18px]" style={{ color: m.hex }} />
-                  <span className="font-mono text-[10px] text-muted-foreground/60">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
+              <Reveal key={m.name} className="card-reveal" delay={(i % 4) * 90}>
+                <div
+                  className="mod-card group relative h-full rounded-2xl border border-border/60 bg-card/70 p-5 backdrop-blur-sm"
+                  style={{ ["--c" as string]: m.hex }}
+                >
+                  <div className="flex items-center justify-between">
+                    <m.icon className="size-[18px]" style={{ color: m.hex }} />
+                    <span className="font-mono text-[10px] text-muted-foreground/60">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <h3 className="mt-4 text-[14.5px] font-semibold tracking-tight">
+                    {m.name}
+                  </h3>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                    {m.blurb}
+                  </p>
                 </div>
-                <h3 className="mt-4 text-[14.5px] font-semibold tracking-tight">
-                  {m.name}
-                </h3>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-                  {m.blurb}
-                </p>
-              </div>
+              </Reveal>
             ))}
-            {/* 12th card — keeps the grid a clean 4×3 */}
-            <div className="flex items-center justify-center rounded-2xl border border-dashed border-border/70 p-4 text-center text-[12.5px] leading-snug text-muted-foreground">
-              + more layers added each sprint
-            </div>
+            {/* filler card — rounds out the grid */}
+            <Reveal className="card-reveal" delay={(MODULES.length % 4) * 90}>
+              <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-border/70 p-4 text-center text-[12.5px] leading-snug text-muted-foreground">
+                + more layers added each sprint
+              </div>
+            </Reveal>
           </div>
         </section>
 
@@ -257,7 +290,8 @@ export default function Home() {
 
           <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 md:grid-cols-3">
             {/* Single report — beta price */}
-            <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7 backdrop-blur-sm">
+            <Reveal className="rise-reveal">
+            <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7 backdrop-blur-sm">
               <div className="flex items-baseline justify-between">
                 <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">
                   Single report
@@ -284,7 +318,7 @@ export default function Home() {
                 One-off · per address · $29 after beta
               </p>
               <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-muted-foreground">
-                <li>· All 11 modules for one address</li>
+                <li>· All 15 modules for one address</li>
                 <li>· A4 PDF export, branded cover</li>
                 <li>· No subscription, no auto-renewal</li>
                 <li>· Flooding preview always free first</li>
@@ -296,9 +330,11 @@ export default function Home() {
                 Run a report
               </a>
             </div>
+            </Reveal>
 
             {/* Basic */}
-            <div className="flex flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7 backdrop-blur-sm">
+            <Reveal className="rise-reveal" delay={120}>
+            <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7 backdrop-blur-sm">
               <div className="flex items-baseline justify-between">
                 <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">
                   Basic
@@ -326,10 +362,12 @@ export default function Home() {
                 <SubscribeButton plan="basic" label="Start Basic" variant="ghost" />
               </div>
             </div>
+            </Reveal>
 
             {/* Pro — featured */}
+            <Reveal className="rise-reveal" delay={240}>
             <div
-              className="relative flex flex-col gap-4 rounded-3xl p-7 text-foreground"
+              className="relative flex h-full flex-col gap-4 rounded-3xl p-7 text-foreground"
               style={{
                 background:
                   "linear-gradient(135deg, color-mix(in oklab, var(--apple-blue) 12%, transparent), color-mix(in oklab, var(--apple-purple) 14%, transparent))",
@@ -370,6 +408,7 @@ export default function Home() {
                 <SubscribeButton plan="pro" label="Start Pro" />
               </div>
             </div>
+            </Reveal>
           </div>
 
           <p className="text-center text-[12px] text-muted-foreground">
@@ -395,32 +434,14 @@ export default function Home() {
               Good questions.
             </h2>
           </div>
-          <div className="mx-auto w-full max-w-2xl border-t border-border/60">
-            {FAQS.map((f, i) => (
-              <details
-                key={f.q}
-                className="group border-b border-border/60"
-                open={i === 0}
-              >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 text-[15px] font-medium tracking-tight [&::-webkit-details-marker]:hidden">
-                  {f.q}
-                  <span
-                    className="shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-45"
-                    style={{ color: "var(--apple-blue)" }}
-                  >
-                    +
-                  </span>
-                </summary>
-                <p className="max-w-[62ch] pb-4 text-[13.5px] leading-relaxed text-muted-foreground">
-                  {f.a}
-                </p>
-              </details>
-            ))}
-          </div>
+          <FaqScroller items={FAQS} />
         </section>
 
-        {/* ── FINAL CTA ── */}
-        <section className="glass relative overflow-hidden rounded-3xl px-6 py-12 text-center sm:px-10 sm:py-16">
+        {/* ── FINAL CTA — pinned grow-and-release: swells to near full page
+            while stuck, then settles and hands off to the sections below ── */}
+        <div className="cta-stage">
+          <div className="cta-pin">
+        <section className="cta-card glass relative overflow-hidden rounded-3xl px-6 py-12 text-center sm:px-10 sm:py-16">
           <div
             aria-hidden
             className="pointer-events-none absolute left-1/2 top-[-30%] h-[120%] w-[70%] -translate-x-1/2"
@@ -440,19 +461,13 @@ export default function Home() {
             Flooding preview is free. Ninety seconds now can save a very
             expensive surprise later.
           </p>
-          <a
-            href="#top"
-            className="mt-7 inline-flex h-11 items-center gap-2 rounded-full px-6 text-[14px] font-medium text-white"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--apple-blue), color-mix(in oklab, var(--apple-blue) 70%, var(--apple-purple)))",
-              boxShadow:
-                "0 8px 20px -8px color-mix(in oklab, var(--apple-blue) 70%, transparent)",
-            }}
-          >
-            Run a report
-          </a>
+          {/* the search itself — no detour back to the top */}
+          <div className="mx-auto mt-7 w-full max-w-xl text-left">
+            <AddressForm />
+          </div>
         </section>
+          </div>
+        </div>
 
         {/* ── DISCLAIMER ── */}
         <section id="disclaimer" className="mx-auto max-w-3xl">
@@ -467,7 +482,7 @@ export default function Home() {
 
       <footer className="border-t border-border/40 bg-background/40 backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-6 text-center text-[11.5px] text-muted-foreground sm:flex-row sm:px-6 sm:text-left sm:text-[12px]">
-          <span>© LotLens — Brisbane Due Diligence</span>
+          <span>© LotLens — Queensland Due Diligence</span>
           <span>Public data only · No valuation · No title search</span>
         </div>
       </footer>

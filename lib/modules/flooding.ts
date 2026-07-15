@@ -24,7 +24,14 @@
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
+import {
+  councilOf,
+  FLOOD_ADAPTERS,
+  queryOverlayAdapter,
+  type OverlayAdapter,
+} from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
+import { unavailableForLga, type Region } from "@/lib/region";
 
 const FAM_OVERALL =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Flood_Awareness_Flood_Risk_Overall/FeatureServer/0/query";
@@ -66,9 +73,51 @@ export type FloodingResult = {
     historic2022: unknown;
     historic2011: unknown;
   };
+  /** False outside Brisbane LGA — detailed flood-risk bands are published
+   * per-council; state FloodCheck extents are raster-only. Council flood
+   * adapters for other LGAs land incrementally. */
+  available: boolean;
+  availabilityNote?: string;
 };
 
 const BCC_FAM_BASE = "https://www.brisbane.qld.gov.au/clean-and-green/natural-environment-and-water/flooding-in-brisbane/flood-awareness-map";
+
+// Council flood-band vocabularies vary ("High risk flood hazard area",
+// "Moderate Flood Risk Area", "High" …) — a forgiving keyword matcher
+// normalises them onto our 5-tier scale.
+function classifyCouncilFlood(label: string | null): RiskLevel {
+  if (!label) return "none";
+  const s = label.toLowerCase();
+  if (s.includes("extreme") || s.includes("very high") || s.includes("high")) return "high";
+  if (s.includes("moderate") || s.includes("medium")) return "medium";
+  if (s.includes("very low")) return "very_low";
+  if (s.includes("low")) return "low";
+  // Presence in a flood overlay without a graded label (e.g. Redland's
+  // constrained-land polygons) is still a real consideration.
+  return "medium";
+}
+
+// Detailed council flood overlay via a per-council adapter (Gold Coast,
+// Moreton Bay, Sunshine Coast, Redland). Mapped into the same raw shape
+// as the Brisbane path so overlays/UI need no special-casing.
+async function fetchCouncilFlooding(
+  lat: number,
+  lng: number,
+  adapter: OverlayAdapter,
+): Promise<FloodingResult> {
+  const { point, context, label } = await queryOverlayAdapter(adapter, lat, lng);
+  const riskLevel = classifyCouncilFlood(label);
+  return {
+    riskLevel,
+    floodType: label,
+    historicEvents: [],
+    hasConsideration: riskLevel !== "none",
+    sources: [{ name: adapter.sourceName, url: adapter.docUrl, layer: adapter.url }],
+    raw: { overall: point, historic2022: EMPTY_FC, historic2011: EMPTY_FC },
+    context: { overall: context, historic2022: EMPTY_FC, historic2011: EMPTY_FC },
+    available: true,
+  };
+}
 
 function normalizeRisk(s: string | null | undefined): RiskLevel {
   switch ((s ?? "").trim().toLowerCase()) {
@@ -111,10 +160,34 @@ function pickHistoric(
  * No-feature responses are valid — they mean "no consideration identified",
  * which we surface as riskLevel='none', hasConsideration=false.
  */
+const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
+
 export async function fetchFloodingData(
   lat: number,
   lng: number,
+  region?: Region,
 ): Promise<FloodingResult> {
+  if (region && !region.isBrisbane) {
+    const adapter = FLOOD_ADAPTERS[councilOf(region) ?? "brisbane"];
+    if (adapter) return fetchCouncilFlooding(lat, lng, adapter);
+    const empty = { overall: EMPTY_FC, historic2022: EMPTY_FC, historic2011: EMPTY_FC };
+    return {
+      riskLevel: "none",
+      floodType: null,
+      historicEvents: [],
+      hasConsideration: false,
+      sources: [
+        {
+          name: "FloodCheck Queensland",
+          url: "https://floodcheck.information.qld.gov.au/",
+          layer: "",
+        },
+      ],
+      raw: empty,
+      context: empty,
+      ...unavailableForLga(region, "The detailed flood-risk overlay"),
+    };
+  }
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   const pointParams = {
     geometry: point,
@@ -205,5 +278,6 @@ export async function fetchFloodingData(
       historic2022: h2022Ctx,
       historic2011: h2011Ctx,
     },
+    available: true,
   };
 }

@@ -5,6 +5,7 @@ import {
   ManageBillingButton,
   SubscribeButton,
 } from "@/components/site/billing-buttons";
+import { NameForm, PasswordForm } from "@/components/site/account-security";
 import {
   PLAN_QUOTAS,
   getSessionUser,
@@ -184,6 +185,16 @@ export default async function AccountPage({
             })}
           </section>
         )}
+
+        {/* Profile & security */}
+        <section className="glass flex flex-col gap-6 rounded-3xl p-6">
+          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Profile &amp; security
+          </div>
+          <NameForm initialName={user.name ?? ""} />
+          <div className="h-px bg-border/60" />
+          <PasswordForm hasPassword={user.hasPassword} />
+        </section>
 
         {/* Sign out */}
         <form action="/api/auth/logout" method="post" className="mt-2">

@@ -125,6 +125,15 @@ export function AuthForm({
           aria-label="Password"
         />
 
+        {!isSignup && (
+          <Link
+            href="/forgot-password"
+            className="-mt-1 self-end text-[12px] text-muted-foreground underline-offset-2 hover:underline"
+          >
+            Forgot password?
+          </Link>
+        )}
+
         {error && (
           <p className="text-[12.5px]" style={{ color: "var(--apple-red)" }}>
             {error}

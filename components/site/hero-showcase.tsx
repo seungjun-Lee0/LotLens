@@ -33,11 +33,11 @@ export type HeroDemoData = {
   suburb?: string | null;
 };
 
-const QLD_EXPORT =
-  "https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/exportImage";
-
-const bboxUrl = (b: Bbox, size: string) =>
-  `${QLD_EXPORT}?bbox=${b.xmin},${b.ymin},${b.xmax},${b.ymax}&bboxSR=3857&imageSR=3857&size=${size}&format=jpeg&transparent=false&f=image`;
+// Aerials are baked to /public by scripts/bake-hero-images.ts with the
+// blur pre-applied — identical pixels, none of the runtime CSS-filter
+// cost, and no LCP dependency on the QLD imagery server.
+const HERO_AERIAL_SRC = "/hero-aerial.jpg";
+const LOUPE_AERIAL_SRC = "/hero-loupe.jpg";
 
 // ── Module registry (icon tints mirror the report overlay palette) ──────
 type ModuleKey =
@@ -192,14 +192,11 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
       {/* ── full-bleed aerial + live layer silhouette + veil ── */}
       <div aria-hidden className="absolute inset-0 -z-10">
         {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size remote render, next/image adds nothing here */}
-        {/* Requested at half resolution: upscaling gives the same soft
-            background look as the old CSS blur(2px) at a fraction of the
-            paint cost (the full-bleed CSS blur re-rasterised on scroll
-            re-entry and was a jank source). */}
         <img
-          src={bboxUrl(data.heroBbox, "1000,563")}
+          src={HERO_AERIAL_SRC}
           alt=""
-          className="h-full w-full object-cover brightness-[0.98] saturate-[1.08] dark:brightness-[0.42] dark:saturate-[0.9]"
+          fetchPriority="high"
+          className="h-full w-full scale-105 object-cover brightness-[1.04] saturate-[0.15] contrast-[0.92] dark:brightness-[0.42] dark:saturate-[0.9] dark:contrast-100"
         />
         {/* veil: fade the aerial into the page background on all edges.
             The vertical ramp completes WELL BEFORE the section edge (~90%)
@@ -232,10 +229,36 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
               "linear-gradient(180deg, transparent 0%, #000 14%, #000 72%, transparent 94%)",
           }}
         >
+        {/* auto: the ENTIRE cycling group paints the map — the exact
+            modules the chips are announcing — but a radial mask keeps the
+            silhouette hugging the detail circle and fading out towards the
+            page edges/text. Pinning (next svg) opens up the full suburb. */}
         <svg
           viewBox="0 0 1600 900"
           preserveAspectRatio="xMidYMid slice"
-          className="absolute inset-0 h-full w-full"
+          className="absolute inset-0 h-full w-full scale-105"
+          style={{
+            maskImage:
+              "radial-gradient(46% 66% at 68% 47%, #000 28%, rgba(0,0,0,.4) 58%, transparent 88%)",
+            WebkitMaskImage:
+              "radial-gradient(46% 66% at 68% 47%, #000 28%, rgba(0,0,0,.4) 58%, transparent 88%)",
+          }}
+        >
+          {!pinned &&
+            GROUPS.map((grp, gi) => (
+              <g key={`bg-grp-${gi}`} className={`lens-fade${gi + 1}`}>
+                <g style={{ opacity: "var(--hero-layer)" }}>
+                  {grp.map((k) => (
+                    <LayerPaths key={k} paths={layers[k].bg} lineWidth={1} lineOpacity={0.5} />
+                  ))}
+                </g>
+              </g>
+            ))}
+        </svg>
+        <svg
+          viewBox="0 0 1600 900"
+          preserveAspectRatio="xMidYMid slice"
+          className="absolute inset-0 h-full w-full scale-105"
           style={{
             maskImage:
               "linear-gradient(90deg, rgba(0,0,0,.07) 0%, rgba(0,0,0,.2) 38%, rgba(0,0,0,.8) 62%, #000 80%)",
@@ -243,21 +266,11 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
               "linear-gradient(90deg, rgba(0,0,0,.07) 0%, rgba(0,0,0,.2) 38%, rgba(0,0,0,.8) 62%, #000 80%)",
           }}
         >
-          {/* auto: the ENTIRE cycling group paints the suburb — the exact
-              modules the chips are announcing. Inner <g opacity> keeps it
-              ambient rather than loud. */}
-          {!pinned &&
-            GROUPS.map((grp, gi) => (
-              <g key={`bg-grp-${gi}`} className={`lens-fade${gi + 1}`}>
-                <g opacity={0.45}>
-                  {grp.map((k) => (
-                    <LayerPaths key={k} paths={layers[k].bg} lineWidth={1} lineOpacity={0.4} />
-                  ))}
-                </g>
-              </g>
-            ))}
-          <g className="transition-opacity duration-700" style={{ opacity: pinned ? 0.65 : 0 }}>
-            <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.45} />
+          <g
+            className="transition-opacity duration-700"
+            style={{ opacity: pinned ? "var(--hero-layer-pinned)" : 0 }}
+          >
+            <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.5} />
           </g>
           <path
             d={parcelBg}
@@ -298,8 +311,9 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size remote render, next/image adds nothing here */}
                 <img
-                  src={bboxUrl(data.loupeBbox, "900,900")}
+                  src={LOUPE_AERIAL_SRC}
                   alt=""
+                  fetchPriority="high"
                   className="absolute inset-0 h-full w-full object-cover"
                 />
 

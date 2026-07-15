@@ -27,6 +27,7 @@ import { fetchSteepLandData } from "@/lib/modules/steep-land";
 import { fetchStormTideData } from "@/lib/modules/storm-tide";
 import { fetchVegetationData } from "@/lib/modules/vegetation";
 import { fetchZoningData } from "@/lib/modules/zoning";
+import { slimGeoJson } from "@/lib/geo-slim";
 import { regionFromParcel } from "@/lib/region";
 
 import { generateModuleNarrative, type ModuleNarrative } from "@/lib/anthropic";
@@ -88,30 +89,62 @@ export async function fetchOverlaysForAddress(
   const sql = getDb();
   const addr = await loadAddress(addressId);
 
-  // Resolve which LGA (council) the point falls in FIRST — the parcel's
-  // `shire_name` decides which council overlay adapters apply. One extra
-  // ~150 ms round-trip before the parallel fan-out.
-  const parcelForRegion = await fetchPropertyParcel(addr.lat, addr.lng);
+  // Per-module wall time — one summary line per run so slow government
+  // layers are identifiable in prod logs without extra tooling.
+  const timings: Record<string, number> = {};
+  const timed = async <T,>(name: string, p: Promise<T>): Promise<T> => {
+    const t = performance.now();
+    try {
+      return await p;
+    } finally {
+      timings[name] = Math.round(performance.now() - t);
+    }
+  };
+
+  // Modules that don't need the LGA can start immediately; the rest wait
+  // for the parcel lookup (its `shire_name` picks the council adapters).
+  // This takes the ~150-300 ms parcel round-trip off the critical path for
+  // six of the fifteen fetches.
+  const regionFreeP = Promise.all([
+    timed("storm_tide", fetchStormTideData(addr.lat, addr.lng)),
+    timed("bushfire", fetchBushfireData(addr.lat, addr.lng)),
+    timed("environment", fetchEnvironmentData(addr.lat, addr.lng)),
+    timed("acid_sulfate", fetchAcidSulfateData(addr.lat, addr.lng)),
+    timed("mining", fetchMiningData(addr.lat, addr.lng)),
+    timed("schools", fetchSchoolsData(addr.lat, addr.lng)),
+  ]);
+
+  const parcelForRegion = await timed(
+    "parcel",
+    fetchPropertyParcel(addr.lat, addr.lng),
+  );
   const region = regionFromParcel(parcelForRegion.lga, addr.lat, addr.lng);
 
-  const [flood, floodPlan, overland, stormTide, fire, veg, env, herit, ease, noise, steep, acid, mine, schools, zone] =
-    await Promise.all([
-      fetchFloodingData(addr.lat, addr.lng, region),
-      fetchFloodPlanningData(addr.lat, addr.lng, region),
-      fetchOverlandFlowData(addr.lat, addr.lng, region),
-      fetchStormTideData(addr.lat, addr.lng),
-      fetchBushfireData(addr.lat, addr.lng),
-      fetchVegetationData(addr.lat, addr.lng, region),
-      fetchEnvironmentData(addr.lat, addr.lng),
-      fetchHeritageData(addr.lat, addr.lng, region),
-      fetchEasementsData(addr.lat, addr.lng, region),
-      fetchNoiseData(addr.lat, addr.lng, region),
-      fetchSteepLandData(addr.lat, addr.lng, region),
-      fetchAcidSulfateData(addr.lat, addr.lng),
-      fetchMiningData(addr.lat, addr.lng),
-      fetchSchoolsData(addr.lat, addr.lng),
-      fetchZoningData(addr.lat, addr.lng, region),
-    ]);
+  const [
+    [flood, floodPlan, overland, veg, herit, ease, noise, steep, zone],
+    [stormTide, fire, env, acid, mine, schools],
+  ] = await Promise.all([
+    Promise.all([
+      timed("flooding", fetchFloodingData(addr.lat, addr.lng, region)),
+      timed("flood_planning", fetchFloodPlanningData(addr.lat, addr.lng, region)),
+      timed("overland_flow", fetchOverlandFlowData(addr.lat, addr.lng, region)),
+      timed("vegetation", fetchVegetationData(addr.lat, addr.lng, region)),
+      timed("heritage", fetchHeritageData(addr.lat, addr.lng, region)),
+      timed("easements", fetchEasementsData(addr.lat, addr.lng, region)),
+      timed("noise", fetchNoiseData(addr.lat, addr.lng, region)),
+      timed("steep_land", fetchSteepLandData(addr.lat, addr.lng, region)),
+      timed("zoning", fetchZoningData(addr.lat, addr.lng, region)),
+    ]),
+    regionFreeP,
+  ]);
+
+  console.log(
+    "[overlays] module timings:",
+    Object.entries(timings)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => `${k}=${v}ms`)
+      .join(" "),
+  );
 
   const overlays: ModuleOverlay[] = [
     { module: "flooding",       riskLevel: flood.riskLevel,     hasConsideration: flood.hasConsideration,     sourceName: flood.sources[0].name,     sourceUrl: flood.sources[0].url,     raw: flood },
@@ -135,19 +168,24 @@ export async function fetchOverlaysForAddress(
   // and rewrites the five fresh ones.
   await sql`DELETE FROM council_data WHERE address_id = ${addressId}`;
 
-  // 5 small inserts — fast enough sequentially on Neon's HTTP driver
-  // (~30 ms each). Avoiding multi-row INSERT lets us serialise jsonb
-  // through the tagged-template binding without manual escaping.
-  for (const o of overlays) {
-    await sql`
-      INSERT INTO council_data
-        (address_id, module, risk_level, has_consideration,
-         source_name, source_url, raw_response)
-      VALUES
-        (${addressId}, ${o.module}, ${o.riskLevel}, ${o.hasConsideration},
-         ${o.sourceName}, ${o.sourceUrl}, ${JSON.stringify(o.raw)}::jsonb)
-    `;
-  }
+  // 15 independent single-row inserts — run them concurrently. Neon's
+  // HTTP driver issues one stateless request per statement (~30 ms), so
+  // sequential would cost ~450 ms; parallel costs one round-trip.
+  // slimGeoJson caps polygon vertex counts before upload — the Brisbane
+  // River flood-planning multipolygon alone is ~7 MB raw, which was
+  // costing >10 s of DB write time per report.
+  await Promise.all(
+    overlays.map(
+      (o) => sql`
+        INSERT INTO council_data
+          (address_id, module, risk_level, has_consideration,
+           source_name, source_url, raw_response)
+        VALUES
+          (${addressId}, ${o.module}, ${o.riskLevel}, ${o.hasConsideration},
+           ${o.sourceName}, ${o.sourceUrl}, ${JSON.stringify(slimGeoJson(o.raw, { lat: addr.lat, lng: addr.lng }))}::jsonb)
+      `,
+    ),
+  );
 
   const modules = Object.fromEntries(
     overlays.map((o) => [

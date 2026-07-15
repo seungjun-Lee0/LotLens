@@ -378,17 +378,24 @@
      spotlights the card. Leaving the zone releases both. The JS toggle
      lives in components/site/cta-stage.tsx. */
   .cta-stage {
-    height: 200vh;
+    /* Just enough runway for the grow to play and release — any taller and
+       the page feels stuck on the CTA before it hands off to the footer. */
+    height: 130vh;
   }
   .cta-pin {
-    /* Full-viewport sticky frame with the card dead-centred, above the
-       sticky site header (z-30) so the swollen card is never covered. */
+    /* Full-viewport sticky frame with the card dead-centred. Sits BELOW
+       the site header (z-30) by default so the released card slides under
+       it like any other content; only while focused (grown + dimmed) does
+       it jump above the header. */
     position: sticky;
     top: 0;
-    z-index: 40;
+    z-index: 20;
     display: flex;
     align-items: center;
     height: 100vh;
+  }
+  .cta-stage.is-focus .cta-pin {
+    z-index: 40;
   }
   .cta-dim {
     position: fixed;
@@ -438,7 +445,7 @@
   @media (min-width: 1440px) { .cta-card { --cta-peak: 1.14; --cta-zoom: 1.1; } }
   @media (min-width: 1680px) { .cta-card { --cta-peak: 1.28; --cta-zoom: 1.12; } }
   @media (max-width: 767.98px) {
-    .cta-stage { height: 145vh; }
+    .cta-stage { height: 115vh; }
     .cta-card { --cta-peak: 1; --cta-zoom: 1.03; --cta-peak-h: 46vh; }
   }
   /* Without JS the focus state can never trigger — skip the scroll-jack

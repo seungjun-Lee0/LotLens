@@ -12,6 +12,7 @@ const STEPS = [
   { key: "geocode",  label: "Locating address",            tint: "var(--apple-blue)" },
   { key: "overlays", label: "Pulling council overlay data", tint: "var(--apple-orange)" },
   { key: "narrative", label: "Generating narrative",        tint: "var(--apple-purple)" },
+  { key: "render",   label: "Preparing your report",       tint: "var(--apple-green)" },
 ] as const;
 type StepKey = typeof STEPS[number]["key"];
 
@@ -47,6 +48,9 @@ export function AddressForm({
   // Tracks the address we last *selected* so re-rendering doesn't immediately
   // re-suggest the same string while typing-by-pick.
   const lastPickedRef = useRef<string>("");
+  // Session cache: repeat queries (backspacing, re-typing) render instantly
+  // without a network round-trip.
+  const suggestCacheRef = useRef(new Map<string, Suggestion[]>());
 
   function applyPreset(addr: string) {
     setValue(addr);
@@ -63,11 +67,18 @@ export function AddressForm({
     inputRef.current?.focus();
   }
 
-  // Debounced /api/geocode/suggest fetch.
+  // Debounced /api/geocode/suggest fetch. Cache hits render immediately.
   useEffect(() => {
     const q = value.trim();
     if (q.length < 3 || phase !== "idle" || q === lastPickedRef.current) {
       setSuggestions([]);
+      return;
+    }
+    const cached = suggestCacheRef.current.get(q.toLowerCase());
+    if (cached) {
+      setSuggestions(cached);
+      setSuggestOpen(true);
+      setActiveIdx(-1);
       return;
     }
     const ctrl = new AbortController();
@@ -85,7 +96,9 @@ export function AddressForm({
           return;
         }
         const body = (await res.json()) as { suggestions: Suggestion[] };
-        setSuggestions(body.suggestions ?? []);
+        const list = body.suggestions ?? [];
+        suggestCacheRef.current.set(q.toLowerCase(), list);
+        setSuggestions(list);
         setSuggestOpen(true);
         setActiveIdx(-1);
       } catch {
@@ -93,7 +106,7 @@ export function AddressForm({
       } finally {
         setSuggestLoading(false);
       }
-    }, 280);
+    }, 120);
     return () => {
       window.clearTimeout(t);
       ctrl.abort();
@@ -162,7 +175,10 @@ export function AddressForm({
       const gnBody = await gn.json();
       if (!gn.ok) throw new Error(gnBody.error ?? "narrative generation failed");
 
-      setPhase("done");
+      // Stay in "running" on the final step — the spinner keeps going while
+      // Next.js loads the report route (the loading.tsx skeleton takes over
+      // once navigation commits, and this component unmounts).
+      setStep("render");
       router.push(`/report/${gnBody.reportId}`);
     } catch (err) {
       setPhase("error");

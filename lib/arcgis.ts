@@ -91,6 +91,9 @@ export async function queryArcGIS(
     outFields: params.outFields ?? "*",
     returnGeometry: String(params.returnGeometry ?? false),
     outSR: "4326",
+    // 6 decimal places ≈ 0.1 m — full-precision coordinates double the
+    // payload of big polygons for zero visible benefit.
+    geometryPrecision: "6",
   });
   if (params.returnGeometry && params.maxAllowableOffset !== undefined) {
     // The offset is expressed in *output* SR units. We outSR=4326 so the
@@ -102,7 +105,12 @@ export async function queryArcGIS(
 
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Accept: "application/geo+json" } });
+    res = await fetch(url, {
+      headers: { Accept: "application/geo+json" },
+      // Government ArcGIS servers occasionally hang; cap the wait so one
+      // stuck layer can't stall the whole parallel overlay fan-out.
+      signal: AbortSignal.timeout(15_000),
+    });
   } catch (err) {
     throw new ArcGISError(
       `Network error querying ${endpoint}: ${(err as Error).message}`,

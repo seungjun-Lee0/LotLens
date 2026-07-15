@@ -1,4 +1,4 @@
-import {
+﻿import {
   CloudRain,
   Droplets,
   Flame,
@@ -17,12 +17,13 @@ import {
 
 import { SiteHeader } from "@/components/site/site-header";
 import { AddressForm } from "@/components/site/address-form";
+import { CtaStage } from "@/components/site/cta-stage";
 import { FaqScroller } from "@/components/site/faq-scroller";
 import { Reveal } from "@/components/site/reveal";
 import { SubscribeButton } from "@/components/site/billing-buttons";
 import { HeroShowcase, type HeroDemoData } from "@/components/site/hero-showcase";
 
-// Real report data for the hero's demo lot (Stafford, 10SP348436) — actual
+// Real report data for the hero's demo lot (Stafford, 10SP348436) ??actual
 // cadastre parcel + per-module council overlays, snapshotted by
 // `npx tsx scripts/generate-hero-demo.ts`. The aerial crops are derived from
 // the bboxes stored in the fixture so imagery and geometry always align.
@@ -30,7 +31,7 @@ import heroDemoJson from "@/lib/hero-demo-data.json";
 
 const heroDemo = heroDemoJson as unknown as HeroDemoData;
 
-// ── Landing module registry ───────────────────────────────────────────────
+// ?? Landing module registry ???????????????????????????????????????????????
 // `hex` mirrors the overlay colour the report map paints for that module.
 type LandingModule = {
   icon: typeof Waves;
@@ -135,23 +136,23 @@ const MODULES: LandingModule[] = [
 const FAQS = [
   {
     q: "Is this legal or planning advice?",
-    a: "No. LotLens aggregates public council & state data into plain English for your own research. It's not legal, financial or planning advice — always confirm details with a qualified professional, conveyancer or the relevant Council before you act.",
+    a: "No. LotLens aggregates public council & state data into plain English for your own research. It's not legal, financial or planning advice ??always confirm details with a qualified professional, conveyancer or the relevant Council before you act.",
   },
   {
     q: "How accurate is the data?",
-    a: "Every layer is queried live, straight from local council and Queensland Government sources at the moment you run the report — not a stale cached copy. Each finding cites its exact source layer.",
+    a: "Every layer is queried live, straight from local council and Queensland Government sources at the moment you run the report ??not a stale cached copy. Each finding cites its exact source layer.",
   },
   {
     q: "Which areas are covered?",
-    a: "Any Queensland address. Statewide layers (cadastre, bushfire, coastal hazards, heritage register, vegetation, koala habitat, acid sulfate soils, mining, school catchments) run everywhere. Detailed council overlays (flood risk bands, zoning, transport noise, landslide) are live for Brisbane, Gold Coast, Moreton Bay, Sunshine Coast and Redland — and the report tells you honestly when a council layer isn't integrated yet for other LGAs.",
+    a: "Any Queensland address. Statewide layers (cadastre, bushfire, coastal hazards, heritage register, vegetation, koala habitat, acid sulfate soils, mining, school catchments) run everywhere. Detailed council overlays (flood risk bands, zoning, transport noise, landslide) are live for Brisbane, Gold Coast, Moreton Bay, Sunshine Coast and Redland ??and the report tells you honestly when a council layer isn't integrated yet for other LGAs.",
   },
   {
     q: "Do I get a PDF I can share?",
-    a: "Yes — the full report includes a branded A4 fact pack with the maps, narrative and sources, ready to forward to your conveyancer or partner.",
+    a: "Yes ??the full report includes a branded A4 fact pack with the maps, narrative and sources, ready to forward to your conveyancer or partner.",
   },
   {
     q: "How long does it take?",
-    a: "Seconds. Enter an address and the report generates on the spot — no waiting on an email.",
+    a: "Seconds. Enter an address and the report generates on the spot ??no waiting on an email.",
   },
 ];
 
@@ -163,7 +164,7 @@ export default function Home() {
     <>
       <SiteHeader />
 
-      {/* ── HERO — blurred aerial full-bleed, sharp loupe on the right ── */}
+      {/* ?? HERO ??blurred aerial full-bleed, sharp loupe on the right ?? */}
       <section
         id="top"
         className="relative -mt-16 overflow-hidden pt-16 sm:-mt-[72px] sm:pt-[72px]"
@@ -195,7 +196,7 @@ export default function Home() {
             </h1>
 
             <p className="max-w-lg text-pretty text-[15px] leading-relaxed text-muted-foreground sm:text-[16.5px]">
-              Flood, bushfire, heritage, easements, zoning and more — every
+              Flood, bushfire, heritage, easements, zoning and more ??every
               council &amp; state layer for an address, on one map and explained
               in plain English. Before you sign.
             </p>
@@ -203,12 +204,12 @@ export default function Home() {
             <AddressForm
               presets={[
                 {
-                  label: "Property A · Chermside (clean)",
+                  label: "Property A 쨌 Chermside (clean)",
                   address: "Westfield Chermside, Chermside QLD 4032",
                   tint: "var(--apple-teal)",
                 },
                 {
-                  label: "Property B · Rocklea (flood)",
+                  label: "Property B 쨌 Rocklea (flood)",
                   address: "250 Sherwood Road, Rocklea QLD 4106",
                   tint: "var(--apple-orange)",
                 },
@@ -219,7 +220,7 @@ export default function Home() {
               <b className="font-medium text-foreground">
                 Flooding preview free
               </b>{" "}
-              · full report $19 during beta · no signup to preview
+              쨌 full report $19 during beta 쨌 no signup to preview
             </p>
           </div>
 
@@ -227,8 +228,8 @@ export default function Home() {
       </section>
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-16 px-4 pb-16 pt-14 sm:gap-24 sm:px-6 sm:pb-24 sm:pt-20">
-        {/* ── MODULES — map-tile cards: the layer IS the card ── */}
-        <section id="modules" className="flex flex-col gap-8">
+        {/* ?? MODULES ??map-tile cards: the layer IS the card ?? */}
+        <section id="modules" className="cv-auto flex flex-col gap-8">
           <div className="mx-auto max-w-xl text-center">
             <div className="text-[10.5px] font-medium uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
               What&rsquo;s checked
@@ -238,7 +239,7 @@ export default function Home() {
             </h2>
             <p className="mx-auto mt-3 max-w-md text-pretty text-[14px] leading-relaxed text-muted-foreground">
               Every tile is that overlay exactly as it renders on your
-              report&rsquo;s map — same colours, same amber lot outline.
+              report&rsquo;s map ??same colours, same amber lot outline.
             </p>
           </div>
 
@@ -246,7 +247,7 @@ export default function Home() {
             {MODULES.map((m, i) => (
               <Reveal key={m.name} className="card-reveal" delay={(i % 4) * 90}>
                 <div
-                  className="mod-card group relative h-full rounded-2xl border border-border/60 bg-card/70 p-5 backdrop-blur-sm"
+                  className="mod-card group relative h-full rounded-2xl border border-border/60 bg-card/70 p-5"
                   style={{ ["--c" as string]: m.hex }}
                 >
                   <div className="flex items-center justify-between">
@@ -264,7 +265,7 @@ export default function Home() {
                 </div>
               </Reveal>
             ))}
-            {/* filler card — rounds out the grid */}
+            {/* filler card ??rounds out the grid */}
             <Reveal className="card-reveal" delay={(MODULES.length % 4) * 90}>
               <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-border/70 p-4 text-center text-[12.5px] leading-snug text-muted-foreground">
                 + more layers added each sprint
@@ -273,8 +274,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ── PRICING ── */}
-        <section id="pricing" className="flex flex-col gap-6 sm:gap-8">
+        {/* ?? PRICING ?? */}
+        <section id="pricing" className="cv-auto flex flex-col gap-6 sm:gap-8">
           <div className="mx-auto max-w-xl text-center">
             <div className="text-[10.5px] font-medium uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
               Pricing
@@ -289,9 +290,9 @@ export default function Home() {
           </div>
 
           <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 md:grid-cols-3">
-            {/* Single report — beta price */}
+            {/* Single report ??beta price */}
             <Reveal className="rise-reveal">
-            <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7 backdrop-blur-sm">
+            <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7">
               <div className="flex items-baseline justify-between">
                 <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">
                   Single report
@@ -315,13 +316,13 @@ export default function Home() {
                 <span className="text-[13px] text-muted-foreground">AUD</span>
               </div>
               <p className="text-[12px] text-muted-foreground">
-                One-off · per address · $29 after beta
+                One-off 쨌 per address 쨌 $29 after beta
               </p>
               <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-muted-foreground">
-                <li>· All 15 modules for one address</li>
-                <li>· A4 PDF export, branded cover</li>
-                <li>· No subscription, no auto-renewal</li>
-                <li>· Flooding preview always free first</li>
+                <li>쨌 All 15 modules for one address</li>
+                <li>쨌 A4 PDF export, branded cover</li>
+                <li>쨌 No subscription, no auto-renewal</li>
+                <li>쨌 Flooding preview always free first</li>
               </ul>
               <a
                 href="#top"
@@ -334,7 +335,7 @@ export default function Home() {
 
             {/* Basic */}
             <Reveal className="rise-reveal" delay={120}>
-            <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7 backdrop-blur-sm">
+            <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7">
               <div className="flex items-baseline justify-between">
                 <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">
                   Basic
@@ -353,10 +354,10 @@ export default function Home() {
                 For serious house-hunting weeks
               </p>
               <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-muted-foreground">
-                <li>· 10 full reports per month</li>
-                <li>· Single user</li>
-                <li>· Renews monthly — no automatic top-ups</li>
-                <li>· Manage or cancel in one click</li>
+                <li>쨌 10 full reports per month</li>
+                <li>쨌 Single user</li>
+                <li>쨌 Renews monthly ??no automatic top-ups</li>
+                <li>쨌 Manage or cancel in one click</li>
               </ul>
               <div className="mt-auto">
                 <SubscribeButton plan="basic" label="Start Basic" variant="ghost" />
@@ -364,7 +365,7 @@ export default function Home() {
             </div>
             </Reveal>
 
-            {/* Pro — featured */}
+            {/* Pro ??featured */}
             <Reveal className="rise-reveal" delay={240}>
             <div
               className="relative flex h-full flex-col gap-4 rounded-3xl p-7 text-foreground"
@@ -396,13 +397,13 @@ export default function Home() {
                 </span>
               </div>
               <p className="text-[12px] text-muted-foreground">
-                Beta price · $99/month after beta
+                Beta price 쨌 $99/month after beta
               </p>
               <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-foreground/80">
-                <li>· 50 full reports per month</li>
-                <li>· Branded PDF reports</li>
-                <li>· Buyer&rsquo;s agents &amp; conveyancers</li>
-                <li>· Renews monthly — no automatic top-ups</li>
+                <li>쨌 50 full reports per month</li>
+                <li>쨌 Branded PDF reports</li>
+                <li>쨌 Buyer&rsquo;s agents &amp; conveyancers</li>
+                <li>쨌 Renews monthly ??no automatic top-ups</li>
               </ul>
               <div className="mt-auto">
                 <SubscribeButton plan="pro" label="Start Pro" />
@@ -412,8 +413,8 @@ export default function Home() {
           </div>
 
           <p className="text-center text-[12px] text-muted-foreground">
-            Monthly plans renew monthly and never top up without confirmation ·
-            Secure checkout via Stripe · Apple Pay &amp; cards accepted ·{" "}
+            Monthly plans renew monthly and never top up without confirmation 쨌
+            Secure checkout via Stripe 쨌 Apple Pay &amp; cards accepted 쨌{" "}
             <a
               href="mailto:hello@lotlens.au"
               className="underline underline-offset-2 hover:text-foreground"
@@ -424,8 +425,8 @@ export default function Home() {
           </p>
         </section>
 
-        {/* ── FAQ ── */}
-        <section id="faq" className="flex flex-col gap-6">
+        {/* ?? FAQ ?? */}
+        <section id="faq" className="cv-auto flex flex-col gap-6">
           <div className="mx-auto max-w-xl text-center">
             <div className="text-[10.5px] font-medium uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
               FAQ
@@ -437,11 +438,10 @@ export default function Home() {
           <FaqScroller items={FAQS} />
         </section>
 
-        {/* ── FINAL CTA — pinned grow-and-release: swells to near full page
-            while stuck, then settles and hands off to the sections below ── */}
-        <div className="cta-stage">
-          <div className="cta-pin">
-        <section className="cta-card glass relative overflow-hidden rounded-3xl px-6 py-12 text-center sm:px-10 sm:py-16">
+        {/* ?? FINAL CTA ??pinned focus stage: scrolling into the middle
+            triggers a smooth grow + page dim that spotlights the card ?? */}
+        <CtaStage>
+        <section className="cta-card glass overflow-hidden rounded-3xl px-6 py-12 text-center sm:px-10 sm:py-16">
           <div
             aria-hidden
             className="pointer-events-none absolute left-1/2 top-[-30%] h-[120%] w-[70%] -translate-x-1/2"
@@ -461,17 +461,16 @@ export default function Home() {
             Flooding preview is free. Ninety seconds now can save a very
             expensive surprise later.
           </p>
-          {/* the search itself — no detour back to the top */}
+          {/* the search itself ??no detour back to the top */}
           <div className="mx-auto mt-7 w-full max-w-xl text-left">
             <AddressForm />
           </div>
         </section>
-          </div>
-        </div>
+        </CtaStage>
 
-        {/* ── DISCLAIMER ── */}
-        <section id="disclaimer" className="mx-auto max-w-3xl">
-          <div className="rounded-3xl border border-border/60 bg-card/60 p-6 text-center text-[13px] leading-relaxed text-muted-foreground backdrop-blur-sm">
+        {/* ?? DISCLAIMER ?? */}
+        <section id="disclaimer" className="cv-auto mx-auto w-full max-w-3xl">
+          <div className="rounded-3xl border border-border/60 bg-card/60 p-6 text-center text-[13px] leading-relaxed text-muted-foreground">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-foreground/80">
               Disclaimer
             </div>
@@ -480,10 +479,10 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-border/40 bg-background/40 backdrop-blur-sm">
+      <footer className="border-t border-border/40 bg-background/40">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-6 text-center text-[11.5px] text-muted-foreground sm:flex-row sm:px-6 sm:text-left sm:text-[12px]">
-          <span>© LotLens — Queensland Due Diligence</span>
-          <span>Public data only · No valuation · No title search</span>
+          <span>짤 LotLens ??Queensland Due Diligence</span>
+          <span>Public data only 쨌 No valuation 쨌 No title search</span>
         </div>
       </footer>
     </>

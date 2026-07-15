@@ -30,6 +30,8 @@ export type SessionUser = {
   currentPeriodEnd: string | null;
   /** Report credits left this billing cycle (granted by the webhook). */
   credits: number;
+  /** False for Google-only accounts (they can add a password in /account). */
+  hasPassword: boolean;
 };
 
 type UserRow = {
@@ -41,6 +43,7 @@ type UserRow = {
   stripe_customer_id: string | null;
   current_period_end: string | null;
   credits: number;
+  has_password: boolean;
 };
 
 function secretKey(): Uint8Array {
@@ -102,6 +105,7 @@ function toSessionUser(row: UserRow): SessionUser {
     stripeCustomerId: row.stripe_customer_id,
     currentPeriodEnd: row.current_period_end,
     credits: row.credits ?? 0,
+    hasPassword: row.has_password,
   };
 }
 
@@ -117,7 +121,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const sql = getDb();
     const rows = (await sql`
       SELECT id, email, name, plan, subscription_status,
-             stripe_customer_id, current_period_end, credits
+             stripe_customer_id, current_period_end, credits,
+             (password_hash IS NOT NULL) AS has_password
       FROM users WHERE id = ${userId} LIMIT 1
     `) as UserRow[];
     if (rows.length === 0) return null;

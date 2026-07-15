@@ -115,6 +115,11 @@
   --apple-gray: #8e8e93;
   --selected-property: #ffcc00;
 
+  /* Hero background layer strength — the near-white light aerial swallows
+     faint overlays, so light mode runs them noticeably stronger. */
+  --hero-layer: 0.68;
+  --hero-layer-pinned: 0.9;
+
   /* Glassmorphism — tuned for subtle use on light surfaces */
   --glass-bg: rgba(255, 255, 255, 0.65);
   --glass-bg-strong: rgba(255, 255, 255, 0.92);
@@ -173,6 +178,9 @@
   --apple-gray: #98989d;
   --selected-property: #ffd60a;
 
+  --hero-layer: 0.4;
+  --hero-layer-pinned: 0.65;
+
   --glass-bg: rgba(20, 22, 30, 0.55);
   --glass-bg-strong: rgba(20, 22, 30, 0.92);
   --glass-border: rgba(255, 255, 255, 0.08);
@@ -214,12 +222,8 @@
   .glass-strong {
     background-color: var(--glass-bg-strong);
     border: 1px solid var(--glass-border);
-    /* Kept modest: backdrop-filter re-samples what's behind it on EVERY
-       scrolled frame, and the sticky header sits over the busy hero —
-       blur(40px) here was the main scroll-jank source. Cost scales with
-       radius; 14px reads the same at 92% background opacity. */
-    backdrop-filter: saturate(160%) blur(14px);
-    -webkit-backdrop-filter: saturate(160%) blur(14px);
+    backdrop-filter: saturate(200%) blur(40px);
+    -webkit-backdrop-filter: saturate(200%) blur(40px);
     box-shadow: var(--glass-shadow);
   }
   /* Colored glass tint — pass --tint as the base color */
@@ -232,6 +236,13 @@
   }
   .dark .glass-tint {
     color: color-mix(in oklab, var(--tint, var(--apple-blue)) 80%, var(--foreground));
+  }
+
+  /* Below-the-fold sections skip rendering work until they approach the
+     viewport — pure perf, zero visual difference once on screen. */
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 900px;
   }
 
   /* Sheen used on hero gradient text */
@@ -311,10 +322,7 @@
 
   /* Loupe overlay layers fade in sync with each chip group (opacity only —
      the transform-based chip pop doesn't suit SVG <g> elements). */
-  /* will-change promotes each fading layer group to its own compositor
-     layer — the big SVG vector sets get painted ONCE and the 24 s cycle
-     animates opacity on the GPU instead of repainting paths every tick. */
-  .lens-fade1, .lens-fade2, .lens-fade3 { opacity: 0; will-change: opacity; }
+  .lens-fade1, .lens-fade2, .lens-fade3 { opacity: 0; }
   .lens-fade1 { animation: lens-fade1 24s infinite; }
   .lens-fade2 { animation: lens-fade2 24s infinite; }
   .lens-fade3 { animation: lens-fade3 24s infinite; }
@@ -364,70 +372,81 @@
     to   { opacity: 1; transform: none; }
   }
 
-  /* Final CTA — a pinned grow-and-release. The tall .cta-stage provides
-     scroll distance; the card sticks near the viewport centre, stays at
-     normal size while entering, swells to its viewport-capped peak, holds,
-     then settles back to 1× and unpins so the content below takes over. */
-  @supports (animation-timeline: view()) {
-    .cta-stage {
-      height: 200vh;
-      view-timeline-name: --cta-stage;
-    }
-    .cta-pin {
-      /* Full-viewport sticky frame with the card dead-centred, above the
-         sticky site header (z-30) so the swollen card is never covered. */
-      position: sticky;
-      top: 0;
-      z-index: 40;
-      display: flex;
-      align-items: center;
-      height: 100vh;
-    }
-    .cta-card {
-      /* Growth is LAYOUT-based (width + min-height re-laid-out every frame
-         at native resolution — no blurry upscaled raster) plus a whisper
-         of scale for the zoom feel. Peak width is capped per viewport so
-         the card never outgrows the screen; peak height fills most of it. */
-      --cta-peak: 1.06;
-      --cta-peak-h: 72vh;
-      width: 100%;
-      position: relative;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      animation: cta-grow linear both;
-      animation-timeline: --cta-stage;
-      animation-range: cover 0% cover 100%;
-      transform-origin: 50% 50%;
-    }
-    @media (min-width: 1280px) { .cta-card { --cta-peak: 1.13; } }
-    @media (min-width: 1440px) { .cta-card { --cta-peak: 1.26; } }
-    @media (min-width: 1680px) { .cta-card { --cta-peak: 1.46; } }
-    /* Settles back to exactly 1× by 84% — while still on screen — instead
-       of only reaching it as the stage exits. */
-    @keyframes cta-grow {
-      0%, 22% {
-        width: 100%;
-        min-height: 0vh;
-        transform: translateX(-50%) scale(1);
-      }
-      46%, 68% {
-        width: calc(var(--cta-peak, 1.2) * 100%);
-        min-height: var(--cta-peak-h, 72vh);
-        transform: translateX(-50%) scale(1.06);
-      }
-      84%, 100% {
-        width: 100%;
-        min-height: 0vh;
-        transform: translateX(-50%) scale(1);
-      }
-    }
-    @media (max-width: 767.98px) {
-      .cta-stage { height: 145vh; }
-      .cta-card { --cta-peak: 1.03; --cta-peak-h: 46vh; }
-    }
+  /* Final CTA — a pinned focus stage. The tall .cta-stage provides scroll
+     distance; reaching its middle TRIGGERS a smooth time-based grow (not
+     scroll-scrubbed, so wheel notches never show) plus a page dim that
+     spotlights the card. Leaving the zone releases both. The JS toggle
+     lives in components/site/cta-stage.tsx. */
+  .cta-stage {
+    height: 200vh;
+  }
+  .cta-pin {
+    /* Full-viewport sticky frame with the card dead-centred, above the
+       sticky site header (z-30) so the swollen card is never covered. */
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    height: 100vh;
+  }
+  .cta-dim {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 10, 16, 0.45);
+    opacity: 0;
+    transition: opacity 0.7s ease;
+    pointer-events: none;
+  }
+  .cta-card {
+    /* Growth is LAYOUT-based (width + min-height re-laid-out at native
+       resolution — no blurry upscaled raster) plus a whisper of scale for
+       the zoom feel. Peak width × zoom is kept under ~97% of each viewport
+       so the enlarged card never gets clipped at the edges. */
+    --cta-peak: 1;
+    --cta-zoom: 1.05;
+    --cta-peak-h: 72vh;
+    width: 100%;
+    min-height: 0;
+    position: relative;
+    z-index: 1;
+    left: 50%;
+    transform: translateX(-50%) scale(1);
+    transform-origin: 50% 50%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition:
+      width 0.85s cubic-bezier(0.22, 0.8, 0.25, 1),
+      min-height 0.85s cubic-bezier(0.22, 0.8, 0.25, 1),
+      transform 0.85s cubic-bezier(0.22, 0.8, 0.25, 1),
+      background-color 0.85s ease;
+  }
+  .cta-stage.is-focus .cta-card {
+    width: calc(var(--cta-peak) * 100%);
+    min-height: var(--cta-peak-h);
+    transform: translateX(-50%) scale(var(--cta-zoom));
+    /* Fully opaque while focused — the translucent glass otherwise lets
+       the header (and anything else underneath) ghost through the
+       enlarged card. */
+    background-color: var(--card);
+  }
+  .cta-stage.is-focus .cta-dim {
+    opacity: 1;
+  }
+  @media (min-width: 1280px) { .cta-card { --cta-peak: 1.06; --cta-zoom: 1.08; } }
+  @media (min-width: 1440px) { .cta-card { --cta-peak: 1.14; --cta-zoom: 1.1; } }
+  @media (min-width: 1680px) { .cta-card { --cta-peak: 1.28; --cta-zoom: 1.12; } }
+  @media (max-width: 767.98px) {
+    .cta-stage { height: 145vh; }
+    .cta-card { --cta-peak: 1; --cta-zoom: 1.03; --cta-peak-h: 46vh; }
+  }
+  /* Without JS the focus state can never trigger — skip the scroll-jack
+     so the CTA reads as a normal section. */
+  @media (scripting: none) {
+    .cta-stage { height: auto; }
+    .cta-pin { position: static; display: block; height: auto; }
+    .cta-dim { display: none; }
   }
 
   /* Smooth <details> open/close (Chromium's interpolate-size; a no-op
@@ -444,9 +463,11 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .card-reveal, .rise-reveal, .cta-card { animation: none; }
+    .card-reveal, .rise-reveal { animation: none; }
+    .cta-card { transition: none; }
     .cta-stage { height: auto; }
     .cta-pin { position: static; display: block; height: auto; }
+    .cta-dim { display: none; }
     .faq-item::details-content { transition: none; }
   }
 

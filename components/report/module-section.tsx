@@ -1,7 +1,6 @@
 import { Fragment } from "react";
 import { Check, TriangleAlert } from "lucide-react";
 
-import { RiskBadge } from "@/components/report/risk-badge";
 import { ModuleMap } from "@/components/report/module-map";
 import type { ModuleNarrative } from "@/lib/anthropic";
 import { MODULE_META } from "@/lib/module-meta";
@@ -309,17 +308,30 @@ function ModuleFacts({
   }
 }
 
-// ── Status pill (Develo "CONSIDERATIONS IDENTIFIED" / "NO CONSIDERATIONS") ─
+// ── Status pill — one chip carrying both the finding AND its severity
+// (previously a separate risk badge duplicated this and both read
+// "clear/none" together on empty modules). ──────────────────────────────
+
+const RISK_LABEL: Record<RiskLevel, string> = {
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+  very_low: "Very low",
+  none: "",
+};
 
 function StatusPill({
   hasConsideration,
+  risk,
   tint,
 }: {
   hasConsideration: boolean;
+  risk: RiskLevel;
   tint: string;
 }) {
   const color = hasConsideration ? tint : "var(--apple-green)";
   const Icon = hasConsideration ? TriangleAlert : Check;
+  const riskLabel = hasConsideration ? RISK_LABEL[risk] : "";
   return (
     <div
       className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
@@ -334,7 +346,9 @@ function StatusPill({
       >
         <Icon className="size-2.5" strokeWidth={3.5} />
       </span>
-      {hasConsideration ? "Considerations identified" : "No considerations identified"}
+      {hasConsideration
+        ? `Considerations${riskLabel ? ` · ${riskLabel}` : ""}`
+        : "No considerations identified"}
     </div>
   );
 }
@@ -395,6 +409,9 @@ export function ModuleSection({
   const mapOverlays = extractOverlays(row.module, row.raw);
   const applicableOverlays = extractOverlays(row.module, row.raw, { scope: "property" });
   const legendItems = splitLegendItems(mapOverlays, applicableOverlays);
+  // ModuleFacts returns null for modules with nothing to tabulate — resolve
+  // it first so we don't render an empty facts box around nothing.
+  const factsContent = raw ? ModuleFacts({ module: row.module, raw }) : null;
 
   return (
     <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(15,23,42,0.12)]">
@@ -438,11 +455,11 @@ export function ModuleSection({
       {/* Status + source + AI summary */}
       <div className="flex flex-col gap-3 px-5 pt-5 sm:gap-4 sm:px-10 sm:pt-6">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-4">
-          <StatusPill hasConsideration={row.hasConsideration} tint={meta.tint} />
-          <RiskBadge level={risk} size="sm" />
-          <span className="hidden text-[11.5px] uppercase tracking-[0.14em] text-muted-foreground sm:inline">
-            Sources: {meta.sourceLabel}
-          </span>
+          <StatusPill
+            hasConsideration={row.hasConsideration}
+            risk={risk}
+            tint={meta.tint}
+          />
         </div>
 
         {narrative?.summary && (
@@ -490,10 +507,8 @@ export function ModuleSection({
             )}
           </div>
 
-          {(raw && Object.keys(raw).length > 0) && (
-            <div className="rounded-2xl bg-foreground/[0.04] p-4">
-              <ModuleFacts module={row.module} raw={raw} />
-            </div>
+          {factsContent && (
+            <div className="rounded-2xl bg-foreground/[0.04] p-4">{factsContent}</div>
           )}
 
           <p className="text-[12px] leading-relaxed text-muted-foreground text-pretty">
@@ -576,16 +591,9 @@ export function ModuleSection({
               <ul className="flex min-w-0 flex-col gap-1.5 text-[12.5px]">
                 {Array.from(new Set(narrative.sources)).map((url) => (
                   <li key={url} className="min-w-0">
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-foreground/80 hover:text-foreground"
-                    >
-                      <span className="block truncate" style={{ color: "var(--apple-blue)" }}>
-                        {prettyUrl(url)}
-                      </span>
-                    </a>
+                    <span className="block truncate text-muted-foreground">
+                      {prettyUrl(url)}
+                    </span>
                   </li>
                 ))}
               </ul>

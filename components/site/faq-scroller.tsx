@@ -15,15 +15,18 @@ export function FaqScroller({ items }: { items: FaqItem[] }) {
   const [openIdx, setOpenIdx] = useState(0);
 
   useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let raf = 0;
+    let listening = false;
     const onScroll = () => {
       if (raf || manualRef.current) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
-        const el = ref.current;
-        if (!el || manualRef.current) return;
-        const rect = el.getBoundingClientRect();
+        const node = ref.current;
+        if (!node || manualRef.current) return;
+        const rect = node.getBoundingClientRect();
         const vh = window.innerHeight;
         // 0 → section top reaches 80% of the viewport; 1 → section has
         // scrolled its own height plus a bit past that line.
@@ -32,10 +35,24 @@ export function FaqScroller({ items }: { items: FaqItem[] }) {
         setOpenIdx(Math.min(items.length - 1, Math.floor(clamped * items.length)));
       });
     };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
+    // Only pay for the scroll handler while the FAQ is near the viewport.
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !listening) {
+          listening = true;
+          window.addEventListener("scroll", onScroll, { passive: true });
+          onScroll();
+        } else if (!entry.isIntersecting && listening) {
+          listening = false;
+          window.removeEventListener("scroll", onScroll);
+        }
+      },
+      { rootMargin: "60% 0px 60% 0px" },
+    );
+    io.observe(el);
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      io.disconnect();
+      if (listening) window.removeEventListener("scroll", onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
   }, [items.length]);

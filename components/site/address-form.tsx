@@ -202,7 +202,7 @@ export function AddressForm({
           aria-autocomplete="list"
           aria-expanded={showDropdown}
           className="h-11 flex-1 min-w-0 border-0 bg-transparent px-2 text-[14.5px] shadow-none focus-visible:ring-0 dark:bg-transparent sm:text-[15px]"
-          aria-label="Brisbane LGA address"
+          aria-label="Queensland address"
         />
         <Button
           type="submit"
@@ -240,7 +240,7 @@ export function AddressForm({
           {suggestLoading && suggestions.length === 0 ? (
             <div className="flex items-center gap-2 px-3 py-2 text-[13px] text-muted-foreground">
               <Loader2 className="size-3.5 animate-spin" />
-              Searching Brisbane addresses…
+              Searching Queensland addresses…
             </div>
           ) : (
             <ul className="flex flex-col">

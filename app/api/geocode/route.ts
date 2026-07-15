@@ -1,9 +1,10 @@
 // POST /api/geocode
 // Body: { address: string }
-// Geocodes a Brisbane LGA address. Google Maps Geocoding (best AU
+// Geocodes a Queensland address. Google Maps Geocoding (best AU
 // unit / apartment resolution) when GOOGLE_GEOCODING_API_KEY is set,
-// Nominatim fallback otherwise. Reuses an existing addresses row when
-// the resolved display name matches; otherwise inserts a new row.
+// then the QLD Government composite locator, then Nominatim. Reuses an
+// existing addresses row when the resolved display name matches;
+// otherwise inserts a new row.
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          "Address not found inside Brisbane LGA. Try a more specific Brisbane street address (e.g. \"12 Oxley Rd, Graceville\").",
+          "Address not found in Queensland. Try a more specific street address (e.g. \"12 Oxley Rd, Graceville QLD\").",
       },
       { status: 404 },
     );

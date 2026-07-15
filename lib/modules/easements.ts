@@ -18,6 +18,7 @@
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
 import type { RiskLevel } from "@/lib/db";
+import type { Region } from "@/lib/region";
 
 const HIGH_VOLTAGE =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Regional_infrastructure_corridors_and_substations_overlay_High_voltage_easements/FeatureServer/0/query";
@@ -86,16 +87,22 @@ function numOrNull(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
+
 export async function fetchEasementsData(
   lat: number,
   lng: number,
+  region?: Region,
 ): Promise<EasementResult> {
+  // The DCDB easement-parcel layer is statewide; the HV powerline overlay
+  // is a BCC City Plan layer, so only query it inside Brisbane LGA.
+  const isBrisbane = region?.isBrisbane ?? true;
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   const hvFields = "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION";
   const dcdbFields = "lotplan,feat_name,alias_name,parcel_typ,lot_area";
 
   const [hvHit, hvCtx, dcdbHit, dcdbCtx] = await Promise.all([
-    queryArcGIS(HIGH_VOLTAGE, {
+    !isBrisbane ? EMPTY_FC : queryArcGIS(HIGH_VOLTAGE, {
       geometry: point,
       geometryType: "esriGeometryPoint",
       inSR: 4326,
@@ -103,7 +110,7 @@ export async function fetchEasementsData(
       returnGeometry: false,
       bufferDegrees: 0.00005,
     }),
-    queryArcGIS(HIGH_VOLTAGE, {
+    !isBrisbane ? EMPTY_FC : queryArcGIS(HIGH_VOLTAGE, {
       geometry: point,
       geometryType: "esriGeometryPoint",
       inSR: 4326,
@@ -166,15 +173,19 @@ export async function fetchEasementsData(
     hasConsideration: hit,
     sources: [
       {
-        name: "BCC City Plan 2014 — High voltage easements overlay",
-        url: BCC_EASEMENTS_DOC,
-        layer: HIGH_VOLTAGE,
-      },
-      {
         name: "Queensland DCDB — Easement parcels (QSpatial)",
         url: QSPATIAL_DOC,
         layer: QSPATIAL_EASEMENTS,
       },
+      ...(isBrisbane
+        ? [
+            {
+              name: "BCC City Plan 2014 — High voltage easements overlay",
+              url: BCC_EASEMENTS_DOC,
+              layer: HIGH_VOLTAGE,
+            },
+          ]
+        : []),
     ],
     raw: hvHit,
     context: hvCtx,

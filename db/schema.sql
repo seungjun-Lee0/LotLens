@@ -68,6 +68,10 @@ create table if not exists users (
 alter table reports add column if not exists user_id uuid references users(id) on delete set null;
 create index if not exists reports_user_id_idx on reports(user_id);
 
+-- Credit balance — granted on subscription activation/renewal (basic 10,
+-- pro 50 per cycle), decremented once per report unlock.
+alter table users add column if not exists credits int not null default 0;
+
 -- One row per report a subscriber unlocked against their monthly quota.
 create table if not exists report_usage (
   id         uuid primary key default gen_random_uuid(),

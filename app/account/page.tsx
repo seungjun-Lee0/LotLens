@@ -9,7 +9,6 @@ import {
   PLAN_QUOTAS,
   getSessionUser,
   isActiveSubscriber,
-  usageThisMonth,
 } from "@/lib/auth";
 import { SUBSCRIPTION_PLANS } from "@/lib/stripe";
 
@@ -48,7 +47,7 @@ export default async function AccountPage({
   const quota = subscriber
     ? PLAN_QUOTAS[user.plan as keyof typeof PLAN_QUOTAS]
     : 0;
-  const used = subscriber ? await usageThisMonth(user.id) : 0;
+  const credits = subscriber ? user.credits : 0;
   const renews =
     subscriber && user.currentPeriodEnd
       ? new Date(user.currentPeriodEnd).toLocaleDateString("en-AU", {
@@ -113,24 +112,40 @@ export default async function AccountPage({
           {subscriber && (
             <div className="mt-5">
               <div className="flex items-baseline justify-between text-[13px]">
-                <span className="text-muted-foreground">Reports this month</span>
+                <span className="text-muted-foreground">
+                  Report credits left
+                </span>
                 <span className="font-medium">
-                  {used} / {quota}
+                  {credits} / {quota}
                 </span>
               </div>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-foreground/10">
                 <div
                   className="h-full rounded-full"
                   style={{
-                    width: `${Math.min(100, (used / quota) * 100)}%`,
+                    width: `${Math.min(100, (credits / quota) * 100)}%`,
                     background:
                       "linear-gradient(90deg, var(--apple-blue), var(--apple-purple))",
                   }}
                 />
               </div>
               <p className="mt-2 text-[12px] text-muted-foreground">
-                Plans renew monthly — nothing tops up without going through
-                checkout again.
+                {credits === 0 ? (
+                  <>
+                    <b className="font-semibold text-foreground">
+                      No credits left this cycle
+                    </b>{" "}
+                    — credits reset when your plan renews
+                    {renews ? ` on ${renews}` : ""}. Single reports at $19 still
+                    work meanwhile.
+                  </>
+                ) : (
+                  <>
+                    1 credit unlocks 1 full report. Credits reset to {quota} when
+                    your plan renews — they don&rsquo;t accumulate or top up
+                    mid-cycle.
+                  </>
+                )}
               </p>
             </div>
           )}

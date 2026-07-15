@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Check, TriangleAlert } from "lucide-react";
 
 import { RiskBadge } from "@/components/report/risk-badge";
@@ -20,6 +21,17 @@ function ModuleFacts({
   raw: Record<string, unknown> | undefined;
 }) {
   if (!raw) return null;
+  // Council-overlay modules outside adapted LGAs mark themselves
+  // unavailable — surface the note instead of module facts.
+  if (raw.available === false) {
+    return (
+      <p className="rounded-xl border border-dashed border-border/70 bg-muted/40 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
+        {typeof raw.availabilityNote === "string"
+          ? raw.availabilityNote
+          : "This overlay has not been integrated for this council area yet."}
+      </p>
+    );
+  }
   switch (module) {
     case "flooding": {
       const ft = raw.floodType as string | null;
@@ -210,6 +222,67 @@ function ModuleFacts({
               </dd>
             </>
           )}
+        </dl>
+      );
+    }
+    case "environment": {
+      const cat = raw.category as string | null;
+      if (!cat) return null;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">Habitat</dt>
+          <dd className="font-medium">{cat}</dd>
+        </dl>
+      );
+    }
+    case "steep_land": {
+      const cat = raw.category as string | null;
+      if (!cat) return null;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">Overlay</dt>
+          <dd className="font-medium">{cat}</dd>
+        </dl>
+      );
+    }
+    case "acid_sulfate": {
+      const code = raw.mapCode as string | null;
+      const meaning = raw.meaning as string | null;
+      const scale = raw.scale as string | null;
+      if (!code && !meaning) return null;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">Classification</dt>
+          <dd className="font-medium">{meaning ?? "Mapped acid sulfate soils"}</dd>
+          {code && (
+            <>
+              <dt className="text-muted-foreground">Map code</dt>
+              <dd className="font-mono text-[11px]">{code}{scale ? ` · ${scale}` : ""}</dd>
+            </>
+          )}
+        </dl>
+      );
+    }
+    case "mining": {
+      const cat = raw.category as string | null;
+      const tenements = Array.isArray(raw.tenements)
+        ? (raw.tenements as Array<{ type?: string | null; status?: string | null; owner?: string | null }>)
+        : [];
+      if (!cat) return null;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">Finding</dt>
+          <dd className="font-medium">{cat}</dd>
+          {tenements.slice(0, 3).map((t, i) => (
+            <Fragment key={i}>
+              <dt className="text-muted-foreground">Tenure {i + 1}</dt>
+              <dd className="font-medium">
+                {t.type ?? "Resource authority"}
+                {t.status ? ` · ${t.status}` : ""}
+                {t.owner ? ` · ${t.owner}` : ""}
+              </dd>
+            </Fragment>
+          ))}
         </dl>
       );
     }

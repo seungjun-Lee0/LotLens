@@ -86,6 +86,34 @@ export const DEVELO_HEX = {
   zoneResidential: "#facc15",
   zoneOpenSpace: "#16a34a",
   zoneOther:    "#6366f1",
+
+  // Coastal erosion prone area (paired with the storm-tide cyan family)
+  coastalErosion: "#d97706",
+
+  // Regulated vegetation (statewide RVM categories)
+  rvmA: "#15803d",
+  rvmB: "#16a34a",
+  rvmC: "#84cc16",
+  rvmR: "#0d9488",
+
+  // Environment — koala / wildlife habitat
+  koalaCore:     "#16a34a",
+  koalaLocal:    "#4ade80",
+  koalaPriority: "#a3e635",
+  wildlifeHabitat: "#f97316",
+
+  // Acid sulfate soils
+  assShallow: "#b45309",
+  assMapped:  "#eab308",
+
+  // Mining & resources
+  tenement:      "#a855f7",
+  kraResource:   "#dc2626",
+  kraSeparation: "#f59e0b",
+
+  // Steep land / landslide
+  steepHigh: "#9a3412",
+  steep:     "#f59e0b",
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -118,11 +146,26 @@ function pushFC(
 // ── Per-module classifiers ──────────────────────────────────────────────
 
 function floodingColor(props: Record<string, unknown>) {
-  const r = String(props.FLOOD_RISK ?? "").toLowerCase();
+  // BCC uses FLOOD_RISK; council adapters use OVL2_DESC / LABEL /
+  // Flood_Risk — accept all and keyword-match.
+  const label = String(
+    props.FLOOD_RISK ?? props.OVL2_DESC ?? props.LABEL ?? props.Flood_Risk ?? props.CLASS ?? "",
+  );
+  const r = label.toLowerCase();
   if (r === "high")     return { fillColor: DEVELO_HEX.floodHigh,    legendLabel: "High possibility (5.0% AEP)" };
   if (r === "medium")   return { fillColor: DEVELO_HEX.floodMedium,  legendLabel: "Moderate possibility (1.0% AEP)" };
   if (r === "low")      return { fillColor: DEVELO_HEX.floodLow,     legendLabel: "Low possibility (0.2% AEP)" };
   if (r === "very low") return { fillColor: DEVELO_HEX.floodVeryLow, legendLabel: "Very low (0.05% AEP)" };
+  if (r.includes("extreme") || r.includes("very high") || r.includes("high"))
+    return { fillColor: DEVELO_HEX.floodHigh, legendLabel: label };
+  if (r.includes("moderate") || r.includes("medium"))
+    return { fillColor: DEVELO_HEX.floodMedium, legendLabel: label };
+  if (r.includes("very low"))
+    return { fillColor: DEVELO_HEX.floodVeryLow, legendLabel: label };
+  if (r.includes("low"))
+    return { fillColor: DEVELO_HEX.floodLow, legendLabel: label };
+  if (label)
+    return { fillColor: DEVELO_HEX.floodMedium, legendLabel: label };
   return { fillColor: "#94a3b8", legendLabel: "Unclassified" };
 }
 
@@ -145,12 +188,17 @@ function stormTideColor(props: Record<string, unknown>) {
 }
 
 function bushfireColor(props: Record<string, unknown>) {
-  const d = String(props.OVL2_DESC ?? "").toLowerCase();
-  if (d.includes("very high"))        return { fillColor: DEVELO_HEX.fireVeryHigh, legendLabel: "Very high potential" };
+  // Statewide BPA uses `class`; the old BCC overlay used OVL2_DESC —
+  // accept both so historical council_data rows still paint.
+  const label = String(props.class ?? props.OVL2_DESC ?? "");
+  const d = label.toLowerCase();
+  if (d.includes("very high"))        return { fillColor: DEVELO_HEX.fireVeryHigh, legendLabel: "Very high potential intensity" };
   if (d.includes("high hazard area")) return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "High hazard area" };
-  if (d.includes("high hazard"))      return { fillColor: DEVELO_HEX.fireBuffer,   legendLabel: "High hazard buffer" };
-  if (d.includes("medium"))           return { fillColor: DEVELO_HEX.fireMedium,   legendLabel: "Medium hazard area" };
-  return { fillColor: "#94a3b8", legendLabel: String(props.OVL2_DESC ?? "Hazard area") };
+  if (d.includes("high"))             return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "High potential intensity" };
+  if (d.includes("medium"))           return { fillColor: DEVELO_HEX.fireMedium,   legendLabel: "Medium potential intensity" };
+  if (d.includes("buffer") || d.includes("impact"))
+                                      return { fillColor: DEVELO_HEX.fireBuffer,   legendLabel: "Potential impact buffer" };
+  return { fillColor: "#94a3b8", legendLabel: label || "Hazard area" };
 }
 
 function vegetationColor(props: Record<string, unknown>) {
@@ -175,27 +223,84 @@ function floodPlanningColor(props: Record<string, unknown>) {
 }
 
 function noiseColor(props: Record<string, unknown>) {
-  const d = String(props.OVL2_DESC ?? "");
+  const d = String(props.OVL2_DESC ?? props.LABEL ?? props.CLASS ?? "");
   const isAnef = /anef/i.test(d);
-  const n = parseInt(d.replace(/\D/g, ""), 10);
   if (isAnef) {
+    const n = parseInt(d.replace(/\D/g, ""), 10);
     if (n >= 30) return { fillColor: DEVELO_HEX.fireVeryHigh, legendLabel: "Aircraft 30+ ANEF" };
     if (n >= 25) return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "Aircraft 25-30 ANEF" };
     if (n >= 20) return { fillColor: DEVELO_HEX.fireBuffer,   legendLabel: "Aircraft 20-25 ANEF" };
     return { fillColor: DEVELO_HEX.fireMedium, legendLabel: d };
   }
+  // QDC MP4.4 "noise category N" — HIGHER = louder (opposite of the BCC
+  // legacy corridor numbering below).
+  const qdc = /categor(?:y|ies)\s*(\d)/i.exec(d);
+  if (qdc) {
+    const n = Number(qdc[1]);
+    if (n >= 3) return { fillColor: DEVELO_HEX.fireHigh,   legendLabel: "Noise category 3-4 (loudest)" };
+    if (n === 2) return { fillColor: DEVELO_HEX.fireBuffer, legendLabel: "Noise category 2" };
+    return { fillColor: DEVELO_HEX.fireMedium, legendLabel: "Noise category 0-1" };
+  }
+  const corridor = /corridor\s*(\d)/i.exec(d);
+  const n = corridor ? Number(corridor[1]) : NaN;
   if (n === 1) return { fillColor: DEVELO_HEX.fireHigh,    legendLabel: "Transport corridor 1 - loudest" };
   if (n === 2) return { fillColor: DEVELO_HEX.fireBuffer,  legendLabel: "Transport corridor 2" };
-  if (n === 3 || n >= 4) return { fillColor: DEVELO_HEX.fireMedium, legendLabel: "Transport corridor 3-4" };
+  if (n >= 3) return { fillColor: DEVELO_HEX.fireMedium, legendLabel: "Transport corridor 3-4" };
   return { fillColor: "#94a3b8", legendLabel: d || "Noise corridor" };
 }
 
+// Catchments are suburb-scale polygons stacked per year level — a filled
+// wash drowns the whole map in green. The information is the BOUNDARY, so
+// paint outlines only (fillOpacity 0).
 function schoolsColor(props: Record<string, unknown>) {
   const t = String(props.CatchmentType ?? "").toLowerCase();
-  if (t.includes("primary")) return { fillColor: DEVELO_HEX.vegBiodiversity, legendLabel: "Primary catchment" };
+  if (t.includes("primary"))
+    return { fillColor: DEVELO_HEX.vegBiodiversity, legendLabel: "Primary catchment", fillOpacity: 0 };
   // Treat any secondary type (Junior/Senior Secondary) as one band.
-  if (t.includes("secondary")) return { fillColor: DEVELO_HEX.vegCorridor, legendLabel: "Secondary catchment" };
-  return { fillColor: "#94a3b8", legendLabel: t || "School catchment" };
+  if (t.includes("secondary"))
+    return { fillColor: DEVELO_HEX.vegCorridor, legendLabel: "Secondary catchment", fillOpacity: 0 };
+  return { fillColor: "#94a3b8", legendLabel: t || "School catchment", fillOpacity: 0 };
+}
+
+function rvmColor(props: Record<string, unknown>): Classified {
+  const c = String(props.rvm_cat ?? "").toUpperCase();
+  if (c === "A") return { fillColor: DEVELO_HEX.rvmA, legendLabel: "RVM Category A" };
+  if (c === "B") return { fillColor: DEVELO_HEX.rvmB, legendLabel: "RVM Category B (remnant)" };
+  if (c === "C") return { fillColor: DEVELO_HEX.rvmC, legendLabel: "RVM Category C (regrowth)" };
+  if (c === "R") return { fillColor: DEVELO_HEX.rvmR, legendLabel: "RVM Category R (riverine)" };
+  // Category X / water are exempt — paint nothing visible.
+  return { fillColor: "#94a3b8", legendLabel: "Exempt (Category X)", fillOpacity: 0 };
+}
+
+function assColor(props: Record<string, unknown>): Classified {
+  const code = String(props.map_code ?? "");
+  const meaning = String(props.map_code_meaning ?? "");
+  const shallow = /s[0-2]/i.test(code) || /sulfid/i.test(meaning);
+  return shallow
+    ? { fillColor: DEVELO_HEX.assShallow, legendLabel: "Acid sulfate soils (shallow sulfidic)" }
+    : { fillColor: DEVELO_HEX.assMapped, legendLabel: "Acid sulfate soils (mapped)", fillOpacity: 0.25 };
+}
+
+function steepColor(props: Record<string, unknown>): Classified {
+  const label = String(
+    props.OVL2_DESC ?? props.LABEL ?? props.CLASS ?? props.Class ?? "Landslide / steep land",
+  );
+  const s = label.toLowerCase();
+  const high = s.includes("high") || s.includes("landslide");
+  return {
+    fillColor: high ? DEVELO_HEX.steepHigh : DEVELO_HEX.steep,
+    legendLabel: label,
+  };
+}
+
+function tenementColor(props: Record<string, unknown>): Classified {
+  const status = String(props.tenstatus ?? "").toLowerCase();
+  const type = String(props.tentype ?? "Resource authority");
+  return {
+    fillColor: DEVELO_HEX.tenement,
+    legendLabel: `${type}${status ? ` (${status})` : ""}`,
+    fillOpacity: status.includes("granted") ? 0.25 : 0.12,
+  };
 }
 
 // Zone polygons are dissolved by zone-precinct — a single feature spans a
@@ -205,23 +310,40 @@ function schoolsColor(props: Record<string, unknown>) {
 const ZONE_FILL_OPACITY = 0.18;
 
 function zoningColor(props: Record<string, unknown>): Classified {
-  const f = String(props.LVL1_ZONE ?? "").toLowerCase();
+  // SEQ Regional Plan land use category (non-Brisbane baseline).
+  if (typeof props.rluc2023 === "string" && props.rluc2023) {
+    const r = props.rluc2023.toLowerCase();
+    const o = ZONE_FILL_OPACITY;
+    if (r.includes("urban"))
+      return { fillColor: DEVELO_HEX.zoneResidential, legendLabel: "Urban Footprint (SEQ Regional Plan)", fillOpacity: o };
+    if (r.includes("rural living"))
+      return { fillColor: DEVELO_HEX.zoneLowMediumResidential, legendLabel: "Rural Living Area (SEQ Regional Plan)", fillOpacity: o };
+    return { fillColor: DEVELO_HEX.zoneOpenSpace, legendLabel: props.rluc2023, fillOpacity: o };
+  }
+  // BCC fields first; council adapter fields (GC ZONE/LVL1_ZONE, MBRC
+  // ZONE_PREC, SCC LABEL/HEADING, Redland ZONEDESC) folded in after.
+  const f = String(props.LVL1_ZONE ?? props.HEADING ?? props.ZONEDESC ?? props.ZONE_PREC ?? props.LABEL ?? "").toLowerCase();
   const z = [
     props.LVL2_ZONE,
     props.ZONE_PREC_DESC,
     props.ZONE_CODE,
+    props.ZONE,
+    props.ZONE_PREC,
+    props.LABEL,
+    props.ZONEDESC,
   ]
     .map((v) => String(v ?? "").toLowerCase())
     .join(" ");
   const o = ZONE_FILL_OPACITY;
-  if (f.startsWith("centre"))             return { fillColor: DEVELO_HEX.zoneCentre,    legendLabel: "Centre", fillOpacity: o };
-  if (f.startsWith("mixed"))              return { fillColor: DEVELO_HEX.zoneMixed,     legendLabel: "Mixed use", fillOpacity: o };
+  if (f.includes("centre"))               return { fillColor: DEVELO_HEX.zoneCentre,    legendLabel: "Centre", fillOpacity: o };
+  if (f.includes("mixed"))                return { fillColor: DEVELO_HEX.zoneMixed,     legendLabel: "Mixed use", fillOpacity: o };
   if (z.includes("low-medium") || z.includes("low medium") || z.includes("2 or 3 storey"))
                                           return { fillColor: DEVELO_HEX.zoneLowMediumResidential, legendLabel: "Low-medium density residential", fillOpacity: o };
-  if (f.includes("residential"))          return { fillColor: DEVELO_HEX.zoneResidential, legendLabel: "General residential", fillOpacity: o };
-  if (f.includes("open space") || f.includes("recreation"))
-                                          return { fillColor: DEVELO_HEX.zoneOpenSpace, legendLabel: "Open space / Recreation", fillOpacity: o };
-  return { fillColor: DEVELO_HEX.zoneOther, legendLabel: String(props.LVL1_ZONE ?? "Other"), fillOpacity: o };
+  if (f.includes("residential") || f.includes("neighbourhood"))
+                                          return { fillColor: DEVELO_HEX.zoneResidential, legendLabel: "Residential", fillOpacity: o };
+  if (f.includes("open space") || f.includes("recreation") || f.includes("rural") || f.includes("environment") || f.includes("conservation"))
+                                          return { fillColor: DEVELO_HEX.zoneOpenSpace, legendLabel: "Open space / Rural / Environment", fillOpacity: o };
+  return { fillColor: DEVELO_HEX.zoneOther, legendLabel: String(props.LVL1_ZONE ?? props.ZONEDESC ?? props.LABEL ?? props.ZONE_PREC ?? "Other"), fillOpacity: o };
 }
 
 // ── Public extractor ─────────────────────────────────────────────────────
@@ -256,15 +378,93 @@ export function extractOverlays(
     case "overland_flow":
       pushFC(out, inner, overlandFlowColor);
       return out;
-    case "storm_tide":
-      pushFC(out, inner, stormTideColor);
+    case "storm_tide": {
+      // Statewide coastal-hazard shape: { stormHigh, stormMedium, erosion }.
+      // Legacy BCC rows were a single FC — keep painting those too.
+      if (isFC(inner)) {
+        pushFC(out, inner, stormTideColor);
+        return out;
+      }
+      const i = inner as Record<string, unknown>;
+      pushFC(out, i.stormHigh, () => ({
+        fillColor: DEVELO_HEX.stormHigh,
+        legendLabel: "Storm tide — high hazard area",
+      }));
+      pushFC(out, i.stormMedium, () => ({
+        fillColor: DEVELO_HEX.stormMedium,
+        legendLabel: "Storm tide — medium hazard area",
+      }));
+      pushFC(out, i.erosion, () => ({
+        fillColor: DEVELO_HEX.coastalErosion,
+        legendLabel: "Erosion prone area",
+      }));
       return out;
+    }
     case "bushfire":
       pushFC(out, inner, bushfireColor);
       return out;
-    case "vegetation":
-      pushFC(out, inner, vegetationColor);
+    case "vegetation": {
+      // Statewide shape: { rvm, essentialHabitat, council }. Legacy BCC
+      // rows were a single FC.
+      if (isFC(inner)) {
+        pushFC(out, inner, vegetationColor);
+        return out;
+      }
+      const i = inner as Record<string, unknown>;
+      pushFC(out, i.rvm, rvmColor);
+      pushFC(out, i.essentialHabitat, () => ({
+        fillColor: DEVELO_HEX.vegWaterway,
+        legendLabel: "Essential habitat",
+      }));
+      pushFC(out, i.council, vegetationColor);
       return out;
+    }
+    case "environment": {
+      const i = inner as Record<string, unknown>;
+      pushFC(out, i.core, () => ({
+        fillColor: DEVELO_HEX.koalaCore,
+        legendLabel: "Core koala habitat area",
+      }));
+      pushFC(out, i.local, () => ({
+        fillColor: DEVELO_HEX.koalaLocal,
+        legendLabel: "Locally refined koala habitat",
+      }));
+      pushFC(out, i.priority, () => ({
+        fillColor: DEVELO_HEX.koalaPriority,
+        legendLabel: "Koala priority area",
+        fillOpacity: 0.15,
+      }));
+      pushFC(out, i.wildlife, () => ({
+        fillColor: DEVELO_HEX.wildlifeHabitat,
+        legendLabel: "MSES wildlife habitat",
+      }));
+      return out;
+    }
+    case "steep_land":
+      pushFC(out, inner, steepColor);
+      return out;
+    case "acid_sulfate": {
+      const i = inner as Record<string, unknown>;
+      // Finest scale wins visually; paint 25k over 100k.
+      pushFC(out, i.k100, assColor);
+      pushFC(out, i.k50, assColor);
+      pushFC(out, i.k25, assColor);
+      return out;
+    }
+    case "mining": {
+      const i = inner as Record<string, unknown>;
+      pushFC(out, i.kraResource, () => ({
+        fillColor: DEVELO_HEX.kraResource,
+        legendLabel: "KRA resource/processing area",
+      }));
+      pushFC(out, i.kraSeparation, () => ({
+        fillColor: DEVELO_HEX.kraSeparation,
+        legendLabel: "KRA separation area",
+        fillOpacity: 0.2,
+      }));
+      pushFC(out, i.tenements, tenementColor);
+      return out;
+    }
     case "heritage": {
       const i = inner as Record<string, unknown>;
       pushFC(out, i.state, () => ({

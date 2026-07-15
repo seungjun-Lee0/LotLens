@@ -1,33 +1,34 @@
 // Property parcel lookup — the real cadastre lot polygon + metadata.
 //
-// Brisbane City Council publishes the per-lot cadastre at
-// `property_boundaries_parcel`. Each polygon is a single freehold lot
-// (typical Brisbane suburban lot ~600 m², 20×30 m), not a whole zone
-// area. Replaces the misleadingly-named "zoning polygon" we used to draw
-// the yellow "selected property" highlight (zoning polygons span entire
-// zone-precinct areas — hundreds of metres across).
+// Source: Queensland DCDB (Land Parcel Property Framework) on QSpatial —
+// statewide, nightly-updated, so any Queensland address resolves, not just
+// Brisbane. Layer 4 = all cadastral parcels.
 //
-// Field highlights:
-//   LOT, PLAN_, LOTPLAN (e.g. "1RP84598" — same shape as Develo's "1/RP84598")
-//   LOT_AREA, LOT_VOLUME, TENURE ("FH" = freehold)
-//   HOUSE_NUMBER, CORRIDOR_NAME, SUBURB, POSTCODE, WARD_NAME
+// Field highlights (lowercase in this service):
+//   lot, plan, lotplan (e.g. "1RP84598")
+//   lot_area (m²), tenure ("Freehold" etc.), parcel_typ
+//   locality (suburb), shire_name (LGA, e.g. "Gold Coast City") — this is
+//   how the pipeline decides which council overlay adapter applies.
 
 import type { FeatureCollection, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
 
 const PARCEL_LAYER =
-  "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/property_boundaries_parcel/FeatureServer/0/query";
+  "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/LandParcelPropertyFramework/MapServer/4/query";
 
 export type ParcelInfo = {
   polygon: Geometry | null;
-  lotPlan: string | null;     // "1RP84598"
+  lotPlan: string | null; // "1RP84598"
   lotNumber: string | null;
   planNumber: string | null;
-  areaM2: number | null;       // freehold land area
-  tenure: string | null;       // "Freehold" etc.
+  areaM2: number | null; // freehold land area
+  tenure: string | null; // "Freehold" etc.
+  suburb: string | null; // DCDB locality
+  /** Local government area, e.g. "Brisbane City", "Noosa Shire". */
+  lga: string | null;
+  /** Kept for backward compatibility with older BCC-sourced rows. */
   houseNumber: string | null;
   street: string | null;
-  suburb: string | null;
   postcode: string | null;
   ward: string | null;
 };
@@ -39,9 +40,10 @@ const EMPTY: ParcelInfo = {
   planNumber: null,
   areaM2: null,
   tenure: null,
+  suburb: null,
+  lga: null,
   houseNumber: null,
   street: null,
-  suburb: null,
   postcode: null,
   ward: null,
 };
@@ -63,30 +65,28 @@ export async function fetchPropertyParcel(
       geometry: { x: lng, y: lat, spatialReference: 4326 },
       geometryType: "esriGeometryPoint",
       inSR: 4326,
-      outFields:
-        "LOT,PLAN_,LOTPLAN,LOT_AREA,TENURE_DESC,HOUSE_NUMBER,CORRIDOR_NAME,CORRIDOR_SUFFIX_CODE,SUBURB,POSTCODE,WARD_NAME",
+      outFields: "lot,plan,lotplan,lot_area,tenure,parcel_typ,locality,shire_name",
       returnGeometry: true,
       // Tiny simplification — the lot is already a 5–8 vertex rectangle.
       maxAllowableOffset: 0.00001,
     });
-    const f = fc.features[0];
+    // Road/rail/water reserves come back with null lotplan — prefer a real
+    // lot if the point straddles boundaries.
+    const f =
+      fc.features.find((x) => (x.properties as { lotplan?: unknown })?.lotplan) ??
+      fc.features[0];
     if (!f || !f.geometry) return EMPTY;
     const p = (f.properties ?? {}) as Record<string, unknown>;
-    const street = [str(p.CORRIDOR_NAME), str(p.CORRIDOR_SUFFIX_CODE)]
-      .filter(Boolean)
-      .join(" ");
     return {
+      ...EMPTY,
       polygon: f.geometry,
-      lotPlan: str(p.LOTPLAN),
-      lotNumber: str(p.LOT),
-      planNumber: str(p.PLAN_),
-      areaM2: num(p.LOT_AREA),
-      tenure: str(p.TENURE_DESC),
-      houseNumber: str(p.HOUSE_NUMBER) ?? (typeof p.HOUSE_NUMBER === "number" ? String(p.HOUSE_NUMBER) : null),
-      street: street || null,
-      suburb: str(p.SUBURB),
-      postcode: str(p.POSTCODE) ?? (typeof p.POSTCODE === "number" ? String(p.POSTCODE) : null),
-      ward: str(p.WARD_NAME),
+      lotPlan: str(p.lotplan),
+      lotNumber: str(p.lot),
+      planNumber: str(p.plan),
+      areaM2: num(p.lot_area),
+      tenure: str(p.tenure),
+      suburb: str(p.locality),
+      lga: str(p.shire_name),
     };
   } catch (err) {
     console.error("[property] parcel lookup failed:", err);
@@ -98,10 +98,10 @@ export async function fetchPropertyParcel(
  * Fetch every cadastre lot polygon within ~155 m of the point so a map can
  * draw the individual lot boundary lines (Develo-style).
  *
- * BCC's zoning polygons are dissolved by zone-precinct — a single polygon
- * spans a whole block of lots — so on their own they read as one flat colour
- * wash. Overlaying the real per-lot cadastre outlines restores the "each lot
- * is distinct" look of the reference planning map. Geometry only; we don't
+ * Zoning polygons are dissolved by zone-precinct — a single polygon spans a
+ * whole block of lots — so on their own they read as one flat colour wash.
+ * Overlaying the real per-lot cadastre outlines restores the "each lot is
+ * distinct" look of the reference planning map. Geometry only; we don't
  * need attributes for boundary lines.
  */
 export async function fetchParcelLinesNear(
@@ -113,7 +113,7 @@ export async function fetchParcelLinesNear(
       geometry: { x: lng, y: lat, spatialReference: 4326 },
       geometryType: "esriGeometryPoint",
       inSR: 4326,
-      outFields: "LOTPLAN",
+      outFields: "lotplan",
       returnGeometry: true,
       bufferDegrees: 0.0014, // ~155 m — comfortably covers the ~115 m viewport
       maxAllowableOffset: 0.00001,

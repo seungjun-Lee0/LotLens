@@ -1,92 +1,136 @@
-// Storm Tide module — BCC Flood Awareness Storm Tide.
+// Coastal hazards module (key: storm_tide) — statewide DETSI coastal
+// hazard area mapping: storm tide inundation + erosion prone areas.
 //
-// Coastal / tidal flooding driven by storm surge. Highly relevant for
-// bayside Brisbane addresses (Wynnum / Manly / Sandgate). Same shape as
-// the Overland Flow layer.
+// Source: QSpatial PlanningCadastre/CoastalManagement MapServer (verified
+// live 2026-07). Replaces the old BCC-only Flood Awareness Storm Tide
+// layer so bayside AND coastal addresses anywhere in Queensland classify.
 //
-// Endpoint:
-//   .../Flood_Awareness_Storm_Tide/FeatureServer/0
-// Fields: FLOOD_RISK + FLOOD_TYPE. Native SRID: EPSG:28356.
+// Layers:
+//   11  Storm tide — High hazard area   (inundation > 1.0 m, to 2100)
+//   12  Storm tide — Medium hazard area
+//    7  Erosion prone area — component 2: calculated erosion distance
+//    8  Erosion prone area — component 3: sea level rise
+//    9  Erosion prone area — component 1: 40 m buffer from HAT
+// The storm-tide layers carry no classification attributes — hazard tier
+// comes from WHICH layer intersects.
 
-import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
 import type { RiskLevel } from "@/lib/db";
 
-const STORM_TIDE =
-  "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Flood_Awareness_Storm_Tide/FeatureServer/0/query";
+const CM =
+  "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/PlanningCadastre/CoastalManagement/MapServer";
+const STORM_HIGH = `${CM}/11/query`;
+const STORM_MEDIUM = `${CM}/12/query`;
+const EROSION_CALC = `${CM}/7/query`;
+const EROSION_SLR = `${CM}/8/query`;
+const EROSION_HAT = `${CM}/9/query`;
 
-const BCC_STORM_TIDE_DOC =
-  "https://www.brisbane.qld.gov.au/clean-and-green/natural-environment-and-water/flooding-in-brisbane/flood-awareness-map";
+const QLD_COASTAL_DOC =
+  "https://www.qld.gov.au/environment/coasts-waterways/plans/hazards";
 
 export type StormTideResult = {
   riskLevel: RiskLevel;
+  /** "storm tide" / "erosion" / combined summary of what intersects. */
   floodType: string | null;
+  /** True when any erosion prone area component covers the lot. */
+  erosionProne: boolean;
   hasConsideration: boolean;
   sources: Array<{ name: string; url: string; layer: string }>;
-  raw: unknown;
-  context: unknown;
+  raw: { stormHigh: unknown; stormMedium: unknown; erosion: unknown };
+  context: { stormHigh: unknown; stormMedium: unknown; erosion: unknown };
 };
-
-function attrs(
-  f: Feature<Geometry | null, GeoJsonProperties> | undefined,
-): Record<string, unknown> {
-  return (f?.properties ?? {}) as Record<string, unknown>;
-}
-
-function normalizeRisk(s: string | null | undefined): RiskLevel {
-  switch ((s ?? "").trim().toLowerCase()) {
-    case "high": return "high";
-    case "medium": return "medium";
-    case "low": return "low";
-    case "very low": return "very_low";
-    default: return "none";
-  }
-}
 
 export async function fetchStormTideData(
   lat: number,
   lng: number,
 ): Promise<StormTideResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
-  const outFields = "FLOOD_RISK,FLOOD_TYPE";
-  const [fc, ctx] = await Promise.all([
-    queryArcGIS(STORM_TIDE, {
-      geometry: point,
-      geometryType: "esriGeometryPoint",
-      inSR: 4326,
-      outFields,
-      returnGeometry: false,
-      bufferDegrees: 0.00045,
-    }),
-    queryArcGIS(STORM_TIDE, {
-      geometry: point,
-      geometryType: "esriGeometryPoint",
-      inSR: 4326,
-      outFields,
-      returnGeometry: true,
-      bufferDegrees: 0.0025,
-      maxAllowableOffset: 0.00003,
-    }),
+  const pointParams = {
+    geometry: point,
+    geometryType: "esriGeometryPoint" as const,
+    inSR: 4326,
+    outFields: "objectid",
+    returnGeometry: false,
+    bufferDegrees: 0.00045,
+  };
+  const contextParams = {
+    geometry: point,
+    geometryType: "esriGeometryPoint" as const,
+    inSR: 4326,
+    outFields: "objectid",
+    returnGeometry: true,
+    bufferDegrees: 0.0025,
+    maxAllowableOffset: 0.00003,
+  };
+
+  const [
+    high, medium, eroCalc, eroSlr, eroHat,
+    highCtx, mediumCtx, eroCalcCtx, eroSlrCtx, eroHatCtx,
+  ] = await Promise.all([
+    queryArcGIS(STORM_HIGH, pointParams),
+    queryArcGIS(STORM_MEDIUM, pointParams),
+    queryArcGIS(EROSION_CALC, pointParams),
+    queryArcGIS(EROSION_SLR, pointParams),
+    queryArcGIS(EROSION_HAT, pointParams),
+    queryArcGIS(STORM_HIGH, contextParams),
+    queryArcGIS(STORM_MEDIUM, contextParams),
+    queryArcGIS(EROSION_CALC, contextParams),
+    queryArcGIS(EROSION_SLR, contextParams),
+    queryArcGIS(EROSION_HAT, contextParams),
   ]);
 
-  const a = attrs(fc.features[0]);
-  const riskLevel = normalizeRisk(
-    typeof a.FLOOD_RISK === "string" ? a.FLOOD_RISK : null,
-  );
-  const floodType = typeof a.FLOOD_TYPE === "string" ? a.FLOOD_TYPE : null;
+  const inHigh = high.features.length > 0;
+  const inMedium = medium.features.length > 0;
+  const erosionProne =
+    eroCalc.features.length > 0 ||
+    eroSlr.features.length > 0 ||
+    eroHat.features.length > 0;
+
+  const riskLevel: RiskLevel = inHigh
+    ? "high"
+    : inMedium
+      ? "medium"
+      : erosionProne
+        ? "low"
+        : "none";
+
+  const parts: string[] = [];
+  if (inHigh) parts.push("Storm tide — high hazard area");
+  else if (inMedium) parts.push("Storm tide — medium hazard area");
+  if (erosionProne) parts.push("Erosion prone area");
+
+  // Merge erosion components into one FC per scope for map painting.
+  const mergeFC = (a: typeof eroCalc, b: typeof eroSlr, c: typeof eroHat) => ({
+    type: "FeatureCollection" as const,
+    features: [...a.features, ...b.features, ...c.features],
+  });
 
   return {
     riskLevel,
-    floodType,
+    floodType: parts.length > 0 ? parts.join(" + ") : null,
+    erosionProne,
     hasConsideration: riskLevel !== "none",
     sources: [
       {
-        name: "BCC Flood Awareness — Storm Tide",
-        url: BCC_STORM_TIDE_DOC,
-        layer: STORM_TIDE,
+        name: "QLD Coastal Hazard Area — Storm tide inundation",
+        url: QLD_COASTAL_DOC,
+        layer: STORM_HIGH,
+      },
+      {
+        name: "QLD Coastal Hazard Area — Erosion prone area",
+        url: QLD_COASTAL_DOC,
+        layer: EROSION_CALC,
       },
     ],
-    raw: fc,
-    context: ctx,
+    raw: {
+      stormHigh: high,
+      stormMedium: medium,
+      erosion: mergeFC(eroCalc, eroSlr, eroHat),
+    },
+    context: {
+      stormHigh: highCtx,
+      stormMedium: mediumCtx,
+      erosion: mergeFC(eroCalcCtx, eroSlrCtx, eroHatCtx),
+    },
   };
 }

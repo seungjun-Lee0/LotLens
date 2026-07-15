@@ -12,17 +12,22 @@
 // rewrites. Route handlers and CLI scripts call these directly so we keep
 // HTTP-vs-script behaviour identical.
 
+import { fetchAcidSulfateData } from "@/lib/modules/acid-sulfate";
 import { fetchBushfireData } from "@/lib/modules/bushfire";
 import { fetchEasementsData } from "@/lib/modules/easements";
+import { fetchEnvironmentData } from "@/lib/modules/environment";
 import { fetchFloodingData } from "@/lib/modules/flooding";
 import { fetchFloodPlanningData } from "@/lib/modules/flood-planning";
 import { fetchHeritageData } from "@/lib/modules/heritage";
+import { fetchMiningData } from "@/lib/modules/mining";
 import { fetchNoiseData } from "@/lib/modules/noise";
 import { fetchOverlandFlowData } from "@/lib/modules/overland-flow";
 import { fetchSchoolsData } from "@/lib/modules/schools";
+import { fetchSteepLandData } from "@/lib/modules/steep-land";
 import { fetchStormTideData } from "@/lib/modules/storm-tide";
 import { fetchVegetationData } from "@/lib/modules/vegetation";
 import { fetchZoningData } from "@/lib/modules/zoning";
+import { regionFromParcel } from "@/lib/region";
 
 import { generateModuleNarrative, type ModuleNarrative } from "@/lib/anthropic";
 import {
@@ -83,19 +88,29 @@ export async function fetchOverlaysForAddress(
   const sql = getDb();
   const addr = await loadAddress(addressId);
 
-  const [flood, floodPlan, overland, stormTide, fire, veg, herit, ease, noise, schools, zone] =
+  // Resolve which LGA (council) the point falls in FIRST — the parcel's
+  // `shire_name` decides which council overlay adapters apply. One extra
+  // ~150 ms round-trip before the parallel fan-out.
+  const parcelForRegion = await fetchPropertyParcel(addr.lat, addr.lng);
+  const region = regionFromParcel(parcelForRegion.lga, addr.lat, addr.lng);
+
+  const [flood, floodPlan, overland, stormTide, fire, veg, env, herit, ease, noise, steep, acid, mine, schools, zone] =
     await Promise.all([
-      fetchFloodingData(addr.lat, addr.lng),
-      fetchFloodPlanningData(addr.lat, addr.lng),
-      fetchOverlandFlowData(addr.lat, addr.lng),
+      fetchFloodingData(addr.lat, addr.lng, region),
+      fetchFloodPlanningData(addr.lat, addr.lng, region),
+      fetchOverlandFlowData(addr.lat, addr.lng, region),
       fetchStormTideData(addr.lat, addr.lng),
       fetchBushfireData(addr.lat, addr.lng),
-      fetchVegetationData(addr.lat, addr.lng),
-      fetchHeritageData(addr.lat, addr.lng),
-      fetchEasementsData(addr.lat, addr.lng),
-      fetchNoiseData(addr.lat, addr.lng),
+      fetchVegetationData(addr.lat, addr.lng, region),
+      fetchEnvironmentData(addr.lat, addr.lng),
+      fetchHeritageData(addr.lat, addr.lng, region),
+      fetchEasementsData(addr.lat, addr.lng, region),
+      fetchNoiseData(addr.lat, addr.lng, region),
+      fetchSteepLandData(addr.lat, addr.lng, region),
+      fetchAcidSulfateData(addr.lat, addr.lng),
+      fetchMiningData(addr.lat, addr.lng),
       fetchSchoolsData(addr.lat, addr.lng),
-      fetchZoningData(addr.lat, addr.lng),
+      fetchZoningData(addr.lat, addr.lng, region),
     ]);
 
   const overlays: ModuleOverlay[] = [
@@ -105,9 +120,13 @@ export async function fetchOverlaysForAddress(
     { module: "storm_tide",     riskLevel: stormTide.riskLevel, hasConsideration: stormTide.hasConsideration, sourceName: stormTide.sources[0].name, sourceUrl: stormTide.sources[0].url, raw: stormTide },
     { module: "bushfire",       riskLevel: fire.riskLevel,      hasConsideration: fire.hasConsideration,      sourceName: fire.sources[0].name,      sourceUrl: fire.sources[0].url,      raw: fire },
     { module: "vegetation",     riskLevel: veg.riskLevel,       hasConsideration: veg.hasConsideration,       sourceName: veg.sources[0].name,       sourceUrl: veg.sources[0].url,       raw: veg },
+    { module: "environment",    riskLevel: env.riskLevel,       hasConsideration: env.hasConsideration,       sourceName: env.sources[0].name,       sourceUrl: env.sources[0].url,       raw: env },
     { module: "heritage",       riskLevel: herit.riskLevel,     hasConsideration: herit.hasConsideration,     sourceName: herit.sources[0].name,     sourceUrl: herit.sources[0].url,     raw: herit },
     { module: "easements",      riskLevel: ease.riskLevel,      hasConsideration: ease.hasConsideration,      sourceName: ease.sources[0].name,      sourceUrl: ease.sources[0].url,      raw: ease },
     { module: "noise",          riskLevel: noise.riskLevel,     hasConsideration: noise.hasConsideration,     sourceName: noise.sources[0].name,     sourceUrl: noise.sources[0].url,     raw: noise },
+    { module: "steep_land",     riskLevel: steep.riskLevel,     hasConsideration: steep.hasConsideration,     sourceName: steep.sources[0].name,     sourceUrl: steep.sources[0].url,     raw: steep },
+    { module: "acid_sulfate",   riskLevel: acid.riskLevel,      hasConsideration: acid.hasConsideration,      sourceName: acid.sources[0].name,      sourceUrl: acid.sources[0].url,      raw: acid },
+    { module: "mining",         riskLevel: mine.riskLevel,      hasConsideration: mine.hasConsideration,      sourceName: mine.sources[0].name,      sourceUrl: mine.sources[0].url,      raw: mine },
     { module: "schools",        riskLevel: schools.riskLevel,   hasConsideration: schools.hasConsideration,   sourceName: schools.sources[0].name,   sourceUrl: schools.sources[0].url,   raw: schools },
     { module: "zoning",         riskLevel: zone.riskLevel,      hasConsideration: zone.hasConsideration,      sourceName: zone.sources[0].name,      sourceUrl: zone.sources[0].url,      raw: zone },
   ];
@@ -239,9 +258,13 @@ export async function loadReportPayload(
     "storm_tide",
     "bushfire",
     "vegetation",
+    "environment",
     "heritage",
     "easements",
     "noise",
+    "steep_land",
+    "acid_sulfate",
+    "mining",
     "schools",
     "zoning",
   ];
@@ -301,37 +324,46 @@ export async function loadReportPayload(
 }
 
 export type QuotaUnlock = {
-  /** Plan quota consumed this month AFTER this report (subscribers only). */
-  used: number;
+  /** Credits remaining AFTER this report (subscribers only). */
+  creditsLeft: number;
   quota: number;
   unlocked: boolean;
 };
 
 /**
- * When the report was generated by an active subscriber with quota left,
- * consume one quota slot and unlock the address. Returns null for
- * anonymous / free / over-quota runs (they keep the single-report paywall).
+ * When the report was generated by an active subscriber with credits left,
+ * spend one credit and unlock the address. The decrement is a single
+ * conditional UPDATE so concurrent runs can't spend the same credit twice.
+ * Returns null for anonymous / free users (they keep the single-report
+ * paywall); { unlocked: false } when the balance is empty.
  */
-async function tryQuotaUnlock(
+async function trySpendCredit(
   userId: string,
   reportId: string,
   addressId: string,
 ): Promise<QuotaUnlock | null> {
-  const { isActiveSubscriber, getSessionUser, usageThisMonth, PLAN_QUOTAS } =
-    await import("@/lib/auth");
+  const { isActiveSubscriber, getSessionUser, PLAN_QUOTAS } = await import(
+    "@/lib/auth"
+  );
   const user = await getSessionUser();
   if (!user || user.id !== userId || !isActiveSubscriber(user)) return null;
   const quota = PLAN_QUOTAS[user.plan as keyof typeof PLAN_QUOTAS];
-  const used = await usageThisMonth(user.id);
-  if (used >= quota) return { used, quota, unlocked: false };
   const sql = getDb();
+  const spent = (await sql`
+    UPDATE users SET credits = credits - 1
+    WHERE id = ${user.id} AND credits > 0
+    RETURNING credits
+  `) as Array<{ credits: number }>;
+  if (spent.length === 0) {
+    return { creditsLeft: 0, quota, unlocked: false };
+  }
   await sql`
     INSERT INTO report_usage (user_id, report_id) VALUES (${user.id}, ${reportId})
   `;
   await sql`
     UPDATE addresses SET paid_at = COALESCE(paid_at, now()) WHERE id = ${addressId}
   `;
-  return { used: used + 1, quota, unlocked: true };
+  return { creditsLeft: spent[0].credits, quota, unlocked: true };
 }
 
 export async function generateReportForAddress(
@@ -372,11 +404,11 @@ export async function generateReportForAddress(
   `) as Array<{ id: string }>;
   const reportId = inserted[0].id;
 
-  // Subscribers consume monthly quota and get the report unlocked outright.
+  // Subscribers spend a credit and get the report unlocked outright.
   let quotaUnlock: QuotaUnlock | null = null;
   if (userId) {
     try {
-      quotaUnlock = await tryQuotaUnlock(userId, reportId, addressId);
+      quotaUnlock = await trySpendCredit(userId, reportId, addressId);
     } catch (err) {
       console.error("[pipeline] quota unlock failed (non-fatal):", err);
     }

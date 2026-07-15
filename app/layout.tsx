@@ -17,9 +17,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LotLens — Brisbane Property Due Diligence",
+  title: "LotLens — Queensland Property Due Diligence",
   description:
-    "AI-generated due diligence reports for Brisbane properties. Plain-English summaries of flood, bushfire, heritage, easements, and zoning overlays.",
+    "AI-generated due diligence reports for Queensland properties. Plain-English summaries of flood, bushfire, coastal, koala habitat, heritage, easements, mining, and zoning overlays.",
 };
 
 export default function RootLayout({

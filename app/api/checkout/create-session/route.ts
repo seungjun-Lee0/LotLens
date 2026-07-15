@@ -161,7 +161,7 @@ export async function POST(req: Request) {
             currency: REPORT_CURRENCY,
             unit_amount: REPORT_PRICE_CENTS,
             product_data: {
-              name: "Brisbane Due Diligence Report",
+              name: "Queensland Due Diligence Report",
               description: addressText.slice(0, 120),
             },
           },

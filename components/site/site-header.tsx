@@ -1,10 +1,12 @@
 import Link from "next/link";
 
 import { ThemeToggle } from "@/components/site/theme-toggle";
-import { getSessionUser } from "@/lib/auth";
+import { getSessionUser, isActiveSubscriber, isAdmin } from "@/lib/auth";
 
 export async function SiteHeader() {
   const user = await getSessionUser();
+  const showCredits = isActiveSubscriber(user);
+  const admin = isAdmin(user);
 
   return (
     <header className="sticky top-0 z-30 w-full px-3 pt-3 sm:px-4 sm:pt-4">
@@ -24,7 +26,7 @@ export async function SiteHeader() {
           />
           LotLens
           <span className="ml-1 hidden text-[11px] font-normal text-muted-foreground sm:inline">
-            Brisbane
+            Queensland
           </span>
         </Link>
         <nav className="flex items-center gap-2 text-[13px] text-muted-foreground">
@@ -49,12 +51,39 @@ export async function SiteHeader() {
 
           {user ? (
             <>
+              {admin && (
+                <Link
+                  href="/admin"
+                  className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground sm:inline"
+                >
+                  Admin
+                </Link>
+              )}
               <Link
                 href="/reports"
                 className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground sm:inline"
               >
                 My reports
               </Link>
+              {showCredits && user && (
+                <Link
+                  href="/account"
+                  title="Report credits left this cycle"
+                  className="hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold sm:inline-flex"
+                  style={{
+                    background:
+                      "color-mix(in oklab, var(--apple-blue) 12%, transparent)",
+                    color: "var(--apple-blue)",
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    className="size-1.5 rounded-full"
+                    style={{ background: "currentColor" }}
+                  />
+                  {user.credits} credits
+                </Link>
+              )}
               <Link
                 href="/account"
                 className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition hover:bg-foreground/5 hover:text-foreground"

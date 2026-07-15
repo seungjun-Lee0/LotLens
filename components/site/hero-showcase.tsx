@@ -15,7 +15,7 @@
 // the layer's suburb-scale silhouette reads. Clicking the active dot (or
 // AUTO) resumes the cycle.
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 // ── Fixture types (shape written by scripts/generate-hero-demo.ts) ──────
 type Bbox = { xmin: number; ymin: number; xmax: number; ymax: number };
@@ -29,6 +29,8 @@ export type HeroDemoData = {
   parcel: number[][][];
   parcelLines: number[][][];
   modules: Record<string, HeroModuleData>;
+  lotPlan?: string | null;
+  suburb?: string | null;
 };
 
 const QLD_EXPORT =
@@ -40,19 +42,24 @@ const bboxUrl = (b: Bbox, size: string) =>
 // ── Module registry (icon tints mirror the report overlay palette) ──────
 type ModuleKey =
   | "flooding" | "flood_planning" | "overland_flow" | "storm_tide"
-  | "bushfire" | "vegetation" | "heritage" | "easements"
-  | "noise" | "schools" | "zoning";
+  | "bushfire" | "vegetation" | "environment" | "heritage" | "easements"
+  | "noise" | "steep_land" | "acid_sulfate" | "mining"
+  | "schools" | "zoning";
 
 const RAIL: { key: ModuleKey; label: string; hex: string }[] = [
   { key: "flooding", label: "Flooding", hex: "#3b82f6" },
   { key: "flood_planning", label: "Flood Planning", hex: "#2563eb" },
   { key: "overland_flow", label: "Overland Flow", hex: "#f97316" },
-  { key: "storm_tide", label: "Storm Tide", hex: "#06b6d4" },
+  { key: "storm_tide", label: "Coastal Hazards", hex: "#06b6d4" },
   { key: "bushfire", label: "Bushfire", hex: "#dc2626" },
   { key: "vegetation", label: "Vegetation", hex: "#16a34a" },
+  { key: "environment", label: "Environment & Koala", hex: "#10b981" },
   { key: "heritage", label: "Heritage", hex: "#7e22ce" },
   { key: "easements", label: "Easements", hex: "#db2777" },
   { key: "noise", label: "Noise", hex: "#f59e0b" },
+  { key: "steep_land", label: "Steep Land", hex: "#d97706" },
+  { key: "acid_sulfate", label: "Acid Sulfate Soils", hex: "#eab308" },
+  { key: "mining", label: "Mining & Resources", hex: "#a855f7" },
   { key: "schools", label: "Schools", hex: "#14b8a6" },
   { key: "zoning", label: "Zoning", hex: "#6366f1" },
 ];
@@ -63,26 +70,24 @@ const META = Object.fromEntries(RAIL.map((m) => [m.key, m])) as Record<
 
 // Chips orbiting the loupe — three cycling groups, four anchor slots.
 const CHIPS: { key: ModuleKey; group: string; pos: string; i: number }[] = [
-  { key: "flooding", group: "cycle-g1", pos: "left-[-4%] top-[8%]", i: 0 },
+  { key: "flooding", group: "cycle-g1", pos: "left-[7%] top-[9%]", i: 0 },
   { key: "flood_planning", group: "cycle-g1", pos: "right-[-6%] top-[26%]", i: 1 },
   { key: "overland_flow", group: "cycle-g1", pos: "right-[-2%] bottom-[26%]", i: 2 },
-  { key: "storm_tide", group: "cycle-g1", pos: "left-[-1%] bottom-[10%]", i: 3 },
-  { key: "bushfire", group: "cycle-g2", pos: "left-[-4%] top-[8%]", i: 0 },
+  { key: "storm_tide", group: "cycle-g1", pos: "left-[5%] bottom-[11%]", i: 3 },
+  { key: "bushfire", group: "cycle-g2", pos: "left-[7%] top-[9%]", i: 0 },
   { key: "vegetation", group: "cycle-g2", pos: "right-[-6%] top-[26%]", i: 1 },
   { key: "heritage", group: "cycle-g2", pos: "right-[-2%] bottom-[26%]", i: 2 },
-  { key: "easements", group: "cycle-g2", pos: "left-[-1%] bottom-[10%]", i: 3 },
-  { key: "noise", group: "cycle-g3", pos: "left-[-4%] top-[8%]", i: 0 },
+  { key: "easements", group: "cycle-g2", pos: "left-[5%] bottom-[11%]", i: 3 },
+  { key: "noise", group: "cycle-g3", pos: "left-[7%] top-[9%]", i: 0 },
   { key: "schools", group: "cycle-g3", pos: "right-[-6%] top-[26%]", i: 1 },
-  { key: "zoning", group: "cycle-g3", pos: "left-[-1%] bottom-[10%]", i: 2 },
+  { key: "zoning", group: "cycle-g3", pos: "left-[5%] bottom-[11%]", i: 2 },
 ];
 
-// Auto-cycle representatives: while chips of a group are up, the loupe shows
-// the first module of that group that actually has mapped features here.
-const GROUP_CANDIDATES: ModuleKey[][] = [
-  ["flooding", "flood_planning", "overland_flow", "storm_tide"],
-  ["bushfire", "heritage", "vegetation", "easements"],
-  ["zoning", "noise", "schools"],
-];
+// Auto-cycle groups — derived from CHIPS so the chips on screen and the
+// layers painting the map are always the SAME set of modules.
+const GROUPS: ModuleKey[][] = [1, 2, 3].map((g) =>
+  CHIPS.filter((c) => c.group === `cycle-g${g}`).map((c) => c.key),
+);
 
 const CAPTIONS = [
   "Water & flood layers · 1/3",
@@ -143,12 +148,15 @@ function LayerPaths({ paths, lineWidth = 1.8, lineOpacity = 0.95 }: {
 // ── Component ────────────────────────────────────────────────────────────
 
 export function HeroShowcase({ data, children }: { data: HeroDemoData; children: ReactNode }) {
-  const [pinned, setPinned] = useState<ModuleKey | null>(null);
-  // Remember the last pinned module so the background layer can fade out
-  // in place instead of vanishing when the user returns to AUTO.
-  const lastPinnedRef = useRef<ModuleKey>("flooding");
-  if (pinned) lastPinnedRef.current = pinned;
-  const shown = pinned ?? lastPinnedRef.current;
+  // `shown` lags behind `pinned` so the background layer fades out in place
+  // instead of vanishing the moment the user returns to AUTO.
+  const [sel, setSel] = useState<{ pinned: ModuleKey | null; shown: ModuleKey }>({
+    pinned: null,
+    shown: "flooding",
+  });
+  const { pinned, shown } = sel;
+  const pin = (k: ModuleKey | null) =>
+    setSel((s) => ({ pinned: k, shown: k ?? s.shown }));
 
   const L = data.loupe;
   const loupePx: Project = useMemo(
@@ -170,59 +178,105 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
   const parcelBg = pathFor(data.parcel, bgPx);
   const lotLinesLoupe = useMemo(() => pathFor(data.parcelLines, loupePx), [data.parcelLines, loupePx]);
 
-  const reps = useMemo(
-    () =>
-      GROUP_CANDIDATES.map(
-        (grp) => grp.find((k) => (data.modules[k]?.features.length ?? 0) > 0) ?? grp[0],
-      ),
-    [data],
-  );
-
-  const note = (k: ModuleKey) => data.modules[k]?.note ?? "—";
-  const toggle = (k: ModuleKey) => setPinned((cur) => (cur === k ? null : k));
+  const note = (k: ModuleKey) => data.modules[k]?.note ?? "";
+  const toggle = (k: ModuleKey) => pin(pinned === k ? null : k);
+  // The pinned chip stays in the slot its cycling chip occupied instead of
+  // jumping to a fixed corner. Modules without a cycling chip (the newer
+  // rail-only ones) fall back to the top-left slot.
+  const pinnedPos = pinned
+    ? CHIPS.find((c) => c.key === pinned)?.pos ?? "left-[7%] top-[9%]"
+    : "left-[7%] top-[9%]";
 
   return (
     <>
       {/* ── full-bleed aerial + live layer silhouette + veil ── */}
       <div aria-hidden className="absolute inset-0 -z-10">
         {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size remote render, next/image adds nothing here */}
+        {/* Requested at half resolution: upscaling gives the same soft
+            background look as the old CSS blur(2px) at a fraction of the
+            paint cost (the full-bleed CSS blur re-rasterised on scroll
+            re-entry and was a jank source). */}
         <img
-          src={bboxUrl(data.heroBbox, "1600,900")}
+          src={bboxUrl(data.heroBbox, "1000,563")}
           alt=""
-          className="h-full w-full scale-105 object-cover blur-[2px] brightness-[0.88] saturate-[1.0] dark:brightness-[0.42] dark:saturate-[0.9]"
+          className="h-full w-full object-cover brightness-[0.98] saturate-[1.08] dark:brightness-[0.42] dark:saturate-[0.9]"
         />
-        {/* veil: fade the aerial into the page background on all edges */}
+        {/* veil: fade the aerial into the page background on all edges.
+            The vertical ramp completes WELL BEFORE the section edge (~90%)
+            so the hero melts into the next section with no visible seam.
+            Light and dark get separate strengths — light mode was reading
+            as a white wash, so its veil is much thinner. */}
         <div
-          className="absolute inset-0"
+          className="absolute inset-0 dark:hidden"
           style={{
             background:
-              "linear-gradient(180deg, color-mix(in oklab, var(--background) 78%, transparent) 0%, color-mix(in oklab, var(--background) 30%, transparent) 30%, color-mix(in oklab, var(--background) 26%, transparent) 62%, var(--background) 100%), linear-gradient(90deg, color-mix(in oklab, var(--background) 94%, transparent) 0%, color-mix(in oklab, var(--background) 76%, transparent) 42%, color-mix(in oklab, var(--background) 24%, transparent) 68%, transparent 84%)",
+              "linear-gradient(180deg, color-mix(in oklab, var(--background) 62%, transparent) 0%, color-mix(in oklab, var(--background) 16%, transparent) 30%, color-mix(in oklab, var(--background) 12%, transparent) 68%, var(--background) 96%), linear-gradient(90deg, color-mix(in oklab, var(--background) 90%, transparent) 0%, color-mix(in oklab, var(--background) 66%, transparent) 42%, color-mix(in oklab, var(--background) 16%, transparent) 68%, transparent 84%)",
           }}
         />
-        {/* pinned layer over the whole suburb — masked down on the text side */}
+        <div
+          className="absolute inset-0 hidden dark:block"
+          style={{
+            background:
+              "linear-gradient(180deg, color-mix(in oklab, var(--background) 78%, transparent) 0%, color-mix(in oklab, var(--background) 30%, transparent) 30%, color-mix(in oklab, var(--background) 26%, transparent) 64%, var(--background) 96%), linear-gradient(90deg, color-mix(in oklab, var(--background) 94%, transparent) 0%, color-mix(in oklab, var(--background) 76%, transparent) 42%, color-mix(in oklab, var(--background) 24%, transparent) 68%, transparent 84%)",
+          }}
+        />
+        {/* layer silhouette + lot marker — masked down on the text side.
+            The wrapper's VERTICAL mask dissolves the overlay before the
+            section edges so it never cuts off in a hard line. */}
+        <div
+          className="absolute inset-0 hidden sm:block"
+          style={{
+            maskImage:
+              "linear-gradient(180deg, transparent 0%, #000 14%, #000 72%, transparent 94%)",
+            WebkitMaskImage:
+              "linear-gradient(180deg, transparent 0%, #000 14%, #000 72%, transparent 94%)",
+          }}
+        >
         <svg
           viewBox="0 0 1600 900"
           preserveAspectRatio="xMidYMid slice"
-          className="absolute inset-0 h-full w-full scale-105 transition-opacity duration-700"
+          className="absolute inset-0 h-full w-full"
           style={{
-            opacity: pinned ? 1 : 0,
             maskImage:
-              "linear-gradient(90deg, rgba(0,0,0,.14) 0%, rgba(0,0,0,.32) 38%, rgba(0,0,0,.85) 62%, #000 80%)",
+              "linear-gradient(90deg, rgba(0,0,0,.07) 0%, rgba(0,0,0,.2) 38%, rgba(0,0,0,.8) 62%, #000 80%)",
             WebkitMaskImage:
-              "linear-gradient(90deg, rgba(0,0,0,.14) 0%, rgba(0,0,0,.32) 38%, rgba(0,0,0,.85) 62%, #000 80%)",
+              "linear-gradient(90deg, rgba(0,0,0,.07) 0%, rgba(0,0,0,.2) 38%, rgba(0,0,0,.8) 62%, #000 80%)",
           }}
         >
-          <g>
-            <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.7} />
+          {/* auto: the ENTIRE cycling group paints the suburb — the exact
+              modules the chips are announcing. Inner <g opacity> keeps it
+              ambient rather than loud. */}
+          {!pinned &&
+            GROUPS.map((grp, gi) => (
+              <g key={`bg-grp-${gi}`} className={`lens-fade${gi + 1}`}>
+                <g opacity={0.45}>
+                  {grp.map((k) => (
+                    <LayerPaths key={k} paths={layers[k].bg} lineWidth={1} lineOpacity={0.4} />
+                  ))}
+                </g>
+              </g>
+            ))}
+          <g className="transition-opacity duration-700" style={{ opacity: pinned ? 0.65 : 0 }}>
+            <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.45} />
           </g>
           <path
             d={parcelBg}
             fill="none"
-            stroke="var(--selected-property)"
             strokeWidth={1.6}
             vectorEffect="non-scaling-stroke"
+            style={{ stroke: "var(--selected-property)" }}
           />
+          {/* the spot the detail circle magnifies */}
+          <g
+            style={{ color: "var(--selected-property)" }}
+            transform={`translate(${(((L.u0 + L.u1) / 2) * 1600).toFixed(1)} ${(((L.v0 + L.v1) / 2) * 900).toFixed(1)})`}
+          >
+            <circle r={3.5} fill="currentColor" />
+            <circle r={11} fill="none" stroke="currentColor" strokeWidth={1.4} opacity={0.85} />
+            <circle className="hero-marker-pulse" r={11} fill="none" stroke="currentColor" strokeWidth={1.4} />
+          </g>
         </svg>
+        </div>
       </div>
 
       <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-4 pb-14 pt-10 sm:px-6 sm:pt-16 lg:grid-cols-[1.02fr_0.98fr] lg:pb-20">
@@ -231,23 +285,15 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
 
         {/* loupe + chips + module rail */}
         <div className="flex flex-col">
-          <div className={`relative mx-auto h-[340px] w-full max-w-[460px] sm:h-[420px] ${pinned ? "hero-pinned" : ""}`}>
-            {/* magnifier: angled handle + lens + metal rim */}
+          <div className="relative mx-auto h-[340px] w-full max-w-[460px] sm:h-[420px]">
+            {/* detail circle — a clean zoomed-in viewport over the marked lot */}
             <div aria-hidden className="absolute left-1/2 top-[47%] aspect-square w-[min(340px,78%)] -translate-x-1/2 -translate-y-1/2">
-              {/* handle — sits behind the lens so the rim caps its neck */}
-              <div
-                className="absolute left-[70%] top-[70%] h-[12%] w-[50%] origin-left rotate-45 rounded-full"
-                style={{
-                  background: "linear-gradient(135deg, #4a5058, #23262b 72%)",
-                  boxShadow:
-                    "0 12px 22px -8px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.2), inset 0 -1px 0 rgba(0,0,0,.45)",
-                }}
-              />
               {/* lens */}
               <div
                 className="absolute inset-0 overflow-hidden rounded-full"
                 style={{
-                  boxShadow: "0 50px 90px -34px rgba(0,0,0,.85), 0 0 0 1px rgba(0,0,0,.5)",
+                  boxShadow:
+                    "0 0 0 1px rgba(255,255,255,.45), 0 0 0 5px color-mix(in oklab, var(--background) 45%, transparent), 0 0 0 6px color-mix(in oklab, var(--foreground) 10%, transparent), 0 36px 80px -28px rgba(0,0,0,.55)",
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size remote render, next/image adds nothing here */}
@@ -274,9 +320,9 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                       <LayerPaths paths={layers[pinned].loupe} />
                     </g>
                   ) : (
-                    reps.map((rep, gi) => (
-                      <g key={`${rep}-${gi}`} className={`lens-fade${gi + 1}`}>
-                        {rep === "zoning" && (
+                    GROUPS.map((grp, gi) => (
+                      <g key={`loupe-grp-${gi}`} className={`lens-fade${gi + 1}`}>
+                        {grp.includes("zoning") && (
                           <path
                             d={lotLinesLoupe}
                             fill="none"
@@ -286,31 +332,28 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                             vectorEffect="non-scaling-stroke"
                           />
                         )}
-                        <LayerPaths paths={layers[rep].loupe} />
+                        {grp.map((k) => (
+                          <LayerPaths key={k} paths={layers[k].loupe} />
+                        ))}
                       </g>
                     ))
                   )}
                   {/* selected lot — the amber outline every report map carries */}
                   <path
                     d={parcelLoupe}
-                    fill="var(--selected-property)"
                     fillOpacity={0.12}
-                    stroke="var(--selected-property)"
                     strokeWidth={3}
                     strokeLinejoin="round"
                     vectorEffect="non-scaling-stroke"
-                    style={{ filter: "drop-shadow(0 0 10px color-mix(in oklab, var(--selected-property) 65%, transparent))" }}
+                    style={{
+                      fill: "var(--selected-property)",
+                      stroke: "var(--selected-property)",
+                      filter: "drop-shadow(0 0 10px color-mix(in oklab, var(--selected-property) 65%, transparent))",
+                    }}
                   />
                 </svg>
+
               </div>
-              {/* metal rim frame over the lens */}
-              <div
-                className="pointer-events-none absolute inset-0 rounded-full"
-                style={{
-                  boxShadow:
-                    "inset 0 0 0 5px #2b2f36, inset 0 0 0 6px rgba(255,255,255,.14), inset 0 0 26px 8px rgba(0,0,0,.45)",
-                }}
-              />
             </div>
 
             {/* cycling chips — click one to pin its layer */}
@@ -319,7 +362,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                 <button
                   key={c.key}
                   type="button"
-                  onClick={() => setPinned(c.key)}
+                  onClick={() => pin(c.key)}
                   className={`${c.group} ${c.pos} glass-solid absolute z-[6] hidden cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[12px] font-medium text-foreground sm:inline-flex`}
                   style={{ ["--i" as string]: c.i }}
                 >
@@ -339,8 +382,8 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
             {pinned && (
               <button
                 type="button"
-                onClick={() => setPinned(null)}
-                className="glass-solid absolute left-[-4%] top-[8%] z-[6] hidden cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[12px] font-medium text-foreground sm:inline-flex"
+                onClick={() => pin(null)}
+                className={`${pinnedPos} glass-solid absolute z-[6] hidden cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[12px] font-medium text-foreground sm:inline-flex`}
                 style={{ boxShadow: `0 0 0 1.5px color-mix(in oklab, ${META[pinned].hex} 55%, transparent), var(--glass-shadow)` }}
               >
                 <span
@@ -395,7 +438,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
             })}
             <button
               type="button"
-              onClick={() => setPinned(null)}
+              onClick={() => pin(null)}
               className={`glass-solid h-7 cursor-pointer rounded-full px-2.5 font-mono text-[9.5px] uppercase tracking-[0.14em] transition-colors ${pinned ? "text-foreground" : "text-muted-foreground"}`}
               title="Resume the layer cycle"
             >

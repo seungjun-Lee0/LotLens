@@ -116,10 +116,11 @@ export default async function ReportPage({
                 {lockedCount} more modules ready to unlock
               </h2>
               <p className="mx-auto mt-3 max-w-md text-pretty text-[14.5px] leading-relaxed text-muted-foreground">
-                Bushfire, Overland Flow, Storm Tide, Vegetation, Heritage &amp;
-                Character, Easements, and Zoning — already fetched from BCC.
-                Unlock to see the full per-module narrative, maps, and PDF
-                download.
+                Bushfire, Coastal Hazards, Vegetation, Environment &amp; Koala,
+                Heritage, Easements, Mining, Acid Sulfate Soils, Zoning and
+                more — already fetched from council and Queensland Government
+                sources. Unlock to see the full per-module narrative, maps,
+                and PDF download.
               </p>
               <div className="mt-7">
                 <UnlockButton addressId={address.id} reportId={report.id} />

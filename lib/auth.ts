@@ -28,6 +28,8 @@ export type SessionUser = {
   subscriptionStatus: string | null;
   stripeCustomerId: string | null;
   currentPeriodEnd: string | null;
+  /** Report credits left this billing cycle (granted by the webhook). */
+  credits: number;
 };
 
 type UserRow = {
@@ -38,6 +40,7 @@ type UserRow = {
   subscription_status: string | null;
   stripe_customer_id: string | null;
   current_period_end: string | null;
+  credits: number;
 };
 
 function secretKey(): Uint8Array {
@@ -98,6 +101,7 @@ function toSessionUser(row: UserRow): SessionUser {
     subscriptionStatus: row.subscription_status,
     stripeCustomerId: row.stripe_customer_id,
     currentPeriodEnd: row.current_period_end,
+    credits: row.credits ?? 0,
   };
 }
 
@@ -113,7 +117,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const sql = getDb();
     const rows = (await sql`
       SELECT id, email, name, plan, subscription_status,
-             stripe_customer_id, current_period_end
+             stripe_customer_id, current_period_end, credits
       FROM users WHERE id = ${userId} LIMIT 1
     `) as UserRow[];
     if (rows.length === 0) return null;
@@ -141,6 +145,18 @@ export async function usageThisMonth(userId: string): Promise<number> {
     WHERE user_id = ${userId} AND created_at >= date_trunc('month', now())
   `) as Array<{ n: number }>;
   return rows[0]?.n ?? 0;
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────
+
+/** True when the user's email is in the comma-separated ADMIN_EMAILS env. */
+export function isAdmin(user: SessionUser | null): boolean {
+  if (!user) return false;
+  const list = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return list.includes(user.email.toLowerCase());
 }
 
 // ── Google OAuth (enabled only when both env vars are present) ────────────

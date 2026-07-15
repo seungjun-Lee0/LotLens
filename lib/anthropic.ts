@@ -33,6 +33,14 @@ export async function generateModuleNarrative(
 ): Promise<ModuleNarrative> {
   // Kept `async` to match the signature Task 4b will need. Stub returns
   // immediately.
+  //
+  // Council-overlay modules outside adapted LGAs mark themselves
+  // `available: false` — render an honest "not integrated here" narrative
+  // instead of a false "no considerations identified".
+  const rawAvail = (input.councilData.raw_response ?? {}) as Record<string, unknown>;
+  if (rawAvail.available === false) {
+    return renderStubUnavailable(input, rawAvail);
+  }
   switch (input.module) {
     case "flooding":       return renderStubFlooding(input);
     case "flood_planning": return renderStubFloodPlanning(input);
@@ -40,12 +48,35 @@ export async function generateModuleNarrative(
     case "storm_tide":     return renderStubStormTide(input);
     case "bushfire":       return renderStubBushfire(input);
     case "vegetation":     return renderStubVegetation(input);
+    case "environment":    return renderStubEnvironment(input);
     case "heritage":       return renderStubHeritage(input);
     case "easements":      return renderStubEasements(input);
     case "noise":          return renderStubNoise(input);
+    case "steep_land":     return renderStubSteepLand(input);
+    case "acid_sulfate":   return renderStubAcidSulfate(input);
+    case "mining":         return renderStubMining(input);
     case "schools":        return renderStubSchools(input);
     case "zoning":         return renderStubZoning(input);
   }
+}
+
+function renderStubUnavailable(
+  input: GenerateModuleNarrativeInput,
+  raw: Record<string, unknown>,
+): ModuleNarrative {
+  const note =
+    typeof raw.availabilityNote === "string"
+      ? raw.availabilityNote
+      : "This overlay is published per-council and has not been integrated for this local government area yet.";
+  return {
+    summary: `This check is not yet available for ${input.address}'s council area.`,
+    detail: `${note} No finding here means "not checked", not "clear" — treat it as an open item for your conveyancer.`,
+    questions_to_ask: [
+      "Ask the local council (or check its online planning-scheme mapping) what this overlay shows for the lot.",
+      "Ask your conveyancer to include this check in their searches.",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
 }
 
 // ── Per-module stub renderers ─────────────────────────────────────────────
@@ -440,6 +471,173 @@ function renderStubEasements(
         ? "What is the distance from any dwelling to the live powerline conductor?"
         : "Can you build over or fence within the easement, and who pays if the authority needs to dig it up?",
       "Has the easement holder ever issued a notice or restoration order on this lot?",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubEnvironment(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const category = (raw.category as string | null) ?? null;
+  const priority = raw.inKoalaPriorityArea === true;
+  const habitat = raw.hasKoalaHabitat === true;
+  const wildlife = raw.hasWildlifeHabitat === true;
+
+  if (!priority && !habitat && !wildlife) {
+    return {
+      summary: `No koala or state wildlife habitat mapping covers ${input.address}.`,
+      detail:
+        "The property is outside the SEQ koala habitat mapping (core and locally refined) and outside MSES endangered/vulnerable wildlife habitat. Ordinary tree removal and building work is not constrained by these state environmental frameworks.",
+      questions_to_ask: [
+        "Council local laws can still protect individual trees — check before removing anything substantial.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  return {
+    summary: `${input.address} is affected by environmental habitat mapping: ${category ?? "koala/wildlife habitat"}.`,
+    detail: `${
+      habitat
+        ? "Mapped koala habitat covers part of the lot — inside a Koala Priority Area, interfering with koala habitat trees is assessable development under the Nature Conservation (Koala) Plan 2020. "
+        : priority
+          ? "The lot sits inside a Koala Priority Area, though no koala habitat is mapped on the lot itself. "
+          : ""
+    }${
+      wildlife
+        ? "MSES wildlife habitat (endangered or vulnerable species) is also mapped here, which can trigger state referral and offset requirements for new development."
+        : ""
+    } Day-to-day residential use is unaffected; clearing, pools, sheds and extensions in mapped habitat need checking first.`,
+    questions_to_ask: [
+      "Which trees on the lot are koala habitat trees, and what would removing one require?",
+      "Has any previous development application on this lot triggered koala or MSES conditions?",
+      "If you plan to extend or add a pool: get a fauna/vegetation assessment quote before contract.",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubSteepLand(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const category = (raw.category as string | null) ?? null;
+  const risk = (raw.riskLevel as string) ?? "none";
+
+  if (risk === "none") {
+    return {
+      summary: `No landslide or steep-land overlay covers ${input.address}.`,
+      detail:
+        "The council's landslide / steep land overlay does not place a polygon on this address. That doesn't guarantee flat ground — it means the site is outside the mapped hazard thresholds.",
+      questions_to_ask: [
+        "If the block is visibly sloping, budget for a contour survey before designing anything.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  return {
+    summary: `${input.address} sits in a landslide / steep land overlay${category ? ` (${category})` : ""}.`,
+    detail:
+      "Mapped steep land means development assessment will usually require a geotechnical report — slope stability, cut-and-fill limits, retaining and drainage design. Existing dwellings are unaffected day-to-day, but extensions, pools and secondary dwellings on the slope face extra engineering cost and approval time.",
+    questions_to_ask: [
+      "Has a geotechnical report ever been done for this lot? Ask the seller for a copy.",
+      "Are the existing retaining walls engineered and approved, and who owns each one?",
+      "Any signs of movement — cracked slabs, leaning fences, doors that stopped closing?",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubAcidSulfate(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const mapCode = (raw.mapCode as string | null) ?? null;
+  const meaning = (raw.meaning as string | null) ?? null;
+  const scale = (raw.scale as string | null) ?? null;
+  const risk = (raw.riskLevel as string) ?? "none";
+
+  if (risk === "none") {
+    return {
+      summary: `No mapped acid sulfate soils at ${input.address}.`,
+      detail:
+        "The Queensland acid sulfate soils mapping does not place this address inside a mapped ASS polygon. Note the state mapping covers coastal lowlands — being unmapped is expected for elevated or inland lots.",
+      questions_to_ask: [
+        "If you plan deep excavation (pool, basement) near the coast, ask whether any soil testing has been done regardless.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  return {
+    summary: `${input.address} sits on mapped acid sulfate soils${mapCode ? ` (map code ${mapCode})` : ""}.`,
+    detail: `State mapping${scale ? ` at ${scale} scale` : ""} classifies this land as ${
+      meaning ?? "an acid sulfate soil area"
+    }. Undisturbed, this changes nothing day-to-day — but excavation or drainage works (pools, basements, deep footings, canal work) can oxidise sulfidic material and produce sulfuric acid, so development approval typically requires an ASS investigation and management plan, which adds cost.`,
+    questions_to_ask: [
+      "Have previous works on the lot (pool, retaining walls) done ASS testing? Ask for the report.",
+      "For planned excavation: get an indicative quote for an ASS investigation and management plan.",
+      "Ask council what depth/volume of excavation triggers ASS assessment in this area.",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubMining(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const tenements = Array.isArray(raw.tenements)
+    ? (raw.tenements as Array<{ type?: string | null; status?: string | null; owner?: string | null; mineral?: string | null }>)
+    : [];
+  const kraResource = raw.inKraResourceArea === true;
+  const kraSeparation = raw.inKraSeparationArea === true;
+
+  if (tenements.length === 0 && !kraResource && !kraSeparation) {
+    return {
+      summary: `No resource tenures or Key Resource Areas affect ${input.address}.`,
+      detail:
+        "The statewide tenure layer shows no mining lease, exploration permit or mineral development licence over this lot, and it is outside every Key Resource Area footprint and separation buffer.",
+      questions_to_ask: [
+        "For rural or fringe lots, GeoResGlobe can additionally show historical workings and current applications nearby.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  const parts: string[] = [];
+  if (kraResource) parts.push("a Key Resource Area resource/processing footprint (active or future quarry land)");
+  if (kraSeparation) parts.push("a Key Resource Area separation buffer (dust/noise/blast constraints on sensitive uses)");
+  for (const t of tenements.slice(0, 2)) {
+    parts.push(
+      `${t.type ?? "a resource authority"}${t.status ? ` — ${String(t.status).toLowerCase()}` : ""}${t.owner ? ` (${t.owner})` : ""}`,
+    );
+  }
+
+  return {
+    summary: `${input.address} is affected by: ${parts.join("; ")}.`,
+    detail: `Resource interests exist separately from surface ownership in Queensland. ${
+      kraResource || kraSeparation
+        ? "KRA mapping means extractive industry (quarrying and haulage) is protected here by state policy — expect long-term noise, dust and truck movements, and constraints on adding new dwellings inside the buffer. "
+        : ""
+    }${
+      tenements.length > 0
+        ? "A tenure over the lot does not by itself grant surface access, but granted mining leases carry real activity rights — the exact terms live with the Department of Resources."
+        : ""
+    }`,
+    questions_to_ask: [
+      "Look the tenure up on GeoResGlobe: what is authorised, until when, and how close is active work?",
+      kraSeparation
+        ? "Ask council whether a new dwelling or extension is assessable inside the KRA separation area."
+        : "Has the tenure holder ever exercised access or compensation rights over this lot?",
+      "Ask neighbours about blasting, dust or haulage traffic patterns.",
     ],
     sources: sourcesFromRaw(raw),
   };

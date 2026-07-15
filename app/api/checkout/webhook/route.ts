@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
+import { PLAN_QUOTAS } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 
@@ -43,7 +44,14 @@ function periodEnd(sub: Stripe.Subscription): string | null {
   return typeof raw === "number" ? new Date(raw * 1000).toISOString() : null;
 }
 
-/** Persist subscription state onto the user row (idempotent). */
+/**
+ * Persist subscription state onto the user row (idempotent) and manage the
+ * credit balance:
+ *   - activation / new billing period / plan change → credits reset to the
+ *     plan's quota (basic 10, pro 50) — plans renew monthly, they don't
+ *     accumulate or top up mid-cycle;
+ *   - cancellation / non-active status → plan back to free, credits zeroed.
+ */
 async function syncSubscription(sub: Stripe.Subscription) {
   const userId = sub.metadata?.userId;
   const plan = sub.metadata?.plan;
@@ -52,13 +60,38 @@ async function syncSubscription(sub: Stripe.Subscription) {
     return;
   }
   const active = sub.status === "active" || sub.status === "trialing";
+  const newPeriodEnd = periodEnd(sub);
   const sql = getDb();
+
+  const prevRows = (await sql`
+    SELECT plan, current_period_end, credits FROM users WHERE id = ${userId} LIMIT 1
+  `) as Array<{ plan: string; current_period_end: string | null; credits: number }>;
+  const prev = prevRows[0];
+  if (!prev) {
+    console.warn("[checkout/webhook] user not found for subscription", sub.id, userId);
+    return;
+  }
+
+  let credits = prev.credits ?? 0;
+  if (!active) {
+    credits = 0;
+  } else {
+    const planChanged = prev.plan !== plan;
+    const newCycle =
+      !!newPeriodEnd &&
+      (!prev.current_period_end ||
+        new Date(newPeriodEnd).getTime() >
+          new Date(prev.current_period_end).getTime());
+    if (planChanged || newCycle) credits = PLAN_QUOTAS[plan];
+  }
+
   await sql`
     UPDATE users
     SET plan = ${active ? plan : "free"},
         subscription_status = ${sub.status},
         stripe_subscription_id = ${sub.id},
-        current_period_end = ${periodEnd(sub)}
+        current_period_end = ${newPeriodEnd},
+        credits = ${credits}
     WHERE id = ${userId}
   `;
 }

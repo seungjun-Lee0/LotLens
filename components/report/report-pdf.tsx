@@ -340,6 +340,19 @@ const styles = StyleSheet.create({
 
 function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; val: string }[] {
   if (!raw) return [];
+  // Council-overlay modules outside adapted LGAs mark themselves
+  // unavailable — one explanatory row instead of module facts.
+  if (raw.available === false) {
+    return [
+      {
+        key: "Not available",
+        val:
+          typeof raw.availabilityNote === "string"
+            ? raw.availabilityNote
+            : "This overlay has not been integrated for this council area yet.",
+      },
+    ];
+  }
   switch (module) {
     case "flooding": {
       const rows: { key: string; val: string }[] = [];
@@ -402,6 +415,40 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
           e.areaSqm ? `${Math.round(e.areaSqm)} m²` : null,
         ].filter(Boolean);
         rows.push({ key: `Cadastral ${i + 1}`, val: parts.join(" · ") });
+      });
+      return rows;
+    }
+    case "environment": {
+      const rows: { key: string; val: string }[] = [];
+      if (raw.category) rows.push({ key: "Habitat", val: String(raw.category) });
+      return rows;
+    }
+    case "steep_land": {
+      const rows: { key: string; val: string }[] = [];
+      if (raw.category) rows.push({ key: "Overlay", val: String(raw.category) });
+      return rows;
+    }
+    case "acid_sulfate": {
+      const rows: { key: string; val: string }[] = [];
+      if (raw.meaning) rows.push({ key: "Classification", val: String(raw.meaning) });
+      if (raw.mapCode)
+        rows.push({
+          key: "Map code",
+          val: `${raw.mapCode}${raw.scale ? ` · ${raw.scale}` : ""}`,
+        });
+      return rows;
+    }
+    case "mining": {
+      const rows: { key: string; val: string }[] = [];
+      if (raw.category) rows.push({ key: "Finding", val: String(raw.category) });
+      const tenements = asArr<{ type?: string | null; status?: string | null; owner?: string | null }>(
+        raw.tenements,
+      );
+      tenements.slice(0, 3).forEach((t, i) => {
+        rows.push({
+          key: `Tenure ${i + 1}`,
+          val: [t.type ?? "Resource authority", t.status, t.owner].filter(Boolean).join(" · "),
+        });
       });
       return rows;
     }
@@ -575,9 +622,13 @@ const MODULE_ORDER: Module[] = [
   "storm_tide",
   "bushfire",
   "vegetation",
+  "environment",
   "heritage",
   "easements",
   "noise",
+  "steep_land",
+  "acid_sulfate",
+  "mining",
   "schools",
   "zoning",
 ];
@@ -604,7 +655,7 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
       <Text style={styles.eyebrow}>Property fact pack</Text>
       <Text style={styles.title}>{address.address_text}</Text>
       <Text style={styles.question}>
-        Five public-data modules.{" "}
+        {modules.length} public-data modules.{" "}
         {considerationCount === 0
           ? "Nothing of concern across the address."
           : `${considerationCount} module${considerationCount > 1 ? "s have" : " has"} something worth reading.`}
@@ -663,12 +714,18 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
           )}
           <View style={styles.metaBlock}>
             <Text style={styles.metaLabel}>Council</Text>
-            <Text style={styles.metaValue}>Brisbane City Council</Text>
+            <Text style={styles.metaValue}>
+              {payload.parcel?.lga
+                ? /council/i.test(payload.parcel.lga)
+                  ? payload.parcel.lga
+                  : `${payload.parcel.lga} Council`
+                : "—"}
+            </Text>
           </View>
-          {payload.parcel?.ward && (
+          {payload.parcel?.suburb && (
             <View style={styles.metaBlock}>
-              <Text style={styles.metaLabel}>Ward</Text>
-              <Text style={styles.metaValue}>{payload.parcel.ward}</Text>
+              <Text style={styles.metaLabel}>Locality</Text>
+              <Text style={styles.metaValue}>{payload.parcel.suburb}</Text>
             </View>
           )}
           {zoneText && (

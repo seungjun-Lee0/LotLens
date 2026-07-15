@@ -7,7 +7,7 @@
 // two stay in sync.
 
 import type { LucideIcon } from "lucide-react";
-import { CloudRain, Flame, GraduationCap, Landmark, LayoutGrid, Leaf, ScrollText, Volume2, Waves, Wind } from "lucide-react";
+import { CloudRain, Droplets, Flame, GraduationCap, Landmark, LayoutGrid, Leaf, Mountain, PawPrint, ScrollText, TrendingUp, Volume2, Waves, Wind } from "lucide-react";
 
 import type { Module } from "@/lib/db";
 
@@ -69,6 +69,12 @@ const D = {
   easementHV: "#db2777", easementCadastre: "#a21caf",
   vegWaterway: "#0284c7", vegMSES: "#ea580c", vegBiodiversity: "#84cc16", vegCorridor: "#16a34a",
   zoneCentre: "#dc2626", zoneMixed: "#f97316", zoneLowMediumResidential: "#d97706", zoneResidential: "#facc15", zoneOpenSpace: "#16a34a", zoneOther: "#6366f1",
+  coastalErosion: "#d97706",
+  rvmA: "#15803d", rvmB: "#16a34a", rvmC: "#84cc16", rvmR: "#0d9488",
+  koalaCore: "#16a34a", koalaLocal: "#4ade80", koalaPriority: "#a3e635", wildlifeHabitat: "#f97316",
+  assShallow: "#b45309", assMapped: "#eab308",
+  tenement: "#a855f7", kraResource: "#dc2626", kraSeparation: "#f59e0b",
+  steepHigh: "#9a3412", steep: "#f59e0b",
 };
 
 export const MODULE_META: Record<Module, ModuleMeta> = {
@@ -135,22 +141,21 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
   },
 
   storm_tide: {
-    name: "Storm Tide",
-    question: "Is the property exposed to coastal storm-tide flooding?",
+    name: "Coastal Hazards",
+    question: "Is the property exposed to storm-tide inundation or coastal erosion?",
     tint: "var(--apple-indigo)",
     tintHex: APPLE_HEX.indigo,
     icon: Wind,
-    sourceLabel: "Brisbane City Council — Storm Tide mapping",
+    sourceLabel: "Queensland Government — Coastal hazard area mapping",
     thingsToKnow: [
-      "Storm tide is the sea-level rise caused by a severe storm combined with the normal astronomical tide. Bayside Brisbane (Wynnum, Manly, Sandgate) and tidal creek mouths are exposed to storm-tide inundation during cyclones and east-coast lows.",
-      "Building in a storm-tide area triggers council planning controls — habitable floor levels must sit above the defined storm-tide level, and there can be requirements around the building envelope's resilience to wave action and saltwater inundation.",
+      "Storm tide is the sea-level rise caused by a severe storm combined with the normal astronomical tide. Bayside and tidal-creek addresses anywhere on the Queensland coast are exposed during cyclones and east-coast lows. The state's coastal hazard maps model inundation out to 2100, including projected sea-level rise.",
+      "Erosion prone areas mark land that could be lost to long-term coastal erosion or permanent tidal inundation. Building in a storm-tide or erosion prone area triggers planning controls — habitable floor levels above the defined storm-tide level, and constraints on how close to the shoreline you can build.",
     ],
-    note: "Storm-tide modelling combines historical events, projected sea-level rise, and bathymetry. Site-specific factors (sea walls, elevation surveys) may change the practical risk. Confirm with the council or a qualified coastal engineer before relying on this for a major decision.",
+    note: "Coastal hazard modelling combines historical events, projected sea-level rise, and bathymetry. Site-specific factors (sea walls, elevation surveys) may change the practical risk. Confirm with the council or a qualified coastal engineer before relying on this for a major decision.",
     legend: [
-      { label: "High risk",     color: D.stormHigh,    colorHex: D.stormHigh },
-      { label: "Medium risk",   color: D.stormMedium,  colorHex: D.stormMedium },
-      { label: "Low risk",      color: D.stormLow,     colorHex: D.stormLow },
-      { label: "Very low risk", color: D.stormVeryLow, colorHex: D.stormVeryLow },
+      { label: "Storm tide — high hazard",   color: D.stormHigh,      colorHex: D.stormHigh },
+      { label: "Storm tide — medium hazard", color: D.stormMedium,    colorHex: D.stormMedium },
+      { label: "Erosion prone area",         color: D.coastalErosion, colorHex: D.coastalErosion },
     ],
   },
 
@@ -160,17 +165,17 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-orange)",
     tintHex: APPLE_HEX.orange,
     icon: Flame,
-    sourceLabel: "Brisbane City Council — City Plan Bushfire overlay",
+    sourceLabel: "Queensland Government — Bushfire Prone Area (State Planning Policy)",
     thingsToKnow: [
       "Bushfire prone areas are mapped where vegetation type, slope, and proximity to bushland create an elevated fire risk. The classification affects how new buildings must be constructed (Bushfire Attack Level / BAL standards), what vegetation must be cleared around dwellings, and how access for emergency vehicles is designed.",
       "If a property sits in a bushfire hazard area or its buffer, building approvals usually require a BAL assessment and may impose specific construction requirements. Insurance premiums for bushfire-affected properties can also be materially higher than for non-affected addresses.",
     ],
-    note: "BCC's overlay is council-scope. Some properties on the statewide Queensland Fire Department mapping fall outside the council overlay. For high-stakes decisions, also check the QFD bushfire prone area map.",
+    note: "This is the statewide Bushfire Prone Area mapping used by the State Planning Policy. Councils may also apply their own bushfire overlay with local refinements — check the council planning scheme for LGA-specific provisions.",
     legend: [
-      { label: "Very high potential",   color: D.fireVeryHigh, colorHex: D.fireVeryHigh },
-      { label: "High hazard area",      color: D.fireHigh,     colorHex: D.fireHigh },
-      { label: "High hazard buffer",    color: D.fireBuffer,   colorHex: D.fireBuffer },
-      { label: "Medium hazard area",    color: D.fireMedium,   colorHex: D.fireMedium },
+      { label: "Very high potential intensity", color: D.fireVeryHigh, colorHex: D.fireVeryHigh },
+      { label: "High potential intensity",      color: D.fireHigh,     colorHex: D.fireHigh },
+      { label: "Medium potential intensity",    color: D.fireMedium,   colorHex: D.fireMedium },
+      { label: "Potential impact buffer",       color: D.fireBuffer,   colorHex: D.fireBuffer },
     ],
   },
 
@@ -180,17 +185,39 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-green)",
     tintHex: APPLE_HEX.green,
     icon: Leaf,
-    sourceLabel: "Brisbane City Council — Biodiversity areas overlay",
+    sourceLabel: "QLD Regulated Vegetation Map + council biodiversity overlays",
     thingsToKnow: [
       "The Biodiversity areas overlay protects native vegetation that supports threatened species, wildlife corridors, and ecological communities. Council assessment is required before removing significant trees, clearing understorey, or substantially altering habitat in these areas.",
       "Owning a property in the overlay does not stop you renovating or extending, but it constrains where buildings can sit, what trees can be removed, and what landscaping can replace cleared vegetation. Many Brisbane renovations are stalled mid-project by overlooked vegetation controls.",
     ],
     note: "The overlay does not include every individual tree of value. Pre-1947 dwellings, Natural Assets Local Law trees, and protected wetlands may impose extra controls. For any work near trees or waterways, an arborist report or council pre-lodgement meeting is the safer path.",
     legend: [
+      { label: "RVM Category B (remnant)",  color: D.rvmB,            colorHex: D.rvmB },
+      { label: "RVM Category C (regrowth)", color: D.rvmC,            colorHex: D.rvmC },
+      { label: "Essential habitat",         color: D.vegWaterway,     colorHex: D.vegWaterway },
       { label: "Waterway / wetland",        color: D.vegWaterway,     colorHex: D.vegWaterway },
-      { label: "Matters of state interest", color: D.vegMSES,         colorHex: D.vegMSES },
       { label: "Biodiversity area",         color: D.vegBiodiversity, colorHex: D.vegBiodiversity },
       { label: "Ecological corridor",       color: D.vegCorridor,     colorHex: D.vegCorridor },
+    ],
+  },
+
+  environment: {
+    name: "Environment & Koala",
+    question: "Does koala or wildlife habitat mapping affect the property?",
+    tint: "var(--apple-green)",
+    tintHex: APPLE_HEX.green,
+    icon: PawPrint,
+    sourceLabel: "QLD Koala Plan mapping + Matters of State Environmental Significance",
+    thingsToKnow: [
+      "South East Queensland has regulatory koala habitat mapping under the Nature Conservation (Koala) Plan 2020. Inside a Koala Priority Area, interfering with koala habitat trees in mapped core habitat is assessable development — a genuine constraint on clearing, driveways, pools and building envelopes.",
+      "Matters of State Environmental Significance (MSES) wildlife habitat marks areas mapped for endangered or vulnerable species statewide. Development in MSES areas can trigger state referral and offset requirements on top of council rules.",
+    ],
+    note: "Habitat mapping is periodically refined and councils may hold locally refined versions. A property inside the mapping is not frozen — most ordinary residential use continues unaffected — but tree removal and new development need checking against the koala and MSES frameworks first.",
+    legend: [
+      { label: "Core koala habitat",        color: D.koalaCore,       colorHex: D.koalaCore },
+      { label: "Locally refined habitat",   color: D.koalaLocal,      colorHex: D.koalaLocal },
+      { label: "Koala priority area",       color: D.koalaPriority,   colorHex: D.koalaPriority },
+      { label: "MSES wildlife habitat",     color: D.wildlifeHabitat, colorHex: D.wildlifeHabitat },
     ],
   },
 
@@ -200,7 +227,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-purple)",
     tintHex: APPLE_HEX.purple,
     icon: Landmark,
-    sourceLabel: "Brisbane City Council — Heritage + Character overlays",
+    sourceLabel: "Queensland Heritage Register + council heritage/character overlays",
     thingsToKnow: [
       "Brisbane protects two distinct kinds of buildings and areas. Heritage register listings (state or local) cover places with explicit cultural or historic significance — external work and demolition normally require Council assessment, and demolition can be refused. The Traditional Building Character overlay protects pre-1947 housing across whole suburbs to preserve street-facing form.",
       "Owning a property in either overlay does not stop you renovating, but it constrains what you can do and how it must look. Common impacts: street-facing facades cannot be altered freely, demolition usually requires impact assessment, and additions must respect the original built form.",
@@ -253,6 +280,61 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
   },
 
+  steep_land: {
+    name: "Steep Land",
+    question: "Is the property on steep or landslide-prone land?",
+    tint: "var(--apple-orange)",
+    tintHex: APPLE_HEX.orange,
+    icon: TrendingUp,
+    sourceLabel: "Council landslide / steep land overlays",
+    thingsToKnow: [
+      "Councils map land where slope, soil and geology create landslide risk — typically slopes above 15%. Building on mapped steep land usually triggers geotechnical assessment requirements: a site-specific report on stability, cut-and-fill limits, retaining design and drainage before approval.",
+      "Steep lots also cost more to build on regardless of hazard mapping: benched slabs or pole homes, engineered retaining walls, and more complex stormwater management. If you're comparing a flat lot and a steep lot at similar prices, the steep one usually carries a five-figure construction premium.",
+    ],
+    note: "Landslide overlays are council planning-scheme layers and their thresholds differ by LGA. A lot outside the overlay can still be steep — check the contours and get a site inspection for anything visibly sloping. This module is available where a council adapter exists (Brisbane, Moreton Bay, Sunshine Coast, Redland today).",
+    legend: [
+      { label: "Landslide hazard / high slope", color: D.steepHigh, colorHex: D.steepHigh },
+      { label: "Steep land overlay area",        color: D.steep,     colorHex: D.steep },
+    ],
+  },
+
+  acid_sulfate: {
+    name: "Acid Sulfate Soils",
+    question: "Could excavation on this lot disturb acid sulfate soils?",
+    tint: "var(--apple-yellow)",
+    tintHex: APPLE_HEX.yellow,
+    icon: Droplets,
+    sourceLabel: "Queensland Government — Acid sulfate soils mapping",
+    thingsToKnow: [
+      "Acid sulfate soils are natural coastal-lowland soils (typically below 5 m elevation) containing iron sulfides. Left undisturbed they are harmless — but when excavated or drained they react with air to produce sulfuric acid, which corrodes concrete and steel, kills vegetation, and can trigger costly environmental management obligations.",
+      "For buyers the practical impact lands on earthworks: pools, basements, canal-front works, deep footings and major drainage in mapped areas usually need an acid sulfate soil investigation and a management plan as part of development approval.",
+    ],
+    note: "State mapping is broad-scale (1:25,000 at best) and marks the probability of occurrence, not a confirmed on-site condition. Lots outside mapped areas can still contain acid sulfate soils at depth. Site-specific soil testing is the only definitive answer before major excavation.",
+    legend: [
+      { label: "Shallow sulfidic material", color: D.assShallow, colorHex: D.assShallow },
+      { label: "Mapped acid sulfate soils", color: D.assMapped,  colorHex: D.assMapped },
+    ],
+  },
+
+  mining: {
+    name: "Mining & Resources",
+    question: "Do resource tenures or quarry buffers affect the property?",
+    tint: "var(--apple-purple)",
+    tintHex: APPLE_HEX.purple,
+    icon: Mountain,
+    sourceLabel: "Queensland Government — Resource tenures + Key Resource Areas",
+    thingsToKnow: [
+      "Queensland land can carry resource authorities — mining leases, exploration permits, mineral development licences — that exist separately from surface ownership. An exploration permit blanketing a region is common and usually low-impact; a granted mining lease on or beside a lot is a serious flag for noise, dust, subsidence and access rights.",
+      "Key Resource Areas (KRAs) protect extractive resources (quarries, sand, gravel) under the State Planning Policy. A KRA separation area is a buffer where sensitive uses like new dwellings can be constrained because blasting, dust and haulage traffic are expected to continue long-term.",
+    ],
+    note: "This module reads the public statewide tenure and KRA layers. Historical mines, abandoned workings and current applications are searchable in more depth on GeoResGlobe. Tenure over a lot does not by itself grant surface access — but it is exactly the kind of encumbrance to raise with a conveyancer.",
+    legend: [
+      { label: "KRA resource/processing area", color: D.kraResource,   colorHex: D.kraResource },
+      { label: "KRA separation buffer",        color: D.kraSeparation, colorHex: D.kraSeparation },
+      { label: "Resource authority (tenure)",  color: D.tenement,      colorHex: D.tenement },
+    ],
+  },
+
   schools: {
     name: "School Catchments",
     question: "Which state schools is this property zoned for?",
@@ -277,7 +359,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-indigo)",
     tintHex: APPLE_HEX.indigo,
     icon: LayoutGrid,
-    sourceLabel: "Brisbane City Council — City Plan 2014 Zoning",
+    sourceLabel: "Council planning scheme zoning (SEQ Regional Plan outside adapted LGAs)",
     thingsToKnow: [
       "Brisbane's City Plan 2014 places every parcel in a specific zone — for example Low density residential, Mixed use, Centre, or Open space. The zone determines what you can build on the land, what the building can be used for, height and density limits, and whether a proposal is code-assessable or impact-assessable.",
       "Some zones are further divided into precincts that fine-tune the rules for that area's character — Centre frame is different from Principal centre even though both are in the Centre family. The precinct description below tells you the exact precinct that applies.",

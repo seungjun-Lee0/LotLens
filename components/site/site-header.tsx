@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { NavAnchor } from "@/components/site/nav-anchor";
 import { ThemeToggle } from "@/components/site/theme-toggle";
 import { getSessionUser, isActiveSubscriber, isAdmin } from "@/lib/auth";
 
@@ -30,24 +31,24 @@ export async function SiteHeader() {
           </span>
         </Link>
         <nav className="flex items-center gap-2 text-[13px] text-muted-foreground">
-          <Link
+          <NavAnchor
             href="/#modules"
             className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground sm:inline"
           >
             Modules
-          </Link>
-          <Link
+          </NavAnchor>
+          <NavAnchor
             href="/#pricing"
             className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground sm:inline"
           >
             Pricing
-          </Link>
-          <Link
+          </NavAnchor>
+          <NavAnchor
             href="/#faq"
             className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground md:inline"
           >
             FAQ
-          </Link>
+          </NavAnchor>
 
           {user ? (
             <>

@@ -1,9 +1,19 @@
 "use client";
 
-// FAQ accordion that plays itself as you scroll — each question opens in
-// turn (and the previous one closes) while the section moves through the
-// viewport. The first manual click takes over for good: from then on it's
-// a normal accordion. Reduced-motion users get the plain accordion too.
+// FAQ accordion that plays itself as you scroll — a scroll-spy on the
+// viewport centre: each question unfolds as its row crosses the middle of
+// the screen, and STAYS open while the next ones reveal below. Keeping
+// passed answers open is what makes the choreography smooth: nothing above
+// the centre line ever collapses, so rows never yank upward mid-read, and
+// each next question sits a full answer's height further down (~150px of
+// scroll per item instead of one 57px row). The first manual click takes
+// over for good: from then on it's a classic one-open accordion.
+// Reduced-motion users get the plain accordion too.
+//
+// Answers animate via the grid-rows 0fr→1fr trick (see .faq-answer in
+// globals.css) — works in every browser, unlike <details> +
+// interpolate-size which is Chromium-only and left phones snapping open
+// with no transition at all.
 
 import { useEffect, useRef, useState } from "react";
 
@@ -12,7 +22,8 @@ export type FaqItem = { q: string; a: string };
 export function FaqScroller({ items }: { items: FaqItem[] }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const manualRef = useRef(false);
-  const [openIdx, setOpenIdx] = useState(0);
+  // Scroll mode: items 0..idx are open. Manual mode: only idx is open.
+  const [sel, setSel] = useState<{ manual: boolean; idx: number }>({ manual: false, idx: -1 });
 
   useEffect(() => {
     const el = ref.current;
@@ -26,13 +37,13 @@ export function FaqScroller({ items }: { items: FaqItem[] }) {
         raf = 0;
         const node = ref.current;
         if (!node || manualRef.current) return;
-        const rect = node.getBoundingClientRect();
-        const vh = window.innerHeight;
-        // 0 → section top reaches 80% of the viewport; 1 → section has
-        // scrolled its own height plus a bit past that line.
-        const p = (vh * 0.8 - rect.top) / (rect.height + vh * 0.35);
-        const clamped = Math.min(1, Math.max(0, p));
-        setOpenIdx(Math.min(items.length - 1, Math.floor(clamped * items.length)));
+        // Open everything whose question row has crossed the centre line.
+        const line = window.innerHeight * 0.55;
+        let idx = -1;
+        node.querySelectorAll<HTMLElement>("[data-faq-q]").forEach((row, i) => {
+          if (row.getBoundingClientRect().top <= line) idx = i;
+        });
+        setSel((s) => (s.manual || s.idx === idx ? s : { manual: false, idx }));
       });
     };
     // Only pay for the scroll handler while the FAQ is near the viewport.
@@ -59,33 +70,41 @@ export function FaqScroller({ items }: { items: FaqItem[] }) {
 
   return (
     <div ref={ref} className="mx-auto w-full max-w-2xl border-t border-border/60">
-      {items.map((f, i) => (
-        <details
-          key={f.q}
-          className="faq-item group border-b border-border/60"
-          open={openIdx === i}
-        >
-          <summary
-            className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 text-[15px] font-medium tracking-tight [&::-webkit-details-marker]:hidden"
-            onClick={(e) => {
-              e.preventDefault();
-              manualRef.current = true;
-              setOpenIdx((prev) => (prev === i ? -1 : i));
-            }}
-          >
-            {f.q}
-            <span
-              className="shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-45"
-              style={{ color: "var(--apple-blue)" }}
+      {items.map((f, i) => {
+        const open = sel.manual ? sel.idx === i : i <= sel.idx;
+        return (
+          <div key={f.q} className="border-b border-border/60">
+            <button
+              type="button"
+              data-faq-q
+              aria-expanded={open}
+              onClick={() => {
+                manualRef.current = true;
+                setSel({ manual: true, idx: open ? -1 : i });
+              }}
+              className="flex w-full cursor-pointer items-center justify-between gap-4 py-4 text-left text-[15px] font-medium tracking-tight"
             >
-              +
-            </span>
-          </summary>
-          <p className="max-w-[62ch] pb-4 text-[13.5px] leading-relaxed text-muted-foreground">
-            {f.a}
-          </p>
-        </details>
-      ))}
+              {f.q}
+              <span
+                aria-hidden
+                className={`shrink-0 transition-transform duration-300 ${open ? "rotate-45" : ""}`}
+                style={{ color: "var(--apple-blue)" }}
+              >
+                +
+              </span>
+            </button>
+            {/* Answer text stays in the DOM whether open or not (SEO/find-
+                in-page); the grid wrapper collapses it visually. */}
+            <div className="faq-answer" data-open={open ? "" : undefined}>
+              <div className="min-h-0 overflow-hidden">
+                <p className="max-w-[62ch] pb-4 text-[13.5px] leading-relaxed text-muted-foreground">
+                  {f.a}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

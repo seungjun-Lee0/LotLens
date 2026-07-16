@@ -239,10 +239,18 @@
   }
 
   /* Below-the-fold sections skip rendering work until they approach the
-     viewport — pure perf, zero visual difference once on screen. */
+     viewport — pure perf, zero visual difference once on screen. During
+     header-anchor scrolling (html.nav-scroll) they render at full size so
+     scroll targets can be measured accurately. */
   .cv-auto {
     content-visibility: auto;
     contain-intrinsic-size: auto 900px;
+    /* Native #hash jumps (arriving from another page) land clear of the
+       sticky header. */
+    scroll-margin-top: 5.5rem;
+  }
+  .nav-scroll .cv-auto {
+    content-visibility: visible;
   }
 
   /* Sheen used on hero gradient text */
@@ -286,6 +294,49 @@
     from { transform: translateX(0); }
     to   { transform: translateX(-50%); }
   }
+
+  /* Hero veils — fade the aerial into the page background. The vertical
+     ramp completes WELL BEFORE the section edge (~90%) so the hero melts
+     into the next section with no visible seam; light and dark get
+     separate strengths (light mode read as a white wash at dark's values).
+     Phones get the vertical ramp ONLY — the 90deg wash exists to clear the
+     desktop text column, but on a stacked phone layout it just buries the
+     left half of the map the loupe is magnifying. */
+  /* Phone stops reach SOLID --background by 88% — the phone hero is much
+     taller than desktop's, so desktop's 96% endpoint leaves the last ~15%
+     (rail + seam) with aerial texture ghosting through, which reads as a
+     hard edge where the section clips. */
+  .hero-veil-light {
+    background: linear-gradient(180deg, color-mix(in oklab, var(--background) 62%, transparent) 0%, color-mix(in oklab, var(--background) 16%, transparent) 30%, color-mix(in oklab, var(--background) 12%, transparent) 60%, color-mix(in oklab, var(--background) 55%, transparent) 76%, var(--background) 88%);
+  }
+  .hero-veil-dark {
+    background: linear-gradient(180deg, color-mix(in oklab, var(--background) 78%, transparent) 0%, color-mix(in oklab, var(--background) 30%, transparent) 30%, color-mix(in oklab, var(--background) 26%, transparent) 60%, color-mix(in oklab, var(--background) 62%, transparent) 76%, var(--background) 88%);
+  }
+  @media (min-width: 640px) {
+    .hero-veil-light {
+      background: linear-gradient(180deg, color-mix(in oklab, var(--background) 62%, transparent) 0%, color-mix(in oklab, var(--background) 16%, transparent) 30%, color-mix(in oklab, var(--background) 12%, transparent) 68%, var(--background) 96%), linear-gradient(90deg, color-mix(in oklab, var(--background) 90%, transparent) 0%, color-mix(in oklab, var(--background) 66%, transparent) 42%, color-mix(in oklab, var(--background) 16%, transparent) 68%, transparent 84%);
+    }
+    .hero-veil-dark {
+      background: linear-gradient(180deg, color-mix(in oklab, var(--background) 78%, transparent) 0%, color-mix(in oklab, var(--background) 30%, transparent) 30%, color-mix(in oklab, var(--background) 26%, transparent) 64%, var(--background) 96%), linear-gradient(90deg, color-mix(in oklab, var(--background) 94%, transparent) 0%, color-mix(in oklab, var(--background) 76%, transparent) 42%, color-mix(in oklab, var(--background) 24%, transparent) 68%, transparent 84%);
+    }
+  }
+
+  /* Phone module rail — soft edge fade so pills dissolving at the sides
+     read as "scrolls sideways", not "cut off". The right fade is WIDE
+     (72px): the pills are dark-on-dark, so a narrow alpha ramp is
+     invisible and a clipped pill still reads as a hard cut — the fade has
+     to swallow most of the partial pill's text to register. Removed at
+     sm+ where the rail wraps and nothing is clipped. */
+  .rail-fade {
+    mask-image: linear-gradient(to right, transparent 0, #000 24px, #000 calc(100% - 72px), transparent calc(100% - 6px));
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 24px, #000 calc(100% - 72px), transparent calc(100% - 6px));
+  }
+  @media (min-width: 640px) {
+    .rail-fade {
+      mask-image: none;
+      -webkit-mask-image: none;
+    }
+  }
 }
 
 /* ── Landing hero: loupe, cycling module chips, layer washes ──────────────
@@ -306,19 +357,6 @@
   .cycle-g1 { animation: lens-cyc1 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
   .cycle-g2 { animation: lens-cyc2 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
   .cycle-g3 { animation: lens-cyc3 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
-
-  /* Pulsing ring on the background map marking the spot the detail circle
-     magnifies. */
-  .hero-marker-pulse {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: hero-marker-pulse 2.6s ease-out infinite;
-  }
-  @keyframes hero-marker-pulse {
-    0%   { transform: scale(1);   opacity: 0.8; }
-    70%  { transform: scale(2.6); opacity: 0; }
-    100% { transform: scale(2.6); opacity: 0; }
-  }
 
   /* Loupe overlay layers fade in sync with each chip group (opacity only —
      the transform-based chip pop doesn't suit SVG <g> elements). */
@@ -444,9 +482,37 @@
   @media (min-width: 1280px) { .cta-card { --cta-peak: 1.06; --cta-zoom: 1.08; } }
   @media (min-width: 1440px) { .cta-card { --cta-peak: 1.14; --cta-zoom: 1.1; } }
   @media (min-width: 1680px) { .cta-card { --cta-peak: 1.28; --cta-zoom: 1.12; } }
+  /* Phones: no centering pin — the card rides in flow right behind the
+     FAQ (sections stay packed, no runway whitespace), then STICKS just
+     under the header (top 5rem) and grows until its bottom nearly fills
+     the screen. Width never changes (--cta-peak/zoom at 1). */
   @media (max-width: 767.98px) {
-    .cta-stage { height: 115vh; }
-    .cta-card { --cta-peak: 1; --cta-zoom: 1.03; --cta-peak-h: 46vh; }
+    /* Fixed-height stage: the ~22rem past one viewport is the stuck
+       dwell, pre-built as sticky travel so it can never be raced away by
+       fast scrolling. It sits BELOW the card (card rides at the stage
+       top, 48px behind the FAQ) and is scrolled through while the grown
+       card covers the screen. */
+    .cta-stage { height: calc(100svh + 22rem); }
+    /* full-height so the sticky card has the whole stage to stick within
+       (sticky travel is bounded by the PARENT box) */
+    .cta-pin { position: static; display: block; height: 100%; }
+    .cta-card {
+      position: sticky;
+      top: 5rem;
+      /* Desktop centres its overgrown width via left:50% + translateX(-50%)
+         — a net-zero pair under position:relative, but sticky clamps the
+         left-shift while the translate still applies, dragging the card
+         half off-screen. Width never grows here, so drop both. */
+      left: 0;
+      transform: none;
+      --cta-peak: 1;
+      --cta-zoom: 1;
+      --cta-peak-h: calc(100svh - 6rem);
+    }
+    .cta-stage.is-focus .cta-card {
+      width: 100%;
+      transform: none;
+    }
   }
   /* Without JS the focus state can never trigger — skip the scroll-jack
      so the CTA reads as a normal section. */
@@ -456,17 +522,16 @@
     .cta-dim { display: none; }
   }
 
-  /* Smooth <details> open/close (Chromium's interpolate-size; a no-op
-     instant toggle elsewhere). */
-  @supports (interpolate-size: allow-keywords) {
-    .faq-item { interpolate-size: allow-keywords; }
-    .faq-item::details-content {
-      block-size: 0;
-      overflow: clip;
-      transition: block-size 0.45s cubic-bezier(0.4, 0, 0.2, 1),
-        content-visibility 0.45s allow-discrete;
-    }
-    .faq-item[open]::details-content { block-size: auto; }
+  /* FAQ answers — the grid-rows 0fr→1fr height animation, which works in
+     EVERY browser (the previous <details> + interpolate-size approach is
+     Chromium-only, so phones snapped open with no transition at all). */
+  .faq-answer {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.55s cubic-bezier(0.22, 0.8, 0.25, 1);
+  }
+  .faq-answer[data-open] {
+    grid-template-rows: 1fr;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -475,7 +540,7 @@
     .cta-stage { height: auto; }
     .cta-pin { position: static; display: block; height: auto; }
     .cta-dim { display: none; }
-    .faq-item::details-content { transition: none; }
+    .faq-answer { transition: none; }
   }
 
   /* Module cards — colour glow keyed off the per-card --c custom property */
@@ -520,7 +585,6 @@
     .cycle-g2, .cycle-g3 { animation: none; display: none; }
     .lens-fade1 { animation: none; opacity: 1; }
     .lens-fade2, .lens-fade3 { animation: none; opacity: 0; }
-    .hero-marker-pulse { animation: none; opacity: 0; }
     .mod-card { transition: none; }
   }
 }

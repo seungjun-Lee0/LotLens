@@ -36,14 +36,20 @@ const CENTER =
     ? { lat: argCenter[0], lng: argCenter[1] }
     : { lat: -27.519, lng: 152.9727 }; // 115RP73818 — Graceville character belt, river flood fringe
 
-// Frame sizes (metres in mercator): hero 2800×1580 (16:9), loupe 320×320.
+// Frame sizes (metres in mercator): hero 2800×1580 (16:9), loupe 560×560.
 // The lot is NOT centred in the hero frame — it sits at (68%, 47%), which
 // is where the loupe circle renders in the desktop layout. The lens
 // therefore hovers over the actual spot it magnifies.
+// The loupe half-width (280 m) is deliberately loose: it puts the lot's
+// whole block plus neighbouring streets in the lens (~20% of hero width),
+// so the magnified view reads as "the land around this spot, in focus"
+// rather than a disconnected close-up — while the parcel stays large
+// enough for the layer-on-lot detail to be legible.
 const HERO_W = 2800;
 const HERO_H = 1580;
 const LOT_FX = 0.68; // fraction from the left edge
 const LOT_FY = 0.47; // fraction from the top edge
+const LOUPE_HALF = 280;
 const CX = merX(CENTER.lng);
 const CY = merY(CENTER.lat);
 const HERO_BBOX = {
@@ -53,10 +59,10 @@ const HERO_BBOX = {
   ymax: Math.round(CY + LOT_FY * HERO_H),
 };
 const LOUPE_BBOX = {
-  xmin: Math.round(CX - 160),
-  xmax: Math.round(CX + 160),
-  ymin: Math.round(CY - 160),
-  ymax: Math.round(CY + 160),
+  xmin: Math.round(CX - LOUPE_HALF),
+  xmax: Math.round(CX + LOUPE_HALF),
+  ymin: Math.round(CY - LOUPE_HALF),
+  ymax: Math.round(CY + LOUPE_HALF),
 };
 
 // Envelope half-width in degrees that covers the whole hero aerial
@@ -421,14 +427,15 @@ async function main() {
   if (!parcel.polygon) throw new Error("No cadastre parcel at the loupe centre — adjust LOUPE_BBOX.");
   console.log(`Parcel: ${parcel.lotPlan} · ${parcel.street ?? "?"} ${parcel.suburb ?? ""} · ${parcel.areaM2 ?? "?"} m²`);
 
-  // Neighbouring lot hairlines — cover the full loupe (~160 m half-width).
+  // Neighbouring lot hairlines — cover the full loupe (~280 m half-width;
+  // 0.0036° lon ≈ 355 m at Brisbane latitude, comfortable margin).
   const linesFC = await queryArcGIS(PARCEL_LAYER, {
     geometry: { x: CENTER.lng, y: CENTER.lat, spatialReference: 4326 },
     geometryType: "esriGeometryPoint",
     inSR: 4326,
     outFields: "LOTPLAN",
     returnGeometry: true,
-    bufferDegrees: 0.0022,
+    bufferDegrees: 0.0036,
     maxAllowableOffset: 0.00001,
   });
 

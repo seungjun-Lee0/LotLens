@@ -5,8 +5,9 @@
 // CSS `blur()` (a full-bleed filter re-rasterises on scroll and was a
 // jank source) and without depending on the QLD imagery server for LCP.
 //
-//   public/hero-aerial.jpg  wide crop, gaussian blur σ=2 (≡ CSS blur(2px))
-//   public/hero-loupe.jpg   tight crop, unfiltered
+//   public/hero-aerial.jpg    wide crop, gaussian blur σ=2 (≡ CSS blur(2px))
+//   public/hero-aerial-m.jpg  same bbox for phones — more pixels, LESS blur
+//   public/hero-loupe.jpg     tight crop, unfiltered
 //
 // Re-run after `generate-hero-demo.ts` whenever the demo lot moves —
 // the bboxes are read from lib/hero-demo-data.json.
@@ -34,8 +35,9 @@ async function fetchImage(u: string): Promise<Buffer> {
 async function main() {
   const pub = join(process.cwd(), "public");
 
-  const [heroRaw, loupeRaw] = await Promise.all([
+  const [heroRaw, heroMobileRaw, loupeRaw] = await Promise.all([
     fetchImage(url(fixture.heroBbox as Bbox, "1600,900")),
+    fetchImage(url(fixture.heroBbox as Bbox, "2048,1152")),
     fetchImage(url(fixture.loupeBbox as Bbox, "900,900")),
   ]);
 
@@ -45,13 +47,24 @@ async function main() {
     .toBuffer();
   writeFileSync(join(pub, "hero-aerial.jpg"), hero);
 
+  // Baked blur lives in IMAGE pixels, so its on-screen width scales with
+  // display size. Phones draw this bbox ~1.7× larger than desktop (the
+  // 160%-tall hero canvas, ~2700 CSS px wide), which would fatten σ=2 to a
+  // ~3.4 px smear — so the phone bake carries more pixels and a
+  // proportionally smaller sigma, landing at the same ~2 CSS px look.
+  const heroM = await sharp(heroMobileRaw)
+    .blur(1.5)
+    .jpeg({ quality: 78, mozjpeg: true })
+    .toBuffer();
+  writeFileSync(join(pub, "hero-aerial-m.jpg"), heroM);
+
   const loupe = await sharp(loupeRaw)
     .jpeg({ quality: 84, mozjpeg: true })
     .toBuffer();
   writeFileSync(join(pub, "hero-loupe.jpg"), loupe);
 
   console.log(
-    `Wrote public/hero-aerial.jpg (${(hero.length / 1024).toFixed(0)} KB) + public/hero-loupe.jpg (${(loupe.length / 1024).toFixed(0)} KB)`,
+    `Wrote public/hero-aerial.jpg (${(hero.length / 1024).toFixed(0)} KB) + public/hero-aerial-m.jpg (${(heroM.length / 1024).toFixed(0)} KB) + public/hero-loupe.jpg (${(loupe.length / 1024).toFixed(0)} KB)`,
   );
 }
 

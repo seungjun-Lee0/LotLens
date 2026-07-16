@@ -165,13 +165,17 @@ export default function Home() {
       <SiteHeader />
 
       {/* ── HERO — blurred aerial full-bleed, sharp loupe on the right ── */}
+      {/* overflow-CLIP, not hidden: hidden boxes are still programmatically
+          scrollable, and anything calling scrollIntoView/focus inside (rail
+          pins, keyboard tabbing) could shift the whole hero sideways over
+          the oversized aerial canvas. clip cannot scroll, ever. */}
       <section
         id="top"
-        className="relative -mt-16 overflow-hidden pt-16 sm:-mt-[72px] sm:pt-[72px]"
+        className="relative -mt-16 overflow-clip pt-16 sm:-mt-[72px] sm:pt-[72px]"
       >
         <HeroShowcase data={heroDemo}>
           {/* copy + live address form */}
-          <div className="flex flex-col items-start gap-6">
+          <div className="flex flex-col items-start gap-5 sm:gap-6">
             {/* <span className="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11.5px] font-medium text-foreground/70 sm:text-[12px]">
               <span
                 className="size-1.5 rounded-full"
@@ -180,7 +184,7 @@ export default function Home() {
               Public council + Queensland state data
             </span> */}
 
-            <h1 className="text-balance text-[2.5rem] font-semibold leading-[1.03] tracking-tight sm:text-6xl">
+            <h1 className="text-balance text-[2.15rem] font-semibold leading-[1.06] tracking-tight sm:text-6xl sm:leading-[1.03]">
               Queensland property,
               <br />
               brought into{" "}
@@ -227,7 +231,7 @@ export default function Home() {
         </HeroShowcase>
       </section>
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-16 px-4 pb-16 pt-14 sm:gap-24 sm:px-6 sm:pb-24 sm:pt-20">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-12 px-4 pb-14 pt-10 sm:gap-24 sm:px-6 sm:pb-24 sm:pt-20">
         {/* ── MODULES — map-tile cards: the layer IS the card ── */}
         <section id="modules" className="cv-auto flex flex-col gap-8">
           <div className="mx-auto max-w-xl text-center">
@@ -243,11 +247,12 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+          {/* 2-up on phones — a single column of 16 cards scrolls forever */}
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
             {MODULES.map((m, i) => (
               <Reveal key={m.name} className="card-reveal" delay={(i % 4) * 90}>
                 <div
-                  className="mod-card group relative h-full rounded-2xl border border-border/60 bg-card/70 p-5"
+                  className="mod-card group relative h-full rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5"
                   style={{ ["--c" as string]: m.hex }}
                 >
                   <div className="flex items-center justify-between">
@@ -256,10 +261,10 @@ export default function Home() {
                       {String(i + 1).padStart(2, "0")}
                     </span>
                   </div>
-                  <h3 className="mt-4 text-[14.5px] font-semibold tracking-tight">
+                  <h3 className="mt-3 text-[13.5px] font-semibold tracking-tight sm:mt-4 sm:text-[14.5px]">
                     {m.name}
                   </h3>
-                  <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                  <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground sm:text-[12.5px]">
                     {m.blurb}
                   </p>
                 </div>
@@ -292,7 +297,7 @@ export default function Home() {
           <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 md:grid-cols-3">
             {/* Single report — beta price */}
             <Reveal className="rise-reveal">
-            <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7">
+            <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-5 sm:p-7">
               <div className="flex items-baseline justify-between">
                 <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">
                   Single report
@@ -309,7 +314,7 @@ export default function Home() {
                 </span>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-semibold tracking-tight">$19</span>
+                <span className="text-4xl font-semibold tracking-tight sm:text-5xl">$19</span>
                 <span className="text-[14px] text-muted-foreground line-through">
                   $29
                 </span>
@@ -335,7 +340,7 @@ export default function Home() {
 
             {/* Basic */}
             <Reveal className="rise-reveal" delay={120}>
-            <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-7">
+            <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-5 sm:p-7">
               <div className="flex items-baseline justify-between">
                 <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">
                   Basic
@@ -345,7 +350,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex items-baseline gap-1.5">
-                <span className="text-5xl font-semibold tracking-tight">$49</span>
+                <span className="text-4xl font-semibold tracking-tight sm:text-5xl">$49</span>
                 <span className="text-[13px] text-muted-foreground">
                   AUD / month
                 </span>
@@ -368,7 +373,7 @@ export default function Home() {
             {/* Pro — featured */}
             <Reveal className="rise-reveal" delay={240}>
             <div
-              className="relative flex h-full flex-col gap-4 rounded-3xl p-7 text-foreground"
+              className="relative flex h-full flex-col gap-4 rounded-3xl p-5 text-foreground sm:p-7"
               style={{
                 background:
                   "linear-gradient(135deg, color-mix(in oklab, var(--apple-blue) 12%, transparent), color-mix(in oklab, var(--apple-purple) 14%, transparent))",
@@ -388,7 +393,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-semibold tracking-tight">$79</span>
+                <span className="text-4xl font-semibold tracking-tight sm:text-5xl">$79</span>
                 <span className="text-[14px] text-muted-foreground line-through">
                   $99
                 </span>
@@ -441,7 +446,7 @@ export default function Home() {
         {/* ── FINAL CTA — pinned focus stage: scrolling into the middle
             triggers a smooth grow + page dim that spotlights the card ── */}
         <CtaStage>
-        <section className="cta-card glass overflow-hidden rounded-3xl px-6 py-12 text-center sm:px-10 sm:py-16">
+        <section className="cta-card glass overflow-hidden rounded-3xl px-5 py-10 text-center sm:px-10 sm:py-16">
           <div
             aria-hidden
             className="pointer-events-none absolute left-1/2 top-[-30%] h-[120%] w-[70%] -translate-x-1/2"

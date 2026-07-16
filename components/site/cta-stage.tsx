@@ -19,14 +19,42 @@ export function CtaStage({ children }: { children: ReactNode }) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let raf = 0;
     let listening = false;
+    // Previous card-centre position (phone branch) — arming keys off the
+    // centre CROSSING the trigger line between two ticks, so a fast flick
+    // that jumps hundreds of px between scroll events can't skip it.
+    let prevMid: number | null = null;
     const onScroll = () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
         const node = ref.current;
         if (!node) return;
-        const r = node.getBoundingClientRect();
         const vh = window.innerHeight;
+        if (window.matchMedia("(max-width: 767.98px)").matches) {
+          // Phones track the CARD itself (it rides in flow, then sticks
+          // just under the header — see globals.css): arm when the card's
+          // centre crosses the middle of the screen, hold while it rides
+          // up to and sits at its stick point, release once the dwell end
+          // shoves it past the stick line (top < 72) or the user scrolls
+          // back up. The HOLD test uses the card's TOP, not its centre —
+          // growing shifts the centre far down, so a centre-based hold
+          // released itself the moment the card expanded.
+          const card = node.querySelector(".cta-card");
+          if (!card) return;
+          const c = card.getBoundingClientRect();
+          const mid = c.top + c.height / 2;
+          const line = vh * 0.62;
+          // Downward crossing only: the post-fold reland (the shrunk card
+          // settling near the stick line, already BELOW the trigger line)
+          // never crosses it, so the grow can't pump itself back on.
+          const crossed = prevMid !== null && prevMid > line && mid <= line;
+          prevMid = mid;
+          setFocus((cur) =>
+            cur ? c.top > 72 && c.top < vh * 0.7 : crossed,
+          );
+          return;
+        }
+        const r = node.getBoundingClientRect();
         // 0 → stage entering at the bottom, 1 → stage gone past the top.
         // With the 130vh runway the sticky pin spans roughly p 0.44–0.57,
         // so focus arms just before the pin engages and releases the moment

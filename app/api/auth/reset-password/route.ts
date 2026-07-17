@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { createSession, hashPassword } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,10 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
+  // Token brute-force guard: 10 attempts per hour per IP.
+  const limited = enforceRateLimit("reset-password", req, { limit: 10, windowSec: 3600 });
+  if (limited) return limited;
+
   let body: z.infer<typeof BodySchema>;
   try {
     body = BodySchema.parse(await req.json());

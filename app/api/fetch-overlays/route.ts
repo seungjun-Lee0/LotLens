@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { fetchOverlaysForAddress } from "@/lib/pipeline";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,11 @@ export const maxDuration = 60;
 const BodySchema = z.object({ addressId: z.string().uuid() });
 
 export async function POST(req: Request) {
+  // The most expensive route in the app (~25 upstream ArcGIS calls +
+  // 15 DB writes). 5 runs per 10 min per IP is plenty for a real user.
+  const limited = enforceRateLimit("fetch-overlays", req, { limit: 5, windowSec: 600 });
+  if (limited) return limited;
+
   let parsed: z.infer<typeof BodySchema>;
   try {
     parsed = BodySchema.parse(await req.json());

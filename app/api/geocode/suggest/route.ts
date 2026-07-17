@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { activeProvider, suggestAddresses, type Suggestion } from "@/lib/geocoder";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,12 @@ const CACHE_MAX = 300;
 const cache = new Map<string, { at: number; suggestions: Suggestion[] }>();
 
 export async function POST(req: Request) {
+  // Fires per keystroke, so the ceiling is high — 300 per 10 min per IP
+  // covers heavy typing while capping scripted autocomplete scraping
+  // (which burns paid Google Places quota when that provider is active).
+  const limited = enforceRateLimit("suggest", req, { limit: 300, windowSec: 600 });
+  if (limited) return limited;
+
   let parsed: z.infer<typeof BodySchema>;
   try {
     parsed = BodySchema.parse(await req.json());

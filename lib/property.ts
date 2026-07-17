@@ -56,6 +56,48 @@ function num(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+/**
+ * Shrink a lot polygon slightly toward its centroid (default 0.3%).
+ *
+ * Cadastre-snapped overlay layers (easement parcels, zoning) share exact
+ * boundary vertices with the lot, and esriSpatialRelIntersects counts a
+ * shared fence line as intersecting — so querying with the exact lot
+ * polygon would flag the NEIGHBOUR'S easement/zone. A ~10-30 cm inset
+ * removes boundary touches without meaningfully changing what's "on" the
+ * lot. Centroid scaling isn't a true buffer for concave lots, but at 0.3%
+ * the distortion is centimetres.
+ */
+export function insetParcelPolygon(g: Geometry, factor = 0.997): Geometry {
+  const scaleRing = (ring: number[][], cx: number, cy: number) =>
+    ring.map(([x, y]) => [cx + (x - cx) * factor, cy + (y - cy) * factor]);
+  const ringCentroid = (ring: number[][]): [number, number] => {
+    let sx = 0;
+    let sy = 0;
+    for (const [x, y] of ring) {
+      sx += x;
+      sy += y;
+    }
+    return [sx / ring.length, sy / ring.length];
+  };
+  if (g.type === "Polygon") {
+    const [cx, cy] = ringCentroid(g.coordinates[0] as number[][]);
+    return {
+      type: "Polygon",
+      coordinates: (g.coordinates as number[][][]).map((r) => scaleRing(r, cx, cy)),
+    };
+  }
+  if (g.type === "MultiPolygon") {
+    return {
+      type: "MultiPolygon",
+      coordinates: (g.coordinates as number[][][][]).map((poly) => {
+        const [cx, cy] = ringCentroid(poly[0] as number[][]);
+        return poly.map((r) => scaleRing(r, cx, cy));
+      }),
+    };
+  }
+  return g;
+}
+
 export async function fetchPropertyParcel(
   lat: number,
   lng: number,

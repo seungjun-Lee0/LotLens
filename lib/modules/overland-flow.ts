@@ -62,11 +62,12 @@ export async function fetchOverlandFlowData(
   lat: number,
   lng: number,
   region?: Region,
+  lot?: Geometry | null,
 ): Promise<OverlandFlowResult> {
   if (region && !region.isBrisbane) {
     const adapter = OVERLAND_ADAPTERS[councilOf(region) ?? "brisbane"];
     if (adapter) {
-      const { point, context, label } = await queryOverlayAdapter(adapter, lat, lng);
+      const { point, context, label } = await queryOverlayAdapter(adapter, lat, lng, lot);
       const hit = point.features.length > 0;
       return {
         // Overland flow paths are presence overlays for most councils —
@@ -106,6 +107,7 @@ export async function fetchOverlandFlowData(
       outFields,
       returnGeometry: false,
       bufferDegrees: 0.00045, // ~50 m, same lot-edge trick as historic flood
+      lotPolygon: lot,
     }),
     queryArcGIS(OVERLAND_FLOW, {
       geometry: point,

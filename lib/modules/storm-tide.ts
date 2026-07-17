@@ -14,6 +14,7 @@
 // The storm-tide layers carry no classification attributes — hazard tier
 // comes from WHICH layer intersects.
 
+import type { Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
 import type { RiskLevel } from "@/lib/db";
 
@@ -43,6 +44,7 @@ export type StormTideResult = {
 export async function fetchStormTideData(
   lat: number,
   lng: number,
+  lot?: Geometry | null,
 ): Promise<StormTideResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   const pointParams = {
@@ -52,6 +54,7 @@ export async function fetchStormTideData(
     outFields: "objectid",
     returnGeometry: false,
     bufferDegrees: 0.00045,
+    lotPolygon: lot,
   };
   const contextParams = {
     geometry: point,

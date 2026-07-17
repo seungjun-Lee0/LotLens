@@ -17,6 +17,7 @@ import { queryArcGIS } from "@/lib/arcgis";
 import {
   councilOf,
   NOISE_ADAPTERS,
+  overlayLabels,
   queryOverlayAdapter,
   type OverlayAdapter,
 } from "@/lib/councils";
@@ -94,11 +95,19 @@ async function fetchCouncilNoise(
   lat: number,
   lng: number,
   adapters: OverlayAdapter[],
+  lot?: Geometry | null,
 ): Promise<NoiseResult> {
   const results = await Promise.all(
-    adapters.map((a) => queryOverlayAdapter(a, lat, lng)),
+    adapters.map((a) => queryOverlayAdapter(a, lat, lng, lot)),
   );
-  const label = results.map((r) => r.label).find(Boolean) ?? null;
+  // Worst corridor across every adapter's features — order isn't stable.
+  const RANK: Record<RiskLevel, number> = { high: 4, medium: 3, low: 2, very_low: 1, none: 0 };
+  const label = results
+    .flatMap((r, i) => overlayLabels(r.point, adapters[i].labelFields))
+    .reduce<string | null>(
+      (worst, l) => (RANK[classify(l, null)] > RANK[classify(worst, null)] ? l : worst),
+      null,
+    );
   const merged = (key: "point" | "context") => ({
     type: "FeatureCollection" as const,
     features: results.flatMap((r) => r[key].features),
@@ -122,10 +131,11 @@ export async function fetchNoiseData(
   lat: number,
   lng: number,
   region?: Region,
+  lot?: Geometry | null,
 ): Promise<NoiseResult> {
   if (region && !region.isBrisbane) {
     const adapters = NOISE_ADAPTERS[councilOf(region) ?? "brisbane"];
-    if (adapters && adapters.length > 0) return fetchCouncilNoise(lat, lng, adapters);
+    if (adapters && adapters.length > 0) return fetchCouncilNoise(lat, lng, adapters, lot);
     return {
       riskLevel: "none",
       transportCorridor: null,
@@ -154,6 +164,7 @@ export async function fetchNoiseData(
     // Transport corridors are thin strips along roads/rail — same
     // ~50 m buffer trick as historic flood so lot-edge matches work.
     bufferDegrees: 0.00045,
+    lotPolygon: lot,
   };
   const contextParams = {
     geometry: point,

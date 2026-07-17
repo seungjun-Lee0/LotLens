@@ -17,6 +17,7 @@
 // habitat trees assessable development in the SEQ koala protection
 // framework — a real constraint on clearing/building envelopes.
 
+import type { Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
 import type { RiskLevel } from "@/lib/db";
 
@@ -62,6 +63,7 @@ export type EnvironmentResult = {
 export async function fetchEnvironmentData(
   lat: number,
   lng: number,
+  lot?: Geometry | null,
 ): Promise<EnvironmentResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   const pointParams = {
@@ -71,6 +73,7 @@ export async function fetchEnvironmentData(
     outFields: "objectid",
     returnGeometry: false,
     bufferDegrees: 0.00045,
+    lotPolygon: lot,
   };
   const contextParams = {
     geometry: point,

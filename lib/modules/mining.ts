@@ -68,6 +68,7 @@ function str(v: unknown): string | null {
 export async function fetchMiningData(
   lat: number,
   lng: number,
+  lot?: Geometry | null,
 ): Promise<MiningResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   const tenFields = "tenid,tenname,tentype,tenmineral,tenowner,tenstatus";
@@ -77,6 +78,7 @@ export async function fetchMiningData(
     inSR: 4326,
     outFields,
     returnGeometry: false,
+    lotPolygon: lot,
   });
   const contextParams = (outFields: string) => ({
     geometry: point,

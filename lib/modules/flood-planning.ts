@@ -63,6 +63,7 @@ export async function fetchFloodPlanningData(
   lat: number,
   lng: number,
   region?: Region,
+  lot?: Geometry | null,
 ): Promise<FloodPlanningResult> {
   if (region && !region.isBrisbane) {
     return {
@@ -91,6 +92,7 @@ export async function fetchFloodPlanningData(
     outFields: fields,
     returnGeometry: false,
     bufferDegrees: 0.00045,
+    lotPolygon: lot,
   };
   const contextParams = {
     geometry: point,

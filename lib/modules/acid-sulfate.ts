@@ -55,6 +55,7 @@ function str(v: unknown): string | null {
 export async function fetchAcidSulfateData(
   lat: number,
   lng: number,
+  lot?: Geometry | null,
 ): Promise<AcidSulfateResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   const fields = "map_code,map_code_meaning,dominant_entity_meaning";
@@ -65,6 +66,7 @@ export async function fetchAcidSulfateData(
     outFields: fields,
     returnGeometry: false,
     bufferDegrees: 0.00045,
+    lotPolygon: lot,
   };
   const contextParams = {
     geometry: point,

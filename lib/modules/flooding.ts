@@ -27,6 +27,7 @@ import { queryArcGIS } from "@/lib/arcgis";
 import {
   councilOf,
   FLOOD_ADAPTERS,
+  overlayLabels,
   queryOverlayAdapter,
   type OverlayAdapter,
 } from "@/lib/councils";
@@ -104,8 +105,17 @@ async function fetchCouncilFlooding(
   lat: number,
   lng: number,
   adapter: OverlayAdapter,
+  lot?: Geometry | null,
 ): Promise<FloodingResult> {
-  const { point, context, label } = await queryOverlayAdapter(adapter, lat, lng);
+  const { point, context } = await queryOverlayAdapter(adapter, lat, lng, lot);
+  // The lot can straddle several flood bands and feature order isn't
+  // deterministic — grade every returned band and keep the worst.
+  const RANK: Record<RiskLevel, number> = { high: 4, medium: 3, low: 2, very_low: 1, none: 0 };
+  const label = overlayLabels(point, adapter.labelFields).reduce<string | null>(
+    (worst, l) =>
+      RANK[classifyCouncilFlood(l)] > RANK[classifyCouncilFlood(worst)] ? l : worst,
+    null,
+  );
   const riskLevel = classifyCouncilFlood(label);
   return {
     riskLevel,
@@ -166,10 +176,11 @@ export async function fetchFloodingData(
   lat: number,
   lng: number,
   region?: Region,
+  lot?: Geometry | null,
 ): Promise<FloodingResult> {
   if (region && !region.isBrisbane) {
     const adapter = FLOOD_ADAPTERS[councilOf(region) ?? "brisbane"];
-    if (adapter) return fetchCouncilFlooding(lat, lng, adapter);
+    if (adapter) return fetchCouncilFlooding(lat, lng, adapter, lot);
     const empty = { overall: EMPTY_FC, historic2022: EMPTY_FC, historic2011: EMPTY_FC };
     return {
       riskLevel: "none",
@@ -194,6 +205,10 @@ export async function fetchFloodingData(
     geometryType: "esriGeometryPoint" as const,
     inSR: 4326,
     returnGeometry: false,
+    // Classify against the actual lot polygon when we have it — the
+    // geocoded point can sit on the one corner of a lot the flood band
+    // misses.
+    lotPolygon: lot,
   };
   // Historic flood polygons are based on the actual lot footprint while we
   // only have the geocoded street-centre point. Typical Brisbane lots run
@@ -231,7 +246,14 @@ export async function fetchFloodingData(
       queryArcGIS(HISTORIC_2011, { ...contextParams, outFields: fieldsHist }),
     ]);
 
-  const overallAttrs = asAttrs(overall.features[0]);
+  // A lot-polygon query can straddle several risk bands — report the worst.
+  const RISK_RANK: Record<RiskLevel, number> = { high: 4, medium: 3, low: 2, very_low: 1, none: 0 };
+  const worstOverall = [...overall.features].sort(
+    (a, b) =>
+      RISK_RANK[normalizeRisk(String(asAttrs(b).FLOOD_RISK ?? ""))] -
+      RISK_RANK[normalizeRisk(String(asAttrs(a).FLOOD_RISK ?? ""))],
+  )[0];
+  const overallAttrs = asAttrs(worstOverall);
   const riskLevel = normalizeRisk(
     typeof overallAttrs.FLOOD_RISK === "string" ? overallAttrs.FLOOD_RISK : null,
   );

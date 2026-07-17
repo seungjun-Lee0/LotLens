@@ -93,6 +93,7 @@ export async function fetchEasementsData(
   lat: number,
   lng: number,
   region?: Region,
+  lot?: Geometry | null,
 ): Promise<EasementResult> {
   // The DCDB easement-parcel layer is statewide; the HV powerline overlay
   // is a BCC City Plan layer, so only query it inside Brisbane LGA.
@@ -109,6 +110,7 @@ export async function fetchEasementsData(
       outFields: hvFields,
       returnGeometry: false,
       bufferDegrees: 0.00005,
+      lotPolygon: lot,
     }),
     !isBrisbane ? EMPTY_FC : queryArcGIS(HIGH_VOLTAGE, {
       geometry: point,
@@ -119,12 +121,11 @@ export async function fetchEasementsData(
       bufferDegrees: 0.0025,
       maxAllowableOffset: 0.00003,
     }),
-    // DCDB easement parcels intersecting the property — ~30 m envelope so
-    // we catch easements anywhere on a typical Brisbane residential lot.
-    // The geocoded point sits near the street frontage; lots are usually
-    // 25 m deep × 20 m wide, so the back/side of the lot needs reach.
-    // Closer than 30 m and we miss them; much wider and we start dragging
-    // in immediate-neighbour easements.
+    // DCDB easement parcels intersecting the property. With the cadastre
+    // lot polygon (slightly inset — see insetParcelPolygon) this is exact:
+    // easement parcels are snapped to the same cadastre, so lot-intersect
+    // means "on this lot", full stop. The ~30 m point envelope remains the
+    // fallback when the parcel lookup missed (road-centreline geocodes).
     queryArcGIS(QSPATIAL_EASEMENTS, {
       geometry: point,
       geometryType: "esriGeometryPoint",
@@ -133,6 +134,7 @@ export async function fetchEasementsData(
       returnGeometry: true,
       bufferDegrees: 0.00027,
       maxAllowableOffset: 0.00003,
+      lotPolygon: lot,
     }),
     // Wider envelope for map context — neighbours' easements visible too.
     queryArcGIS(QSPATIAL_EASEMENTS, {

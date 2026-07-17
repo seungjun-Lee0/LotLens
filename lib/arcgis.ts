@@ -40,7 +40,25 @@ export type QueryArcGISParams = {
    * Only meaningful when `returnGeometry` is true. Default 0 = unsimplified.
    */
   maxAllowableOffset?: number;
+  /**
+   * GeoJSON Polygon/MultiPolygon in EPSG:4326 — the cadastre lot. When set,
+   * the query runs as an esriGeometryPolygon intersect against this shape
+   * instead of the point/envelope, so "consideration applies" means
+   * "anywhere on the lot", not "at the geocoded point" (which can sit on a
+   * driveway corner of a lot whose far edge carries the overlay). Takes
+   * precedence over bufferDegrees. Ignored for non-polygon geometry.
+   */
+  lotPolygon?: Geometry | null;
 };
+
+/** GeoJSON Polygon/MultiPolygon → esri rings array, or null if not a polygon. */
+function esriRings(g: Geometry): number[][][] | null {
+  if (g.type === "Polygon") return g.coordinates as number[][][];
+  if (g.type === "MultiPolygon") {
+    return (g.coordinates as number[][][][]).flat();
+  }
+  return null;
+}
 
 export class ArcGISError extends Error {
   constructor(
@@ -69,23 +87,31 @@ export async function queryArcGIS(
 ): Promise<FeatureCollection<Geometry | null, GeoJsonProperties>> {
   const sr = params.inSR ?? params.geometry.spatialReference ?? 4326;
   const buf = params.bufferDegrees ?? 0;
-  const geom = buf > 0
-    ? {
-        xmin: params.geometry.x - buf,
-        ymin: params.geometry.y - buf,
-        xmax: params.geometry.x + buf,
-        ymax: params.geometry.y + buf,
-        spatialReference: { wkid: params.geometry.spatialReference ?? 4326 },
-      }
-    : {
-        x: params.geometry.x,
-        y: params.geometry.y,
-        spatialReference: { wkid: params.geometry.spatialReference ?? 4326 },
-      };
+  const rings = params.lotPolygon ? esriRings(params.lotPolygon) : null;
+  const wkid = params.geometry.spatialReference ?? 4326;
+  const geom = rings
+    ? { rings, spatialReference: { wkid } }
+    : buf > 0
+      ? {
+          xmin: params.geometry.x - buf,
+          ymin: params.geometry.y - buf,
+          xmax: params.geometry.x + buf,
+          ymax: params.geometry.y + buf,
+          spatialReference: { wkid },
+        }
+      : {
+          x: params.geometry.x,
+          y: params.geometry.y,
+          spatialReference: { wkid },
+        };
   const search = new URLSearchParams({
     f: "geojson",
     geometry: JSON.stringify(geom),
-    geometryType: buf > 0 ? "esriGeometryEnvelope" : params.geometryType,
+    geometryType: rings
+      ? "esriGeometryPolygon"
+      : buf > 0
+        ? "esriGeometryEnvelope"
+        : params.geometryType,
     inSR: String(sr),
     spatialRel: "esriSpatialRelIntersects",
     outFields: params.outFields ?? "*",
@@ -101,12 +127,25 @@ export async function queryArcGIS(
     search.set("maxAllowableOffset", String(params.maxAllowableOffset));
   }
   const url = `${endpoint}?${search.toString()}`;
-  if (DEBUG) console.log("[arcgis] GET", url);
+  // Polygon queries always go as form POSTs: every ArcGIS server accepts
+  // the same params in a POST body, and GET URL limits vary wildly —
+  // services-ap1.arcgis.com (Gold Coast et al.) 404s at ~3.5k chars, which
+  // a ~70-vertex lot polygon already exceeds. Point/envelope queries stay
+  // GET (shorter, and friendlier to any HTTP-level caching).
+  const usePost = rings !== null || url.length > 4000;
+  if (DEBUG) console.log(`[arcgis] ${usePost ? "POST" : "GET"}`, usePost ? endpoint : url);
 
   let res: Response;
   try {
-    res = await fetch(url, {
-      headers: { Accept: "application/geo+json" },
+    res = await fetch(usePost ? endpoint : url, {
+      method: usePost ? "POST" : "GET",
+      headers: {
+        Accept: "application/geo+json",
+        ...(usePost
+          ? { "Content-Type": "application/x-www-form-urlencoded" }
+          : {}),
+      },
+      body: usePost ? search.toString() : undefined,
       // Government ArcGIS servers occasionally hang; cap the wait so one
       // stuck layer can't stall the whole parallel overlay fan-out.
       signal: AbortSignal.timeout(15_000),

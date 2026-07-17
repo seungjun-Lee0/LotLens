@@ -74,6 +74,28 @@ export function overlayLabel(
   return null;
 }
 
+/** One label per feature (first matching field). A lot-polygon query can
+ * straddle several overlay bands, and ArcGIS feature order is NOT
+ * deterministic — callers that grade severity must rank ALL of these and
+ * take the worst, never just the first. */
+export function overlayLabels(
+  fc: FeatureCollection<Geometry | null>,
+  labelFields: string[] = DEFAULT_LABEL_FIELDS,
+): string[] {
+  const labels: string[] = [];
+  for (const f of fc.features) {
+    const props = (f.properties ?? {}) as Record<string, unknown>;
+    for (const field of labelFields) {
+      const v = props[field];
+      if (typeof v === "string" && v.length > 0) {
+        labels.push(v);
+        break;
+      }
+    }
+  }
+  return labels;
+}
+
 // AGOL-hosted council services throw occasional transient network errors;
 // one quick retry keeps a single hiccup from failing the whole report run.
 async function queryWithRetry(
@@ -88,11 +110,14 @@ async function queryWithRetry(
   }
 }
 
-/** Point + context envelope query pair for a generic overlay layer. */
+/** Point + context envelope query pair for a generic overlay layer.
+ * When `lot` (the cadastre polygon) is provided, the classification query
+ * intersects the actual lot instead of a ±50 m point envelope. */
 export async function queryOverlayAdapter(
   adapter: OverlayAdapter,
   lat: number,
   lng: number,
+  lot?: Geometry | null,
 ): Promise<{
   point: FeatureCollection<Geometry | null>;
   context: FeatureCollection<Geometry | null>;
@@ -107,6 +132,7 @@ export async function queryOverlayAdapter(
       outFields: "*",
       returnGeometry: false,
       bufferDegrees: 0.00045,
+      lotPolygon: lot,
     }),
     queryWithRetry(adapter.url, {
       geometry: point,

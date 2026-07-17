@@ -85,6 +85,7 @@ export async function fetchVegetationData(
   lat: number,
   lng: number,
   region?: Region,
+  lot?: Geometry | null,
 ): Promise<VegetationResult> {
   const isBrisbane = region?.isBrisbane ?? true;
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
@@ -96,6 +97,7 @@ export async function fetchVegetationData(
     outFields,
     returnGeometry: false,
     bufferDegrees: 0.00045,
+    lotPolygon: lot,
   });
   const contextParams = (outFields: string) => ({
     geometry: point,

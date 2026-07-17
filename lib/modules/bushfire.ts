@@ -77,6 +77,7 @@ function worstFeature(
 export async function fetchBushfireData(
   lat: number,
   lng: number,
+  lot?: Geometry | null,
 ): Promise<BushfireResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   const fields = "class,region,lga";
@@ -87,6 +88,7 @@ export async function fetchBushfireData(
       inSR: 4326,
       outFields: fields,
       returnGeometry: false,
+      lotPolygon: lot,
     }),
     queryArcGIS(BPA_LAYER, {
       geometry: point,

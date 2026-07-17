@@ -89,6 +89,7 @@ export async function fetchHeritageData(
   lat: number,
   lng: number,
   region?: Region,
+  lot?: Geometry | null,
 ): Promise<HeritageResult> {
   const isBrisbane = region?.isBrisbane ?? true;
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
@@ -100,6 +101,7 @@ export async function fetchHeritageData(
     inSR: 4326,
     outFields,
     returnGeometry: false,
+    lotPolygon: lot,
   });
   const contextParams = (outFields: string) => ({
     geometry: point,

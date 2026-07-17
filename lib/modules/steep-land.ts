@@ -9,8 +9,10 @@
 //   Redland         Landslide Hazard Overlay (CLASS)
 // Other LGAs report `available: false` until their adapters land.
 
+import type { Geometry } from "geojson";
 import {
   councilOf,
+  overlayLabels,
   queryOverlayAdapter,
   STEEP_ADAPTERS,
 } from "@/lib/councils";
@@ -46,6 +48,7 @@ export async function fetchSteepLandData(
   lat: number,
   lng: number,
   region?: Region,
+  lot?: Geometry | null,
 ): Promise<SteepLandResult> {
   // No `?? "brisbane"` fallback here — unlike the other adapter tables this
   // one HAS a brisbane entry, so an unknown LGA must not silently query
@@ -73,8 +76,18 @@ export async function fetchSteepLandData(
     };
   }
 
-  const { point, context, label } = await queryOverlayAdapter(adapter, lat, lng);
+  const { point, context } = await queryOverlayAdapter(adapter, lat, lng, lot);
   const hit = point.features.length > 0;
+  // Worst band across all returned features — feature order isn't stable.
+  // (classifySteep(null, true) grades "medium", so rank the null seed -1.)
+  const RANK: Record<RiskLevel, number> = { high: 4, medium: 3, low: 2, very_low: 1, none: 0 };
+  const label = overlayLabels(point, adapter.labelFields).reduce<string | null>(
+    (worst, l) =>
+      RANK[classifySteep(l, true)] > (worst === null ? -1 : RANK[classifySteep(worst, true)])
+        ? l
+        : worst,
+    null,
+  );
   const riskLevel = classifySteep(label, hit);
 
   return {

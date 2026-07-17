@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { getDb } from "@/lib/db";
 import { emailConfigured, passwordResetHtml, sendEmail } from "@/lib/email";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,10 @@ const GENERIC = {
 };
 
 export async function POST(req: Request) {
+  // Email-bombing / enumeration-probing guard: 5 requests per hour per IP.
+  const limited = enforceRateLimit("forgot-password", req, { limit: 5, windowSec: 3600 });
+  if (limited) return limited;
+
   let body: z.infer<typeof BodySchema>;
   try {
     body = BodySchema.parse(await req.json());

@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { createSession, hashPassword } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,10 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
+  // Bulk account-creation guard: 5 signups per hour per IP.
+  const limited = enforceRateLimit("signup", req, { limit: 5, windowSec: 3600 });
+  if (limited) return limited;
+
   let body: z.infer<typeof BodySchema>;
   try {
     body = BodySchema.parse(await req.json());

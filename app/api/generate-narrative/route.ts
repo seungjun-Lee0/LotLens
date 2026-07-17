@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { getSessionUser } from "@/lib/auth";
 import { generateReportForAddress } from "@/lib/pipeline";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,11 @@ export const maxDuration = 60;
 const BodySchema = z.object({ addressId: z.string().uuid() });
 
 export async function POST(req: Request) {
+  // Will call the Anthropic API once Task ④ lands — keep the same ceiling
+  // as the fetch pipeline it always follows.
+  const limited = enforceRateLimit("generate-narrative", req, { limit: 5, windowSec: 600 });
+  if (limited) return limited;
+
   let parsed: z.infer<typeof BodySchema>;
   try {
     parsed = BodySchema.parse(await req.json());

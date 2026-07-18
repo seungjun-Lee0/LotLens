@@ -1,12 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ArrowRight, MapPin, Loader2, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Suggestion } from "@/app/api/geocode/suggest/route";
+import type { ParcelInfo } from "@/lib/property";
+
+// MapLibre only loads if the user actually reaches the lot-confirmation
+// step — keeps it out of the landing bundle.
+const ModuleMap = dynamic(
+  () => import("@/components/report/module-map").then((m) => m.ModuleMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-56 w-full items-center justify-center rounded-2xl bg-foreground/5">
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      </div>
+    ),
+  },
+);
 
 const STEPS = [
   { key: "geocode",  label: "Locating address",            tint: "var(--apple-blue)" },
@@ -16,7 +32,17 @@ const STEPS = [
 ] as const;
 type StepKey = typeof STEPS[number]["key"];
 
-type Phase = "idle" | "running" | "error" | "done";
+// "confirm" = geocode + parcel resolved; waiting for the user to confirm
+// the lot before the (paid-for, slow) overlay + narrative phases run.
+type Phase = "idle" | "running" | "confirm" | "error" | "done";
+
+type PendingLot = {
+  addressId: string;
+  lat: number;
+  lng: number;
+  displayName: string;
+  parcel: ParcelInfo | null;
+};
 
 export type AddressPreset = {
   label: string;
@@ -39,6 +65,7 @@ export function AddressForm({
   const [phase, setPhase] = useState<Phase>("idle");
   const [step, setStep] = useState<StepKey | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<PendingLot | null>(null);
 
   // Suggestions state — debounced fetch on input change.
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -139,12 +166,16 @@ export function AddressForm({
     }
   }
 
+  // Phase 1: geocode + parcel lookup, then STOP for lot confirmation.
+  // The expensive overlay + narrative phases only run after the user
+  // confirms the highlighted lot is the one they meant.
   async function submit() {
     const address = value.trim();
     if (!address) return;
     setSuggestOpen(false);
     setPhase("running");
     setError(null);
+    setPending(null);
 
     try {
       setStep("geocode");
@@ -155,13 +186,44 @@ export function AddressForm({
       });
       const geoBody = await geo.json();
       if (!geo.ok) throw new Error(geoBody.error ?? "geocoding failed");
-      const addressId: string = geoBody.addressId;
 
+      let parcel: ParcelInfo | null = null;
+      try {
+        const pr = await fetch("/api/parcel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: geoBody.lat, lng: geoBody.lng }),
+        });
+        if (pr.ok) parcel = ((await pr.json()) as { parcel: ParcelInfo }).parcel;
+      } catch {
+        // Confirmation still works without parcel facts — just no polygon.
+      }
+
+      setPending({
+        addressId: geoBody.addressId,
+        lat: geoBody.lat,
+        lng: geoBody.lng,
+        displayName: geoBody.displayName,
+        parcel: parcel?.polygon ? parcel : null,
+      });
+      setPhase("confirm");
+    } catch (err) {
+      setPhase("error");
+      setError((err as Error).message);
+    }
+  }
+
+  // Phase 2 (after "Yes, run the report"): overlays + narrative + navigate.
+  async function runReport(lot: PendingLot) {
+    setPhase("running");
+    setError(null);
+
+    try {
       setStep("overlays");
       const fo = await fetch("/api/fetch-overlays", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addressId }),
+        body: JSON.stringify({ addressId: lot.addressId }),
       });
       const foBody = await fo.json();
       if (!fo.ok) throw new Error(foBody.error ?? "overlay fetch failed");
@@ -170,7 +232,7 @@ export function AddressForm({
       const gn = await fetch("/api/generate-narrative", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addressId }),
+        body: JSON.stringify({ addressId: lot.addressId }),
       });
       const gnBody = await gn.json();
       if (!gn.ok) throw new Error(gnBody.error ?? "narrative generation failed");
@@ -186,7 +248,15 @@ export function AddressForm({
     }
   }
 
+  function cancelConfirm() {
+    setPending(null);
+    setPhase("idle");
+    setStep(null);
+    inputRef.current?.focus();
+  }
+
   const isBusy = phase === "running";
+  const isConfirm = phase === "confirm";
   const showDropdown =
     suggestOpen && phase === "idle" && (suggestions.length > 0 || suggestLoading);
 
@@ -213,7 +283,7 @@ export function AddressForm({
           }}
           onKeyDown={onKeyDown}
           placeholder="e.g. 12 Oxley Rd, Graceville QLD 4075"
-          disabled={isBusy}
+          disabled={isBusy || isConfirm}
           autoComplete="off"
           aria-autocomplete="list"
           aria-expanded={showDropdown}
@@ -223,7 +293,7 @@ export function AddressForm({
         <Button
           type="submit"
           size="lg"
-          disabled={isBusy || value.trim().length === 0}
+          disabled={isBusy || isConfirm || value.trim().length === 0}
           className="h-11 shrink-0 rounded-full px-4 text-[13.5px] font-medium text-white disabled:opacity-70 sm:px-5 sm:text-[14px]"
           style={{
             background:
@@ -308,6 +378,73 @@ export function AddressForm({
               {p.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Lot confirmation — the report only runs after this is accepted. */}
+      {isConfirm && pending && (
+        <div className="glass-strong w-full overflow-hidden rounded-2xl text-left">
+          <ModuleMap
+            lat={pending.lat}
+            lng={pending.lng}
+            zoom={17}
+            className="h-56 w-full"
+            propertyPolygon={pending.parcel?.polygon ?? null}
+          />
+          <div className="flex flex-col gap-3 p-4 sm:p-5">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Is this the right lot?
+              </div>
+              <div className="mt-1 text-[15px] font-semibold tracking-tight">
+                {pending.displayName}
+              </div>
+              {pending.parcel ? (
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[12.5px] text-muted-foreground">
+                  {pending.parcel.lotPlan && (
+                    <span>
+                      Lot/Plan{" "}
+                      <span className="font-mono text-foreground/80">{pending.parcel.lotPlan}</span>
+                    </span>
+                  )}
+                  {pending.parcel.areaM2 && (
+                    <span>{pending.parcel.areaM2.toLocaleString("en-AU")} m²</span>
+                  )}
+                  {pending.parcel.suburb && <span>{pending.parcel.suburb}</span>}
+                  {pending.parcel.lga && <span>{pending.parcel.lga}</span>}
+                </div>
+              ) : (
+                <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                  We couldn&apos;t match an exact cadastre lot at this point —
+                  the pin may sit on a road or boundary. You can still run the
+                  report (checks will use the pin location), or refine the
+                  address.
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                onClick={() => runReport(pending)}
+                className="h-10 rounded-full px-5 text-[13.5px] font-medium text-white"
+                style={{
+                  background:
+                    "linear-gradient(135deg, var(--apple-blue), color-mix(in oklab, var(--apple-blue) 70%, var(--apple-purple)))",
+                }}
+              >
+                Yes — run the report
+                <ArrowRight className="ml-1 size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={cancelConfirm}
+                className="h-10 rounded-full px-5 text-[13.5px] font-medium text-foreground/70"
+              >
+                Different lot? Edit address
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

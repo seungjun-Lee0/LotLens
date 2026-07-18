@@ -20,6 +20,24 @@ function ModuleFacts({
   raw: Record<string, unknown> | undefined;
 }) {
   if (!raw) return null;
+  // The source didn't respond when the report ran — error-toned banner,
+  // distinct from "not integrated for this LGA" below.
+  if (raw.fetchFailed === true) {
+    return (
+      <p
+        className="rounded-xl border border-dashed p-3 text-[12.5px] leading-relaxed"
+        style={{
+          borderColor: "color-mix(in oklab, var(--apple-orange) 45%, transparent)",
+          background: "color-mix(in oklab, var(--apple-orange) 8%, transparent)",
+          color: "color-mix(in oklab, var(--apple-orange) 65%, var(--foreground))",
+        }}
+      >
+        This source didn&apos;t respond when the report ran, so this module was
+        not checked. Re-run the checks to retry — no finding here does not
+        mean &quot;clear&quot;.
+      </p>
+    );
+  }
   // Council-overlay modules outside adapted LGAs mark themselves
   // unavailable — surface the note instead of module facts.
   if (raw.available === false) {
@@ -324,13 +342,20 @@ function StatusPill({
   hasConsideration,
   risk,
   tint,
+  failed = false,
 }: {
   hasConsideration: boolean;
   risk: RiskLevel;
   tint: string;
+  /** Source unreachable this run — neutral "couldn't check", not green. */
+  failed?: boolean;
 }) {
-  const color = hasConsideration ? tint : "var(--apple-green)";
-  const Icon = hasConsideration ? TriangleAlert : Check;
+  const color = failed
+    ? "var(--apple-orange)"
+    : hasConsideration
+      ? tint
+      : "var(--apple-green)";
+  const Icon = failed || hasConsideration ? TriangleAlert : Check;
   const riskLabel = hasConsideration ? RISK_LABEL[risk] : "";
   return (
     <div
@@ -346,9 +371,11 @@ function StatusPill({
       >
         <Icon className="size-2.5" strokeWidth={3.5} />
       </span>
-      {hasConsideration
-        ? `Considerations${riskLabel ? ` · ${riskLabel}` : ""}`
-        : "No considerations identified"}
+      {failed
+        ? "Couldn't check — source unavailable"
+        : hasConsideration
+          ? `Considerations${riskLabel ? ` · ${riskLabel}` : ""}`
+          : "No considerations identified"}
     </div>
   );
 }
@@ -459,6 +486,7 @@ export function ModuleSection({
             hasConsideration={row.hasConsideration}
             risk={risk}
             tint={meta.tint}
+            failed={raw?.fetchFailed === true}
           />
         </div>
 
@@ -473,7 +501,7 @@ export function ModuleSection({
       </div>
 
       {/* Two-column body: Things to know + Note (L) / Questions + Legend (R) */}
-      <div className="grid grid-cols-1 gap-x-10 gap-y-6 px-5 pb-6 pt-5 sm:gap-y-8 sm:px-10 sm:pb-10 sm:pt-7 lg:grid-cols-[1fr_280px]">
+      <div className="grid grid-cols-1 gap-x-8 gap-y-6 px-5 pb-6 pt-5 sm:gap-y-8 sm:px-10 sm:pb-10 sm:pt-7 lg:grid-cols-[minmax(0,1fr)_minmax(260px,300px)]">
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-4">
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -517,7 +545,7 @@ export function ModuleSection({
           </p>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6">
           {narrative?.questions_to_ask?.length ? (
             <div>
               <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">

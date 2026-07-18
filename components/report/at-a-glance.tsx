@@ -36,6 +36,12 @@ function formatDate(iso: string): string {
 
 export function AtAGlance({ payload }: { payload: ReportPayload }) {
   const { report, address, modules, considerationCount } = payload;
+  const failedCount = modules.filter(
+    (m) =>
+      !!m.raw &&
+      typeof m.raw === "object" &&
+      (m.raw as Record<string, unknown>).fetchFailed === true,
+  ).length;
   const distanceKm = haversineKm(CBD, { lat: address.lat, lng: address.lng });
   const zoningRow = modules.find((m) => m.module === "zoning");
   const zoningRaw =
@@ -51,7 +57,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
 
   return (
     <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(15,23,42,0.12)]">
-      <div className="grid grid-cols-1 gap-x-10 gap-y-6 px-5 py-6 sm:gap-y-8 sm:px-10 sm:py-10 lg:grid-cols-[1fr_280px]">
+      <div className="grid grid-cols-1 gap-x-8 gap-y-6 px-5 py-6 sm:gap-y-8 sm:px-10 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
         {/* Left — title + 5 module rows */}
         <div className="flex flex-col gap-5 sm:gap-6">
           <div>
@@ -61,8 +67,12 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
             <p className="mt-2 max-w-md text-pretty text-[13.5px] leading-relaxed text-muted-foreground sm:text-[14px]">
               Public-data modules summarising what we found at this
               address. {considerationCount === 0
-                ? "Nothing of concern."
+                ? failedCount === 0
+                  ? "Nothing of concern."
+                  : ""
                 : `${considerationCount} module${considerationCount > 1 ? "s have" : " has"} something worth reading.`}
+              {failedCount > 0 &&
+                ` ${failedCount} check${failedCount > 1 ? "s" : ""} couldn't reach ${failedCount > 1 ? "their sources" : "its source"} this run — re-run to retry.`}
             </p>
           </div>
 
@@ -70,8 +80,16 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
             {modules.map((m) => {
               const meta = MODULE_META[m.module];
               const Icon = meta.icon;
-              const Status = m.hasConsideration ? TriangleAlert : Check;
-              const tint = m.hasConsideration ? meta.tint : "var(--apple-green)";
+              const failed =
+                !!m.raw &&
+                typeof m.raw === "object" &&
+                (m.raw as Record<string, unknown>).fetchFailed === true;
+              const Status = failed || m.hasConsideration ? TriangleAlert : Check;
+              const tint = failed
+                ? "var(--apple-orange)"
+                : m.hasConsideration
+                  ? meta.tint
+                  : "var(--apple-green)";
               return (
                 <li
                   key={m.module}
@@ -108,7 +126,11 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                       <Status className="size-2.5" strokeWidth={3.5} />
                     </span>
                     <span className="hidden sm:inline">
-                      {m.hasConsideration ? "Considerations" : "All clear"}
+                      {failed
+                        ? "Not checked"
+                        : m.hasConsideration
+                          ? "Considerations"
+                          : "All clear"}
                     </span>
                   </div>
                 </li>
@@ -118,7 +140,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
         </div>
 
         {/* Right — metadata sidebar */}
-        <aside className="flex flex-col gap-4 border-l-0 border-t border-border/40 pt-6 sm:gap-5 sm:pt-7 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+        <aside className="flex min-w-0 flex-col gap-4 border-l-0 border-t border-border/40 pt-6 [overflow-wrap:anywhere] sm:gap-5 sm:pt-7 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
           <Meta label="Date of report">{formatDate(report.generated_at)}</Meta>
           <Meta label="Address"><span className="break-words">{address.address_text}</span></Meta>
           {payload.parcel?.lotPlan && (

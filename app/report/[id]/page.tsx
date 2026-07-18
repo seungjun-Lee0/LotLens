@@ -4,6 +4,7 @@ import { Download, Lock } from "lucide-react";
 import { SiteHeader } from "@/components/site/site-header";
 import { AtAGlance } from "@/components/report/at-a-glance";
 import { ModuleSection } from "@/components/report/module-section";
+import { RetryChecks } from "@/components/report/retry-checks";
 import { UnlockButton } from "@/components/report/unlock-button";
 import { loadReportPayload } from "@/lib/pipeline";
 import type { Module } from "@/lib/db";
@@ -48,6 +49,12 @@ export default async function ReportPage({
     ? modules
     : modules.filter((m) => m.module === PREVIEW_MODULE);
   const lockedCount = paid ? 0 : modules.length - visibleModules.length;
+  const failedCount = modules.filter(
+    (m) =>
+      !!m.raw &&
+      typeof m.raw === "object" &&
+      (m.raw as Record<string, unknown>).fetchFailed === true,
+  ).length;
 
   return (
     <>
@@ -74,6 +81,11 @@ export default async function ReportPage({
             </a>
           )}
         </header>
+
+        {/* Partial-failure banner — some sources were unreachable last run */}
+        {failedCount > 0 && (
+          <RetryChecks reportId={report.id} failedCount={failedCount} />
+        )}
 
         {/* At a glance */}
         <AtAGlance payload={payload} />

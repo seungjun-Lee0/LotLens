@@ -340,6 +340,16 @@ const styles = StyleSheet.create({
 
 function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; val: string }[] {
   if (!raw) return [];
+  // The source didn't respond when the report ran — one explanatory row,
+  // distinct from "not integrated for this LGA" below.
+  if (raw.fetchFailed === true) {
+    return [
+      {
+        key: "Not checked",
+        val: "This source didn't respond when the report ran. No finding here means \"not checked\", not \"clear\" — re-run the checks to retry.",
+      },
+    ];
+  }
   // Council-overlay modules outside adapted LGAs mark themselves
   // unavailable — one explanatory row instead of module facts.
   if (raw.available === false) {
@@ -482,8 +492,17 @@ function ModulePage({
   const meta = MODULE_META[module];
   const facts = factsRows(module, raw);
   const sources = Array.from(new Set(narrative?.sources ?? []));
-  const statusColor = hasConsideration ? meta.tintHex : APPLE_HEX.green;
-  const statusLabel = hasConsideration ? "Considerations identified" : "No considerations identified";
+  const failed = raw?.fetchFailed === true;
+  const statusColor = failed
+    ? APPLE_HEX.orange
+    : hasConsideration
+      ? meta.tintHex
+      : APPLE_HEX.green;
+  const statusLabel = failed
+    ? "Not checked — source unavailable"
+    : hasConsideration
+      ? "Considerations identified"
+      : "No considerations identified";
   const legendItems = splitLegendItems(
     extractOverlays(module, raw),
     extractOverlays(module, raw, { scope: "property" }),
@@ -668,8 +687,20 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
           <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>At a glance</Text>
           {modules.map((m) => {
             const meta = MODULE_META[m.module];
-            const statusColor = m.hasConsideration ? meta.tintHex : APPLE_HEX.green;
-            const statusLabel = m.hasConsideration ? "Considerations" : "All clear";
+            const failed =
+              !!m.raw &&
+              typeof m.raw === "object" &&
+              (m.raw as RawAttrs).fetchFailed === true;
+            const statusColor = failed
+              ? APPLE_HEX.orange
+              : m.hasConsideration
+                ? meta.tintHex
+                : APPLE_HEX.green;
+            const statusLabel = failed
+              ? "Not checked"
+              : m.hasConsideration
+                ? "Considerations"
+                : "All clear";
             return (
               <View key={m.module} style={styles.glanceRow}>
                 <View style={[styles.glanceSwatch, { backgroundColor: meta.tintHex }]} />

@@ -38,6 +38,13 @@ export async function generateModuleNarrative(
   // `available: false` — render an honest "not integrated here" narrative
   // instead of a false "no considerations identified".
   const rawAvail = (input.councilData.raw_response ?? {}) as Record<string, unknown>;
+  // A source that couldn't be reached this run (pipeline wrote a
+  // fetchFailed row) is different again from "not integrated for this
+  // LGA" — it's transient, so the narrative should say "re-run", not
+  // "ask your conveyancer".
+  if (rawAvail.fetchFailed === true) {
+    return renderStubFetchFailed(input);
+  }
   if (rawAvail.available === false) {
     return renderStubUnavailable(input, rawAvail);
   }
@@ -58,6 +65,21 @@ export async function generateModuleNarrative(
     case "schools":        return renderStubSchools(input);
     case "zoning":         return renderStubZoning(input);
   }
+}
+
+function renderStubFetchFailed(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  return {
+    summary: `This check couldn't be completed for ${input.address} — the data source didn't respond.`,
+    detail:
+      "The government/council mapping service for this module was unreachable when the report ran. No finding here means \"not checked\", not \"clear\". Re-run the checks to retry — these outages are usually brief.",
+    questions_to_ask: [
+      "Re-run the report checks to retry this source.",
+      "If it keeps failing, check the source's own website directly — the link is on the module card.",
+    ],
+    sources: [],
+  };
 }
 
 function renderStubUnavailable(

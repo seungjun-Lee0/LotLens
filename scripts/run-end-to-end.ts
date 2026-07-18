@@ -45,7 +45,7 @@ async function main() {
   const fetchRes = await fetchOverlaysForAddress(addressId);
   console.log(`  done in ${fetchRes.elapsedMs}ms`);
   for (const [mod, val] of Object.entries(fetchRes.modules)) {
-    console.log(`  ${mod.padEnd(10)} risk=${val.riskLevel.padEnd(8)} consideration=${val.hasConsideration}`);
+    console.log(`  ${mod.padEnd(10)} risk=${(val.riskLevel ?? "FAILED").padEnd(8)} consideration=${val.hasConsideration}`);
   }
 
   console.log("\n[2/2] generateReportForAddress ...");

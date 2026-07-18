@@ -2,8 +2,10 @@
 //
 // Two phases, both addressed by address_id:
 //
-//   1. fetchOverlaysForAddress() — hits 5 ArcGIS endpoints in parallel,
-//      writes one council_data row per module.
+//   1. fetchOverlaysForAddress() — hits the 15 module sources in parallel,
+//      writes one council_data row per module. Each fetch settles
+//      independently: a source that's down becomes a fetchFailed row
+//      (risk_level NULL) instead of sinking the whole report.
 //   2. generateReportForAddress() — reads the council_data rows back,
 //      generates narrative per module (LLM stub in Task 4a), writes one
 //      reports row.
@@ -40,6 +42,7 @@ import {
 import {
   fetchParcelLinesNear,
   fetchPropertyParcel,
+  insetParcelPolygon,
   type ParcelInfo,
 } from "@/lib/property";
 
@@ -55,16 +58,29 @@ type Address = {
 
 type ModuleOverlay = {
   module: Module;
-  riskLevel: RiskLevel;
+  /** null = the source couldn't be reached this run (fetchFailed row). */
+  riskLevel: RiskLevel | null;
   hasConsideration: boolean;
   sourceName: string;
   sourceUrl: string;
   raw: unknown;
 };
 
+/** Minimal shape every module fetcher satisfies. */
+type AnyModuleResult = {
+  riskLevel: RiskLevel;
+  hasConsideration: boolean;
+  sources: Array<{ name: string; url: string }>;
+};
+
 export type FetchOverlaysSummary = {
   addressId: string;
-  modules: Record<Module, { riskLevel: RiskLevel; hasConsideration: boolean }>;
+  modules: Record<
+    Module,
+    { riskLevel: RiskLevel | null; hasConsideration: boolean }
+  >;
+  /** Modules whose source couldn't be reached this run (fetchFailed rows). */
+  failedModules: Module[];
   elapsedMs: number;
 };
 
@@ -82,12 +98,57 @@ async function loadAddress(addressId: string): Promise<Address> {
   return rows[0];
 }
 
+// A complete, failure-free fetch younger than this is served from
+// council_data instead of re-hitting ~25 government endpoints. Overlay
+// data changes on a cadence of months; 10 minutes only exists to absorb
+// double-submits and back-button replays of the same address.
+const FRESH_REUSE_MS = 10 * 60_000;
+
 export async function fetchOverlaysForAddress(
   addressId: string,
+  opts: { force?: boolean } = {},
 ): Promise<FetchOverlaysSummary> {
   const t0 = performance.now();
   const sql = getDb();
   const addr = await loadAddress(addressId);
+
+  if (!opts.force) {
+    const existing = (await sql`
+      SELECT module, risk_level, has_consideration, retrieved_at,
+             raw_response->>'fetchFailed' AS fetch_failed
+      FROM council_data
+      WHERE address_id = ${addressId}
+    `) as Array<{
+      module: Module;
+      risk_level: RiskLevel | null;
+      has_consideration: boolean;
+      retrieved_at: string;
+      fetch_failed: string | null;
+    }>;
+    const allFresh =
+      existing.length === 15 &&
+      existing.every(
+        (r) =>
+          r.fetch_failed !== "true" &&
+          Date.now() - new Date(r.retrieved_at).getTime() < FRESH_REUSE_MS,
+      );
+    if (allFresh) {
+      console.log(
+        `[overlays] reusing fresh council_data for ${addressId} (all 15 rows < ${FRESH_REUSE_MS / 60_000} min old)`,
+      );
+      return {
+        addressId,
+        modules: Object.fromEntries(
+          existing.map((r) => [
+            r.module,
+            { riskLevel: r.risk_level, hasConsideration: r.has_consideration },
+          ]),
+        ) as FetchOverlaysSummary["modules"],
+        failedModules: [],
+        elapsedMs: Math.round(performance.now() - t0),
+      };
+    }
+  }
 
   // Per-module wall time — one summary line per run so slow government
   // layers are identifiable in prod logs without extra tooling.
@@ -101,42 +162,84 @@ export async function fetchOverlaysForAddress(
     }
   };
 
-  // Modules that don't need the LGA can start immediately; the rest wait
-  // for the parcel lookup (its `shire_name` picks the council adapters).
-  // This takes the ~150-300 ms parcel round-trip off the critical path for
-  // six of the fifteen fetches.
-  const regionFreeP = Promise.all([
-    timed("storm_tide", fetchStormTideData(addr.lat, addr.lng)),
-    timed("bushfire", fetchBushfireData(addr.lat, addr.lng)),
-    timed("environment", fetchEnvironmentData(addr.lat, addr.lng)),
-    timed("acid_sulfate", fetchAcidSulfateData(addr.lat, addr.lng)),
-    timed("mining", fetchMiningData(addr.lat, addr.lng)),
-    timed("schools", fetchSchoolsData(addr.lat, addr.lng)),
-  ]);
+  // Every module settles independently: a source that's down (or a fetcher
+  // that throws) becomes a fetchFailed row instead of failing the whole
+  // report. `settle` attaches its handlers at creation time, so a fetch
+  // that rejects while we're still awaiting the parcel lookup can't raise
+  // an unhandled-rejection.
+  type Settled =
+    | { ok: true; value: AnyModuleResult }
+    | { ok: false; error: unknown };
+  const settle = (
+    module: Module,
+    p: Promise<AnyModuleResult>,
+  ): Promise<Settled> =>
+    timed(module, p).then(
+      (value) => ({ ok: true as const, value }),
+      (error) => {
+        console.error(`[overlays] ${module} fetch failed:`, error);
+        return { ok: false as const, error };
+      },
+    );
 
+  // The parcel lookup now gates ALL fetchers: its `shire_name` picks the
+  // council adapters AND its polygon becomes the classification geometry —
+  // every risk module classifies against the actual cadastre lot (slightly
+  // inset so cadastre-snapped layers don't flag the neighbour across a
+  // shared boundary), not just the geocoded point. Costs the ~150-300 ms
+  // parcel round-trip up front; correctness over latency.
+  // fetchPropertyParcel never rejects (returns an EMPTY parcel on failure),
+  // so this always proceeds — with no polygon the fetchers fall back to
+  // their point/buffer queries.
   const parcelForRegion = await timed(
     "parcel",
     fetchPropertyParcel(addr.lat, addr.lng),
   );
   const region = regionFromParcel(parcelForRegion.lga, addr.lat, addr.lng);
+  const lot = parcelForRegion.polygon
+    ? insetParcelPolygon(parcelForRegion.polygon)
+    : null;
 
-  const [
-    [flood, floodPlan, overland, veg, herit, ease, noise, steep, zone],
-    [stormTide, fire, env, acid, mine, schools],
-  ] = await Promise.all([
-    Promise.all([
-      timed("flooding", fetchFloodingData(addr.lat, addr.lng, region)),
-      timed("flood_planning", fetchFloodPlanningData(addr.lat, addr.lng, region)),
-      timed("overland_flow", fetchOverlandFlowData(addr.lat, addr.lng, region)),
-      timed("vegetation", fetchVegetationData(addr.lat, addr.lng, region)),
-      timed("heritage", fetchHeritageData(addr.lat, addr.lng, region)),
-      timed("easements", fetchEasementsData(addr.lat, addr.lng, region)),
-      timed("noise", fetchNoiseData(addr.lat, addr.lng, region)),
-      timed("steep_land", fetchSteepLandData(addr.lat, addr.lng, region)),
-      timed("zoning", fetchZoningData(addr.lat, addr.lng, region)),
-    ]),
-    regionFreeP,
-  ]);
+  const tasks = new Map<Module, Promise<Settled>>();
+  tasks.set("storm_tide", settle("storm_tide", fetchStormTideData(addr.lat, addr.lng, lot)));
+  tasks.set("bushfire", settle("bushfire", fetchBushfireData(addr.lat, addr.lng, lot)));
+  tasks.set("environment", settle("environment", fetchEnvironmentData(addr.lat, addr.lng, lot)));
+  tasks.set("acid_sulfate", settle("acid_sulfate", fetchAcidSulfateData(addr.lat, addr.lng, lot)));
+  tasks.set("mining", settle("mining", fetchMiningData(addr.lat, addr.lng, lot)));
+  // Schools stays point-based on purpose: catchment is decided by where
+  // the dwelling is, and a lot straddling two catchments would double-list.
+  tasks.set("schools", settle("schools", fetchSchoolsData(addr.lat, addr.lng)));
+  tasks.set("flooding", settle("flooding", fetchFloodingData(addr.lat, addr.lng, region, lot)));
+  tasks.set("flood_planning", settle("flood_planning", fetchFloodPlanningData(addr.lat, addr.lng, region, lot)));
+  tasks.set("overland_flow", settle("overland_flow", fetchOverlandFlowData(addr.lat, addr.lng, region, lot)));
+  tasks.set("vegetation", settle("vegetation", fetchVegetationData(addr.lat, addr.lng, region, lot)));
+  tasks.set("heritage", settle("heritage", fetchHeritageData(addr.lat, addr.lng, region, lot)));
+  tasks.set("easements", settle("easements", fetchEasementsData(addr.lat, addr.lng, region, lot)));
+  tasks.set("noise", settle("noise", fetchNoiseData(addr.lat, addr.lng, region, lot)));
+  tasks.set("steep_land", settle("steep_land", fetchSteepLandData(addr.lat, addr.lng, region, lot)));
+  // Zoning stays point-based too: a lot is in one zone for practical
+  // purposes, and BCC's point-query zone polygon doubles as the parcel
+  // fallback for the report's yellow lot outline.
+  tasks.set("zoning", settle("zoning", fetchZoningData(addr.lat, addr.lng, region)));
+
+  const ORDER: Module[] = [
+    "flooding",
+    "flood_planning",
+    "overland_flow",
+    "storm_tide",
+    "bushfire",
+    "vegetation",
+    "environment",
+    "heritage",
+    "easements",
+    "noise",
+    "steep_land",
+    "acid_sulfate",
+    "mining",
+    "schools",
+    "zoning",
+  ];
+  const settled = await Promise.all(ORDER.map((m) => tasks.get(m)!));
 
   console.log(
     "[overlays] module timings:",
@@ -146,26 +249,49 @@ export async function fetchOverlaysForAddress(
       .join(" "),
   );
 
-  const overlays: ModuleOverlay[] = [
-    { module: "flooding",       riskLevel: flood.riskLevel,     hasConsideration: flood.hasConsideration,     sourceName: flood.sources[0].name,     sourceUrl: flood.sources[0].url,     raw: flood },
-    { module: "flood_planning", riskLevel: floodPlan.riskLevel, hasConsideration: floodPlan.hasConsideration, sourceName: floodPlan.sources[0].name, sourceUrl: floodPlan.sources[0].url, raw: floodPlan },
-    { module: "overland_flow",  riskLevel: overland.riskLevel,  hasConsideration: overland.hasConsideration,  sourceName: overland.sources[0].name,  sourceUrl: overland.sources[0].url,  raw: overland },
-    { module: "storm_tide",     riskLevel: stormTide.riskLevel, hasConsideration: stormTide.hasConsideration, sourceName: stormTide.sources[0].name, sourceUrl: stormTide.sources[0].url, raw: stormTide },
-    { module: "bushfire",       riskLevel: fire.riskLevel,      hasConsideration: fire.hasConsideration,      sourceName: fire.sources[0].name,      sourceUrl: fire.sources[0].url,      raw: fire },
-    { module: "vegetation",     riskLevel: veg.riskLevel,       hasConsideration: veg.hasConsideration,       sourceName: veg.sources[0].name,       sourceUrl: veg.sources[0].url,       raw: veg },
-    { module: "environment",    riskLevel: env.riskLevel,       hasConsideration: env.hasConsideration,       sourceName: env.sources[0].name,       sourceUrl: env.sources[0].url,       raw: env },
-    { module: "heritage",       riskLevel: herit.riskLevel,     hasConsideration: herit.hasConsideration,     sourceName: herit.sources[0].name,     sourceUrl: herit.sources[0].url,     raw: herit },
-    { module: "easements",      riskLevel: ease.riskLevel,      hasConsideration: ease.hasConsideration,      sourceName: ease.sources[0].name,      sourceUrl: ease.sources[0].url,      raw: ease },
-    { module: "noise",          riskLevel: noise.riskLevel,     hasConsideration: noise.hasConsideration,     sourceName: noise.sources[0].name,     sourceUrl: noise.sources[0].url,     raw: noise },
-    { module: "steep_land",     riskLevel: steep.riskLevel,     hasConsideration: steep.hasConsideration,     sourceName: steep.sources[0].name,     sourceUrl: steep.sources[0].url,     raw: steep },
-    { module: "acid_sulfate",   riskLevel: acid.riskLevel,      hasConsideration: acid.hasConsideration,      sourceName: acid.sources[0].name,      sourceUrl: acid.sources[0].url,      raw: acid },
-    { module: "mining",         riskLevel: mine.riskLevel,      hasConsideration: mine.hasConsideration,      sourceName: mine.sources[0].name,      sourceUrl: mine.sources[0].url,      raw: mine },
-    { module: "schools",        riskLevel: schools.riskLevel,   hasConsideration: schools.hasConsideration,   sourceName: schools.sources[0].name,   sourceUrl: schools.sources[0].url,   raw: schools },
-    { module: "zoning",         riskLevel: zone.riskLevel,      hasConsideration: zone.hasConsideration,      sourceName: zone.sources[0].name,      sourceUrl: zone.sources[0].url,      raw: zone },
-  ];
+  const failedModules = ORDER.filter((_, i) => !settled[i].ok);
+  if (failedModules.length === ORDER.length) {
+    // Nothing came back at all — that's our outage (or the machine's
+    // network), not 15 independent source outages. Persisting 15 blank
+    // rows would cache a useless report, so fail the run outright.
+    throw new Error(
+      "all module sources failed — aborting instead of writing an empty report",
+    );
+  }
+  if (failedModules.length > 0) {
+    console.error(
+      `[overlays] ${failedModules.length} module(s) failed this run: ${failedModules.join(", ")}`,
+    );
+  }
+
+  const overlays: ModuleOverlay[] = ORDER.map((module, i) => {
+    const s = settled[i];
+    if (!s.ok) {
+      return {
+        module,
+        riskLevel: null,
+        hasConsideration: false,
+        sourceName: "Source temporarily unavailable",
+        sourceUrl: "",
+        raw: {
+          fetchFailed: true,
+          error: s.error instanceof Error ? s.error.message : String(s.error),
+        },
+      };
+    }
+    const r = s.value;
+    return {
+      module,
+      riskLevel: r.riskLevel,
+      hasConsideration: r.hasConsideration,
+      sourceName: r.sources[0]?.name ?? "",
+      sourceUrl: r.sources[0]?.url ?? "",
+      raw: r,
+    };
+  });
 
   // Idempotent replace. Each invocation drops the address's previous rows
-  // and rewrites the five fresh ones.
+  // and rewrites the fifteen fresh ones.
   await sql`DELETE FROM council_data WHERE address_id = ${addressId}`;
 
   // 15 independent single-row inserts — run them concurrently. Neon's
@@ -197,6 +323,7 @@ export async function fetchOverlaysForAddress(
   return {
     addressId,
     modules,
+    failedModules,
     elapsedMs: Math.round(performance.now() - t0),
   };
 }
@@ -359,6 +486,57 @@ export async function loadReportPayload(
     parcel: parcel.polygon ? parcel : null,
     paid: Boolean(address.paid_at),
   };
+}
+
+/**
+ * Retry path for reports that came back with fetchFailed rows: re-run the
+ * overlay fetches and regenerate the narrative INTO THE EXISTING report row.
+ * Unlike generateReportForAddress this never inserts a new report and never
+ * touches credits/paywall state — it's a repair, not a purchase.
+ *
+ * Returns the modules that are still failing after the retry.
+ */
+export async function retryFailedChecks(reportId: string): Promise<{
+  addressId: string;
+  stillFailing: Module[];
+}> {
+  const sql = getDb();
+  const reportRows = (await sql`
+    SELECT id, address_id FROM reports WHERE id = ${reportId} LIMIT 1
+  `) as Array<{ id: string; address_id: string }>;
+  if (reportRows.length === 0) {
+    throw new Error(`report ${reportId} not found`);
+  }
+  const addressId = reportRows[0].address_id;
+  const addr = await loadAddress(addressId);
+
+  // force: the whole point of a retry is to bypass the freshness reuse.
+  const summary = await fetchOverlaysForAddress(addressId, { force: true });
+
+  const rows = (await sql`
+    SELECT id, address_id, module, source_url, source_name, raw_response,
+           risk_level, has_consideration, retrieved_at
+    FROM council_data
+    WHERE address_id = ${addressId}
+  `) as CouncilDataRow[];
+
+  const narrative: ReportNarrative = {};
+  await Promise.all(
+    rows.map(async (row) => {
+      narrative[row.module as Module] = await generateModuleNarrative({
+        module: row.module as Module,
+        address: addr.address_text,
+        councilData: row,
+      });
+    }),
+  );
+
+  await sql`
+    UPDATE reports SET narrative = ${JSON.stringify(narrative)}::jsonb
+    WHERE id = ${reportId}
+  `;
+
+  return { addressId, stillFailing: summary.failedModules };
 }
 
 export type QuotaUnlock = {

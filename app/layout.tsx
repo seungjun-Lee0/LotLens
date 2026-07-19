@@ -27,8 +27,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Inline no-flash script: pick saved theme or system preference before paint.
-  const noFlashTheme = `(function(){try{var s=localStorage.getItem('theme');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;if(s==='dark'||(!s&&m)){document.documentElement.classList.add('dark');}}catch(e){}})();`;
+  // Inline no-flash script, applied before paint. DARK is the default —
+  // light only when the user explicitly picked it via the toggle.
+  const noFlashTheme = `(function(){try{var s=localStorage.getItem('theme');if(s!=='light'){document.documentElement.classList.add('dark');}}catch(e){}})();`;
 
   return (
     <html

@@ -226,12 +226,12 @@
     -webkit-backdrop-filter: saturate(200%) blur(40px);
     box-shadow: var(--glass-shadow);
   }
-  /* Colored glass tint — pass --tint as the base color */
+  /* Colored tint chip — pass --tint as the base color. OPAQUE (mixed over
+     the solid card colour, no backdrop blur): the translucent version
+     dissolved into the hero aerial behind the preset chips. */
   .glass-tint {
-    background-color: color-mix(in oklab, var(--tint, var(--apple-blue)) 14%, var(--glass-bg));
+    background-color: color-mix(in oklab, var(--tint, var(--apple-blue)) 14%, var(--card));
     border: 1px solid color-mix(in oklab, var(--tint, var(--apple-blue)) 30%, var(--glass-border));
-    backdrop-filter: saturate(180%) blur(20px);
-    -webkit-backdrop-filter: saturate(180%) blur(20px);
     color: color-mix(in oklab, var(--tint, var(--apple-blue)) 65%, var(--foreground));
   }
   .dark .glass-tint {
@@ -482,36 +482,22 @@
   @media (min-width: 1280px) { .cta-card { --cta-peak: 1.06; --cta-zoom: 1.08; } }
   @media (min-width: 1440px) { .cta-card { --cta-peak: 1.14; --cta-zoom: 1.1; } }
   @media (min-width: 1680px) { .cta-card { --cta-peak: 1.28; --cta-zoom: 1.12; } }
-  /* Phones: no centering pin — the card rides in flow right behind the
-     FAQ (sections stay packed, no runway whitespace), then STICKS just
-     under the header (top 5rem) and grows until its bottom nearly fills
-     the screen. Width never changes (--cta-peak/zoom at 1). */
+  /* Phones: ONE-SHOT show, no pin, no runway. The card rides in flow
+     right behind the FAQ with the disclaimer 48px below it at all times.
+     Reaching mid-screen triggers the grow + dim once; after the dim
+     passes, .is-played keeps the card at full size forever — it never
+     shrinks back, so there is no fold to animate and nothing to
+     re-trigger. Width never changes (--cta-peak/zoom at 1). */
   @media (max-width: 767.98px) {
-    /* Fixed-height stage: the ~22rem past one viewport is the stuck
-       dwell, pre-built as sticky travel so it can never be raced away by
-       fast scrolling. It sits BELOW the card (card rides at the stage
-       top, 48px behind the FAQ) and is scrolled through while the grown
-       card covers the screen. */
-    .cta-stage { height: calc(100svh + 22rem); }
-    /* full-height so the sticky card has the whole stage to stick within
-       (sticky travel is bounded by the PARENT box) */
-    .cta-pin { position: static; display: block; height: 100%; }
+    .cta-stage { height: auto; }
+    .cta-pin { position: static; display: block; height: auto; }
     .cta-card {
-      position: sticky;
-      top: 5rem;
-      /* Desktop centres its overgrown width via left:50% + translateX(-50%)
-         — a net-zero pair under position:relative, but sticky clamps the
-         left-shift while the translate still applies, dragging the card
-         half off-screen. Width never grows here, so drop both. */
-      left: 0;
-      transform: none;
       --cta-peak: 1;
       --cta-zoom: 1;
       --cta-peak-h: calc(100svh - 6rem);
     }
-    .cta-stage.is-focus .cta-card {
-      width: 100%;
-      transform: none;
+    .cta-stage.is-played .cta-card {
+      min-height: var(--cta-peak-h);
     }
   }
   /* Without JS the focus state can never trigger — skip the scroll-jack

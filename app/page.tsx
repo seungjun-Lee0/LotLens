@@ -200,7 +200,10 @@ export default function Home() {
               </span>
             </h1>
 
-            <p className="max-w-lg text-pretty text-[15px] leading-relaxed text-muted-foreground sm:text-[16.5px]">
+            {/* Light mode: near-foreground copy — muted gray washed out
+                against the pale aerial behind the stacked phone hero.
+                Dark mode keeps the original muted tone. */}
+            <p className="max-w-lg text-pretty text-[15px] leading-relaxed text-foreground/80 dark:text-muted-foreground sm:text-[16.5px]">
               Flood, bushfire, heritage, easements, zoning and more — every
               council &amp; state layer for an address, on one map and explained
               in plain English. Before you sign.
@@ -221,7 +224,7 @@ export default function Home() {
               ]}
             />
 
-            <p className="text-[12.5px] text-muted-foreground">
+            <p className="text-[12.5px] text-foreground/75 dark:text-muted-foreground">
               <b className="font-medium text-foreground">
                 Flooding preview free
               </b>{" "}

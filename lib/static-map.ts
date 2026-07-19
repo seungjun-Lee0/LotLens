@@ -1,14 +1,23 @@
 // Server-side static map renderer for the PDF report.
 //
-// Uses the `staticmaps` npm package — fetches OSM raster tiles, composites
-// them with sharp, and draws our polygons + property pin. Output is a PNG
-// Buffer that React-PDF can embed via Image src.
+// Two-stage design, built for the PDF route's "render 16 module maps of
+// the SAME frame" workload:
 //
-// Per OSM tile usage policy: include a unique User-Agent and don't hammer
-// the tile server. Each PDF generation grabs ~9 tiles at our zoom level
-// once, then in-process state caches them for the rest of the request.
-// Prototype-scale traffic is well inside fair use.
+//   1. BASE — satellite tiles for the fixed lot-scale frame, rendered by
+//      the `staticmaps` package ONCE per (lat,lng,size) and memoised as a
+//      promise, so 16 concurrent module renders trigger a single tile
+//      fetch pass (~24 tiles) instead of ~380 duplicate downloads two at
+//      a time (staticmaps' per-instance tileRequestLimit defaults to 2 —
+//      that serial trickle was why PDF generation took tens of seconds).
+//   2. OVERLAYS — module polygons, cadastre hairlines, the yellow
+//      property outline and the pin are projected to pixels with plain
+//      web-mercator math and composited onto the base as an SVG layer by
+//      sharp. Pure CPU, no network, runs happily in parallel.
+//
+// Per tile usage policy: unique User-Agent, one frame's worth of tiles
+// per report. Prototype-scale traffic is well inside fair use.
 
+import sharp from "sharp";
 import StaticMaps from "staticmaps";
 
 import type { OverlayFeature } from "@/lib/overlays";
@@ -23,17 +32,86 @@ const SAT_TILES = MAPBOX_TOKEN
   : "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const TILE_UA = "LotLens/0.1 Brisbane-DD (contact: hello@lotlens.au)";
 
-// 8-digit hex with alpha for staticmaps fill colours.
-function withAlpha(hex: string, alpha: number): string {
-  const a = Math.max(0, Math.min(255, Math.round(alpha * 255)))
-    .toString(16)
-    .padStart(2, "0");
-  return `${hex}${a}`;
+// z19 ≈ 0.26 m/px at Brisbane latitudes → ~160 m half-width at 1200 px.
+// The Develo-style lot-scale frame, identical across every module. Both
+// Esri World Imagery and Mapbox serve z19 over QLD.
+const ZOOM = 19;
+const TILE_SIZE = 256;
+
+// ── Web-mercator projection (matches staticmaps' tile math) ─────────────
+
+const lonToX = (lon: number) => ((lon + 180) / 360) * 2 ** ZOOM;
+const latToY = (lat: number) => {
+  const r = (lat * Math.PI) / 180;
+  return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** ZOOM;
+};
+const metersPerPixel = (lat: number) =>
+  (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** ZOOM;
+
+// ── Base imagery, one tile pass per frame ───────────────────────────────
+
+// Promise-memo so concurrent module renders share ONE in-flight tile
+// fetch. Entries expire shortly after settling — this is a per-request
+// dedupe, not a long-lived cache.
+const basePromises = new Map<string, Promise<Buffer>>();
+
+function getBasePNG(lat: number, lng: number, width: number, height: number): Promise<Buffer> {
+  const key = `${lat.toFixed(6)},${lng.toFixed(6)},${width}x${height}`;
+  let p = basePromises.get(key);
+  if (!p) {
+    p = (async () => {
+      const map = new StaticMaps({
+        width,
+        height,
+        tileUrl: SAT_TILES,
+        tileSize: TILE_SIZE,
+        tileRequestHeader: { "User-Agent": TILE_UA, "Accept-Language": "en" },
+        tileRequestTimeout: 15000,
+        tileRequestLimit: 12,
+        paddingX: 0,
+        paddingY: 0,
+        // staticmaps caps zoom at 17 by default — too far out for a
+        // lot-scale frame.
+        zoomRange: { min: 1, max: 20 },
+      });
+      // Explicit centre + zoom — NEVER a bbox. staticmaps treats a
+      // 4-element "center" as one extent among many and unions it with
+      // every feature's bounds, which dragged the frame kilometres out.
+      await map.render([lng, lat], ZOOM);
+      return map.image.buffer("image/png");
+    })();
+    basePromises.set(key, p);
+    p.finally(() => setTimeout(() => basePromises.delete(key), 120_000)).catch(() => {});
+  }
+  return p;
+}
+
+// ── SVG overlay construction ────────────────────────────────────────────
+
+type Px = (lon: number, lat: number) => [number, number];
+
+function ringsToPath(rings: number[][][], px: Px): string {
+  let d = "";
+  for (const ring of rings) {
+    ring.forEach(([lon, lat], i) => {
+      const [x, y] = px(lon, lat);
+      d += `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+    });
+    d += "Z";
+  }
+  return d;
+}
+
+function polygonRings(geometry: { type?: string; coordinates?: unknown } | null | undefined): number[][][][] {
+  if (!geometry) return [];
+  if (geometry.type === "Polygon") return [geometry.coordinates as number[][][]];
+  if (geometry.type === "MultiPolygon") return geometry.coordinates as number[][][][];
+  return [];
 }
 
 /**
- * Render a property-centric map image, ~280 m envelope around the point,
- * with overlay polygons painted in their fill colours.
+ * Render a property-centric map image at a fixed lot-scale frame with
+ * overlay polygons painted in their fill colours.
  *
  * Returns PNG bytes; pass as Buffer to React-PDF's Image src.
  */
@@ -60,46 +138,27 @@ export async function renderModuleMapPNG({
   width?: number;
   height?: number;
 }): Promise<Buffer> {
-  const map = new StaticMaps({
-    width,
-    height,
-    tileUrl: SAT_TILES,
-    tileSize: 256,
-    tileRequestHeader: { "User-Agent": TILE_UA, "Accept-Language": "en" },
-    tileRequestTimeout: 15000,
-    paddingX: 0,
-    paddingY: 0,
-  });
+  const basePromise = getBasePNG(lat, lng, width, height);
 
+  const cx = lonToX(lng);
+  const cy = latToY(lat);
+  const px: Px = (lon, la) => [
+    (lonToX(lon) - cx) * TILE_SIZE + width / 2,
+    (latToY(la) - cy) * TILE_SIZE + height / 2,
+  ];
+
+  const parts: string[] = [];
+
+  // Module overlays — evenodd so polygon holes render correctly (an
+  // upgrade over the old outer-ring-only drawing).
   for (const f of overlays) {
-    if (!f.geometry) continue;
-    const fillColor = f.properties.fillColor;
-    const fill = withAlpha(fillColor, f.properties.fillOpacity ?? 0.35);
-    const stroke = fillColor;
-    if (f.geometry.type === "Polygon") {
-      // staticmaps doesn't support holes; draw outer ring only.
-      const ring = (f.geometry.coordinates as number[][][])[0];
-      if (ring) {
-        map.addPolygon({
-          coords: ring as [number, number][],
-          color: stroke,
-          fill,
-          width: 1.6,
-        });
-      }
-    } else if (f.geometry.type === "MultiPolygon") {
-      const polys = f.geometry.coordinates as number[][][][];
-      for (const poly of polys) {
-        const ring = poly[0];
-        if (ring) {
-          map.addPolygon({
-            coords: ring as [number, number][],
-            color: stroke,
-            fill,
-            width: 1.6,
-          });
-        }
-      }
+    for (const poly of polygonRings(f.geometry as { type?: string; coordinates?: unknown } | null)) {
+      const d = ringsToPath(poly, px);
+      if (!d) continue;
+      const c = f.properties.fillColor;
+      parts.push(
+        `<path d="${d}" fill="${c}" fill-opacity="${f.properties.fillOpacity ?? 0.35}" fill-rule="evenodd" stroke="${c}" stroke-width="1.6" stroke-linejoin="round"/>`,
+      );
     }
   }
 
@@ -108,98 +167,63 @@ export async function renderModuleMapPNG({
   if (
     lotLines &&
     typeof lotLines === "object" &&
-    (lotLines as { type?: string; features?: unknown }).type === "FeatureCollection"
+    (lotLines as { type?: string }).type === "FeatureCollection"
   ) {
-    const fc = lotLines as {
-      features?: Array<{ geometry?: { type?: string; coordinates?: unknown } }>;
-    };
-    const drawLotRing = (ring: [number, number][]) => {
-      if (ring.length >= 3) {
-        map.addPolygon({ coords: ring, color: "#ffffffcc", width: 0.8, fill: "#ffffff00" });
-      }
-    };
+    const fc = lotLines as { features?: Array<{ geometry?: { type?: string; coordinates?: unknown } }> };
     for (const f of fc.features ?? []) {
-      const g = f.geometry;
-      if (!g) continue;
-      if (g.type === "Polygon") {
-        const ring = (g.coordinates as number[][][])[0];
-        if (ring) drawLotRing(ring as [number, number][]);
-      } else if (g.type === "MultiPolygon") {
-        for (const poly of g.coordinates as number[][][][]) {
-          const ring = poly[0];
-          if (ring) drawLotRing(ring as [number, number][]);
+      for (const poly of polygonRings(f.geometry)) {
+        const d = ringsToPath(poly, px);
+        if (d) {
+          parts.push(
+            `<path d="${d}" fill="none" stroke="#ffffff" stroke-opacity="0.8" stroke-width="0.8"/>`,
+          );
         }
       }
     }
   }
 
-  // "Selected property" highlight — mirrors Develo's yellow lot outline.
-  // Uses the real cadastre lot polygon (from zoning's point-query) when
-  // present, falls back to a ~60×60 m box centred on the geocoded point
-  // when zoning didn't match (rare for Brisbane LGA addresses).
-  const drawPropertyRing = (ring: [number, number][]) => {
-    // White halo first for legibility against dark satellite imagery.
-    map.addPolygon({
-      coords: ring,
-      color: SELECTED_PROPERTY_STYLE.haloHex,
-      width: SELECTED_PROPERTY_STYLE.haloWidth,
-      fill: `${SELECTED_PROPERTY_STYLE.haloHex}00`,
-    });
-    map.addPolygon({
-      coords: ring,
-      color: SELECTED_PROPERTY_STYLE.colorHex,
-      width: SELECTED_PROPERTY_STYLE.lineWidth,
-      fill: `${SELECTED_PROPERTY_STYLE.colorHex}00`,
-    });
-  };
-
-  let drew = false;
-  if (
-    propertyPolygon &&
-    typeof propertyPolygon === "object" &&
-    "type" in propertyPolygon
-  ) {
-    const g = propertyPolygon as { type: string; coordinates: unknown };
-    if (g.type === "Polygon" && Array.isArray(g.coordinates)) {
-      const ring = (g.coordinates as number[][][])[0];
-      if (ring && ring.length >= 3) {
-        drawPropertyRing(ring as [number, number][]);
-        drew = true;
-      }
-    } else if (g.type === "MultiPolygon" && Array.isArray(g.coordinates)) {
-      for (const poly of g.coordinates as number[][][][]) {
-        const ring = poly[0];
-        if (ring && ring.length >= 3) {
-          drawPropertyRing(ring as [number, number][]);
-          drew = true;
-        }
-      }
-    }
-  }
-  if (!drew) {
-    const PROP_HALF = 0.00028;
-    drawPropertyRing([
-      [lng - PROP_HALF, lat - PROP_HALF],
-      [lng + PROP_HALF, lat - PROP_HALF],
-      [lng + PROP_HALF, lat + PROP_HALF],
-      [lng - PROP_HALF, lat + PROP_HALF],
-      [lng - PROP_HALF, lat - PROP_HALF],
-    ]);
+  // "Selected property" highlight — the real cadastre lot polygon when
+  // present, else a ~60×60 m box centred on the geocoded point. White
+  // halo first for legibility against dark satellite imagery.
+  const propRings: number[][][][] = polygonRings(
+    propertyPolygon as { type?: string; coordinates?: unknown } | null,
+  );
+  const propPaths =
+    propRings.length > 0
+      ? propRings.map((poly) => ringsToPath([poly[0]].filter(Boolean), px)).filter(Boolean)
+      : [
+          ringsToPath(
+            [[
+              [lng - 0.00028, lat - 0.00028],
+              [lng + 0.00028, lat - 0.00028],
+              [lng + 0.00028, lat + 0.00028],
+              [lng - 0.00028, lat + 0.00028],
+              [lng - 0.00028, lat - 0.00028],
+            ]],
+            px,
+          ),
+        ];
+  for (const d of propPaths) {
+    parts.push(
+      `<path d="${d}" fill="none" stroke="${SELECTED_PROPERTY_STYLE.haloHex}" stroke-width="${SELECTED_PROPERTY_STYLE.haloWidth}" stroke-linejoin="round"/>`,
+    );
+    parts.push(
+      `<path d="${d}" fill="none" stroke="${SELECTED_PROPERTY_STYLE.colorHex}" stroke-width="${SELECTED_PROPERTY_STYLE.lineWidth}" stroke-linejoin="round"/>`,
+    );
   }
 
-  // Small inner pin in the module tint — exact geocoded point.
-  map.addCircle({
-    coord: [lng, lat],
-    radius: 3.5,
-    color: SELECTED_PROPERTY_STYLE.colorHex,
-    fill: SELECTED_PROPERTY_STYLE.colorHex,
-    width: 0,
-  });
+  // Small inner pin — exact geocoded point (3.5 m radius, as before).
+  const pinR = 3.5 / metersPerPixel(lat);
+  const [pinX, pinY] = px(lng, lat);
+  parts.push(
+    `<circle cx="${pinX.toFixed(1)}" cy="${pinY.toFixed(1)}" r="${pinR.toFixed(1)}" fill="${SELECTED_PROPERTY_STYLE.colorHex}"/>`,
+  );
 
-  // ~280m half-width around the property — locks framing across modules.
-  // Match the web map zoom (Develo-style tight ~115 m half-width).
-  const PAD = 0.00105;
-  await map.render([lng - PAD, lat - PAD, lng + PAD, lat + PAD]);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join("")}</svg>`;
 
-  return await map.image.buffer("image/png");
+  const base = await basePromise;
+  return sharp(base)
+    .composite([{ input: Buffer.from(svg) }])
+    .png()
+    .toBuffer();
 }

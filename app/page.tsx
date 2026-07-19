@@ -16,6 +16,7 @@
 } from "lucide-react";
 
 import { SiteHeader } from "@/components/site/site-header";
+import { SiteFooter } from "@/components/site/site-footer";
 import { AddressForm } from "@/components/site/address-form";
 import { CtaStage } from "@/components/site/cta-stage";
 import { FaqScroller } from "@/components/site/faq-scroller";
@@ -484,12 +485,7 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-border/40 bg-background/40">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-6 text-center text-[11.5px] text-muted-foreground sm:flex-row sm:px-6 sm:text-left sm:text-[12px]">
-          <span>LotLens — Queensland Due Diligence</span>
-          <span>Public data only · No valuation · No title search</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   );
 }

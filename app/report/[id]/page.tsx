@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Download, Lock } from "lucide-react";
 
 import { SiteHeader } from "@/components/site/site-header";
+import { SiteFooter } from "@/components/site/site-footer";
 import { AtAGlance } from "@/components/report/at-a-glance";
 import { ModuleSection } from "@/components/report/module-section";
 import { RetryChecks } from "@/components/report/retry-checks";
@@ -153,12 +154,7 @@ export default async function ReportPage({
         </section>
       </main>
 
-      <footer className="border-t border-border/40 bg-background/40 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-5xl flex-col items-center justify-between gap-2 px-4 py-6 text-center text-[11.5px] text-muted-foreground sm:flex-row sm:px-6 sm:text-left sm:text-[12px]">
-          <span>© LotLens</span>
-          <span>Public data only · No valuation · No title search</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </>
   );
 }

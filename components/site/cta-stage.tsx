@@ -12,6 +12,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 export function CtaStage({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [focus, setFocus] = useState(false);
+  // Phone one-shot: once the show has played, .is-played keeps the card
+  // at full size forever — it never shrinks back and never re-triggers.
+  const [played, setPlayed] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -19,10 +22,11 @@ export function CtaStage({ children }: { children: ReactNode }) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let raf = 0;
     let listening = false;
-    // Previous stage-top position (phone branch) — used only to tell the
-    // scroll DIRECTION: the grow arms exclusively on the way down; going
-    // back up the card just rides by folded.
+    // Phone branch state: direction (arm on the way down only) and the
+    // one-shot latch.
     let prevSt: number | null = null;
+    let mobileFocused = false;
+    let mobilePlayed = false;
     const onScroll = () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
@@ -31,33 +35,26 @@ export function CtaStage({ children }: { children: ReactNode }) {
         if (!node) return;
         const vh = window.innerHeight;
         if (window.matchMedia("(max-width: 767.98px)").matches) {
-          // Phones: the stage has a FIXED height (100svh + 22rem, see
-          // globals.css) that never changes with focus, so every phase of
-          // the show maps to an absolute stage-top offset `st`:
-          //   st ≈ 45%vh → the card (at the stage top) reaches
-          //                mid-screen — expand (downward scrolls only);
-          //   st ∈ (5rem … floor) → the card rides pinned under the
-          //                header while the dwell scrolls by;
-          //   st < floor → fold.
-          // Focus is a plain WINDOW on st with hysteresis — no feedback
-          // from the grow/fold animations (they never move the stage), so
-          // the state can't flap. The release floor sits 6rem BEFORE the
-          // geometric dwell end (stage bottom meets the grown card's
-          // bottom at vh - 1rem - stageH): the fold plays while the card
-          // is still pinned, top edge anchored, so the shrink can't fight
-          // the scroll (bottom-clamped folding juddered). Arming requires
-          // DOWNWARD motion — scrolling back up, the folded card just
-          // rides by without re-expanding.
-          const s = node.getBoundingClientRect();
-          const st = s.top;
-          const floor = vh + 80 - s.height;
+          // Phones: ONE-SHOT. The card grows + dims once when it reaches
+          // mid-screen scrolling down; when the user scrolls on past (or
+          // retreats far above), only the dim releases — the size stays
+          // via .is-played (globals.css) and the whole machine goes
+          // inert. No fold, no dwell, nothing to judder or re-trigger.
+          if (mobilePlayed) return;
+          const st = node.getBoundingClientRect().top;
           const goingDown = prevSt !== null && st < prevSt - 0.5;
+          if (!mobileFocused) {
+            if (goingDown && st < vh * 0.45 && st > -vh * 0.3) {
+              mobileFocused = true;
+              setFocus(true);
+            }
+          } else if (st < -vh * 0.4 || st > vh * 0.75) {
+            mobileFocused = false;
+            mobilePlayed = true;
+            setFocus(false);
+            setPlayed(true);
+          }
           prevSt = st;
-          setFocus((cur) =>
-            cur
-              ? st > floor && st < vh * 0.5
-              : goingDown && st > floor + 24 && st < vh * 0.45,
-          );
           return;
         }
         const r = node.getBoundingClientRect();
@@ -95,7 +92,10 @@ export function CtaStage({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div ref={ref} className={`cta-stage${focus ? " is-focus" : ""}`}>
+    <div
+      ref={ref}
+      className={`cta-stage${focus ? " is-focus" : ""}${played ? " is-played" : ""}`}
+    >
       <div className="cta-pin">
         <div className="cta-dim" aria-hidden />
         {children}

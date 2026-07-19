@@ -1,0 +1,221 @@
+{
+  "graceville-bne": {
+    "label": "Graceville (Brisbane)",
+    "lotPlan": "115RP73818",
+    "lga": "Brisbane City",
+    "modules": {
+      "flooding": {
+        "riskLevel": "very_low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "overland_flow": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "storm_tide": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "heritage": {
+        "riskLevel": "medium",
+        "hasConsideration": true
+      },
+      "easements": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "noise": {
+        "riskLevel": "medium",
+        "hasConsideration": true,
+        "available": true
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  },
+  "surfers-gc": {
+    "label": "Surfers Paradise (Gold Coast)",
+    "lotPlan": "4SP148594",
+    "lga": "Gold Coast City",
+    "modules": {
+      "flooding": {
+        "riskLevel": "high",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": false
+      },
+      "overland_flow": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": false
+      },
+      "storm_tide": {
+        "riskLevel": "high",
+        "hasConsideration": true
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "environment": {
+        "riskLevel": "medium",
+        "hasConsideration": true
+      },
+      "heritage": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "easements": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "noise": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": false
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": false
+      },
+      "acid_sulfate": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  },
+  "maroochydore-sc": {
+    "label": "Maroochydore (Sunshine Coast)",
+    "lotPlan": null,
+    "lga": "Sunshine Coast Regional",
+    "modules": {
+      "flooding": {
+        "riskLevel": "medium",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": false
+      },
+      "overland_flow": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": false
+      },
+      "storm_tide": {
+        "riskLevel": "medium",
+        "hasConsideration": true
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "heritage": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "easements": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "noise": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  }
+}

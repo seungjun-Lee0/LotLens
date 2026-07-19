@@ -19,10 +19,10 @@ export function CtaStage({ children }: { children: ReactNode }) {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let raf = 0;
     let listening = false;
-    // Previous card-centre position (phone branch) — arming keys off the
-    // centre CROSSING the trigger line between two ticks, so a fast flick
-    // that jumps hundreds of px between scroll events can't skip it.
-    let prevMid: number | null = null;
+    // Previous stage-top position (phone branch) — used only to tell the
+    // scroll DIRECTION: the grow arms exclusively on the way down; going
+    // back up the card just rides by folded.
+    let prevSt: number | null = null;
     const onScroll = () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
@@ -31,26 +31,32 @@ export function CtaStage({ children }: { children: ReactNode }) {
         if (!node) return;
         const vh = window.innerHeight;
         if (window.matchMedia("(max-width: 767.98px)").matches) {
-          // Phones track the CARD itself (it rides in flow, then sticks
-          // just under the header — see globals.css): arm when the card's
-          // centre crosses the middle of the screen, hold while it rides
-          // up to and sits at its stick point, release once the dwell end
-          // shoves it past the stick line (top < 72) or the user scrolls
-          // back up. The HOLD test uses the card's TOP, not its centre —
-          // growing shifts the centre far down, so a centre-based hold
-          // released itself the moment the card expanded.
-          const card = node.querySelector(".cta-card");
-          if (!card) return;
-          const c = card.getBoundingClientRect();
-          const mid = c.top + c.height / 2;
-          const line = vh * 0.62;
-          // Downward crossing only: the post-fold reland (the shrunk card
-          // settling near the stick line, already BELOW the trigger line)
-          // never crosses it, so the grow can't pump itself back on.
-          const crossed = prevMid !== null && prevMid > line && mid <= line;
-          prevMid = mid;
+          // Phones: the stage has a FIXED height (100svh + 22rem, see
+          // globals.css) that never changes with focus, so every phase of
+          // the show maps to an absolute stage-top offset `st`:
+          //   st ≈ 45%vh → the card (at the stage top) reaches
+          //                mid-screen — expand (downward scrolls only);
+          //   st ∈ (5rem … floor) → the card rides pinned under the
+          //                header while the dwell scrolls by;
+          //   st < floor → fold.
+          // Focus is a plain WINDOW on st with hysteresis — no feedback
+          // from the grow/fold animations (they never move the stage), so
+          // the state can't flap. The release floor sits 6rem BEFORE the
+          // geometric dwell end (stage bottom meets the grown card's
+          // bottom at vh - 1rem - stageH): the fold plays while the card
+          // is still pinned, top edge anchored, so the shrink can't fight
+          // the scroll (bottom-clamped folding juddered). Arming requires
+          // DOWNWARD motion — scrolling back up, the folded card just
+          // rides by without re-expanding.
+          const s = node.getBoundingClientRect();
+          const st = s.top;
+          const floor = vh + 80 - s.height;
+          const goingDown = prevSt !== null && st < prevSt - 0.5;
+          prevSt = st;
           setFocus((cur) =>
-            cur ? c.top > 72 && c.top < vh * 0.7 : crossed,
+            cur
+              ? st > floor && st < vh * 0.5
+              : goingDown && st > floor + 24 && st < vh * 0.45,
           );
           return;
         }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ArrowRight, MapPin, Loader2, Search } from "lucide-react";
 
@@ -51,6 +52,10 @@ export function AddressForm({
   // Session cache: repeat queries (backspacing, re-typing) render instantly
   // without a network round-trip.
   const suggestCacheRef = useRef(new Map<string, Suggestion[]>());
+  // The dropdown renders through a portal with fixed positioning — both
+  // hosts of this form (hero, CTA card) sit inside overflow-clipped
+  // containers that would otherwise cut it off.
+  const dropRef = useRef<HTMLDivElement | null>(null);
 
   function applyPreset(addr: string) {
     setValue(addr);
@@ -113,11 +118,14 @@ export function AddressForm({
     };
   }, [value, phase]);
 
-  // Close suggestions on outside click.
+  // Close suggestions on outside click (the portal counts as inside).
   useEffect(() => {
     if (!suggestOpen) return;
     function onDocClick(e: MouseEvent) {
-      if (!wrapRef.current?.contains(e.target as Node)) setSuggestOpen(false);
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !dropRef.current?.contains(t)) {
+        setSuggestOpen(false);
+      }
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -191,6 +199,33 @@ export function AddressForm({
   const showDropdown =
     suggestOpen && phase === "idle" && (suggestions.length > 0 || suggestLoading);
 
+  // Anchor the portal dropdown under the search pill. Position is written
+  // straight to the portal's style (before paint, so it never flashes at
+  // 0,0) and refreshed on resize; scrolling just closes the dropdown
+  // (standard combobox behaviour) so a fixed box can never drift from its
+  // anchor.
+  useLayoutEffect(() => {
+    if (!showDropdown) return;
+    const el = wrapRef.current;
+    const dd = dropRef.current;
+    if (!el || !dd) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      dd.style.left = `${r.left}px`;
+      dd.style.top = `${r.top + 64}px`;
+      dd.style.width = `${r.width}px`;
+      dd.style.visibility = "visible";
+    };
+    update();
+    window.addEventListener("resize", update);
+    const onScroll = () => setSuggestOpen(false);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [showDropdown]);
+
   return (
     <div ref={wrapRef} className="relative flex w-full max-w-2xl flex-col items-center gap-4">
       <form
@@ -248,12 +283,18 @@ export function AddressForm({
         </Button>
       </form>
 
-      {/* Suggestions dropdown */}
-      {showDropdown && (
+      {/* Suggestions dropdown — portalled to <body> so the hero's
+          overflow-clip / the CTA card's overflow-hidden can't cut it off. */}
+      {showDropdown && createPortal(
         <div
+          ref={dropRef}
           role="listbox"
-          className="glass-strong absolute left-0 right-0 top-[60px] z-20 overflow-hidden rounded-2xl p-1.5"
+          style={{ position: "fixed", zIndex: 80, visibility: "hidden" }}
+          className="glass-strong rounded-2xl p-1.5"
         >
+          {/* Inner scroller: keeps the scrollbar inside the padding, clear
+              of the rounded corners. ~4 rows tall (each row ≈ 56px). */}
+          <div className="glass-scroll max-h-[232px] overflow-y-auto pr-1">
           {suggestLoading && suggestions.length === 0 ? (
             <div className="flex items-center gap-2 px-3 py-2 text-[13px] text-muted-foreground">
               <Loader2 className="size-3.5 animate-spin" />
@@ -292,7 +333,9 @@ export function AddressForm({
               ))}
             </ul>
           )}
-        </div>
+          </div>
+        </div>,
+        document.body,
       )}
 
       {presets && presets.length > 0 && phase === "idle" && (

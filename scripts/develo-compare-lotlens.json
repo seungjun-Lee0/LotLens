@@ -1,0 +1,704 @@
+{
+  "1019 Ann Street, Newstead QLD 4006": {
+    "lat": -27.4524067,
+    "lng": 153.0412604,
+    "lotPlan": "ABSP234058",
+    "lga": "Brisbane City",
+    "areaM2": 612,
+    "modules": {
+      "flooding": {
+        "riskLevel": "high",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "very_low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "overland_flow": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "storm_tide": {
+        "riskLevel": "medium",
+        "hasConsideration": true
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "heritage": {
+        "riskLevel": "high",
+        "hasConsideration": true,
+        "note": "[object Object]"
+      },
+      "easements": {
+        "riskLevel": "high",
+        "hasConsideration": true
+      },
+      "noise": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true,
+        "note": "[object Object]"
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  },
+  "15 Addison Avenue, Bulimba QLD 4171": {
+    "lat": -27.4513832,
+    "lng": 153.0531547,
+    "lotPlan": "5SP148949",
+    "lga": "Brisbane City",
+    "areaM2": 540,
+    "modules": {
+      "flooding": {
+        "riskLevel": "medium",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "very_low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "overland_flow": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "storm_tide": {
+        "riskLevel": "high",
+        "hasConsideration": true
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "heritage": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "easements": {
+        "riskLevel": "high",
+        "hasConsideration": true
+      },
+      "noise": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true,
+        "note": "[object Object]"
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  },
+  "16 Rover Street, Mount Gravatt QLD 4122": {
+    "lat": -27.541972,
+    "lng": 153.0791906,
+    "lotPlan": "10RP837628",
+    "lga": "Brisbane City",
+    "areaM2": 16750,
+    "modules": {
+      "flooding": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "overland_flow": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "storm_tide": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "bushfire": {
+        "riskLevel": "high",
+        "hasConsideration": true
+      },
+      "vegetation": {
+        "riskLevel": "medium",
+        "hasConsideration": true
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "heritage": {
+        "riskLevel": "high",
+        "hasConsideration": true,
+        "note": "[object Object]"
+      },
+      "easements": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "noise": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true,
+        "note": "[object Object]"
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  },
+  "198 Fletcher Parade, Bardon QLD 4065": {
+    "lat": -27.4510831,
+    "lng": 152.9821483,
+    "lotPlan": "8RP75816",
+    "lga": "Brisbane City",
+    "areaM2": 546,
+    "modules": {
+      "flooding": {
+        "riskLevel": "medium",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "very_low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "overland_flow": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "storm_tide": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "heritage": {
+        "riskLevel": "medium",
+        "hasConsideration": true,
+        "note": "[object Object]"
+      },
+      "easements": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "noise": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true,
+        "note": "[object Object]"
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  },
+  "30 Rivergum Place, Fig Tree Pocket QLD 4069": {
+    "lat": -27.5287515,
+    "lng": 152.9707519,
+    "lotPlan": "50RP905752",
+    "lga": "Brisbane City",
+    "areaM2": 3333,
+    "modules": {
+      "flooding": {
+        "riskLevel": "high",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "high",
+        "hasConsideration": true,
+        "available": true
+      },
+      "overland_flow": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "storm_tide": {
+        "riskLevel": "high",
+        "hasConsideration": true
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "medium",
+        "hasConsideration": true
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "heritage": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "easements": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "noise": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true,
+        "note": "[object Object]"
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  },
+  "33 Heath Street, East Brisbane QLD 4169": {
+    "lat": -27.4809457,
+    "lng": 153.048885,
+    "lotPlan": "248RP11234",
+    "lga": "Brisbane City",
+    "areaM2": 405,
+    "modules": {
+      "flooding": {
+        "riskLevel": "high",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "medium",
+        "hasConsideration": true,
+        "available": true
+      },
+      "overland_flow": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "storm_tide": {
+        "riskLevel": "high",
+        "hasConsideration": true
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "heritage": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "easements": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "noise": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true,
+        "note": "[object Object]"
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  },
+  "50 Macquarie Street, Teneriffe QLD 4005": {
+    "lat": -27.4602823,
+    "lng": 153.0498049,
+    "lotPlan": "00000SP147390",
+    "lga": "Brisbane City",
+    "areaM2": 0,
+    "modules": {
+      "flooding": {
+        "riskLevel": "very_low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "overland_flow": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "storm_tide": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "heritage": {
+        "riskLevel": "high",
+        "hasConsideration": true,
+        "note": "[object Object]"
+      },
+      "easements": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "noise": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true,
+        "note": "[object Object]"
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  },
+  "69 Alice Street, Brisbane City QLD 4000": {
+    "lat": -27.4756253,
+    "lng": 153.0271917,
+    "lotPlan": "414SL8740",
+    "lga": "Brisbane City",
+    "areaM2": 17550,
+    "modules": {
+      "flooding": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "very_low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "overland_flow": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "storm_tide": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "heritage": {
+        "riskLevel": "high",
+        "hasConsideration": true,
+        "note": "[object Object]"
+      },
+      "easements": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "noise": {
+        "riskLevel": "medium",
+        "hasConsideration": true,
+        "available": true,
+        "note": "[object Object]"
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  },
+  "8 Queens Wharf Road, Brisbane City QLD 4000": {
+    "lat": -27.4726604,
+    "lng": 153.0237031,
+    "lotPlan": "10B31753",
+    "lga": "Brisbane City",
+    "areaM2": 1384,
+    "modules": {
+      "flooding": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "flood_planning": {
+        "riskLevel": "very_low",
+        "hasConsideration": true,
+        "available": true
+      },
+      "overland_flow": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "storm_tide": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "bushfire": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "vegetation": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "environment": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "note": "[object Object]"
+      },
+      "heritage": {
+        "riskLevel": "high",
+        "hasConsideration": true,
+        "note": "[object Object]"
+      },
+      "easements": {
+        "riskLevel": "high",
+        "hasConsideration": true
+      },
+      "noise": {
+        "riskLevel": "medium",
+        "hasConsideration": true,
+        "available": true,
+        "note": "[object Object]"
+      },
+      "steep_land": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "acid_sulfate": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "mining": {
+        "riskLevel": "none",
+        "hasConsideration": false
+      },
+      "schools": {
+        "riskLevel": "low",
+        "hasConsideration": true
+      },
+      "zoning": {
+        "riskLevel": "low",
+        "hasConsideration": true,
+        "available": true
+      }
+    }
+  }
+}

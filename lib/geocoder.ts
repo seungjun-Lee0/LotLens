@@ -84,7 +84,9 @@ function qldLabel(c: QldCandidate): string {
     const lga = long.split(",").map((s) => s.trim()).pop() ?? "";
     return lga ? `${c.address}, ${lga}, QLD` : `${c.address}, QLD`;
   }
-  if (c.address.includes(",") || /\d/.test(c.address)) return c.address;
+  if (c.address.includes(",") || /\d/.test(c.address)) {
+    return c.address.replace(/,\s*Property area:.*?m²/i, "");
+  }
   return long || c.address;
 }
 
@@ -155,12 +157,27 @@ function cleanSuggestText(t: string): string {
   return out.join(", ");
 }
 
+/** The rural-property-name source embeds the parcel size in the label
+ * ("Westfield, Property area: 10,554,361.23 m², Rural Property, Drillham
+ * South…") — and the thousands separators then confuse every comma-based
+ * split downstream. Strip the area segment; keep the place itself. */
+function stripPropertyArea(label: string): string {
+  return label.replace(/,\s*Property area:.*?m²/i, "");
+}
+
 async function suggestQld(query: string): Promise<Suggestion[]> {
-  const sugs = await qldSuggest(query, 10);
+  const sugs = await qldSuggest(locatorQuery(query), 10);
   const seen = new Set<string>();
   const out: Suggestion[] = [];
   for (const s of sugs) {
-    const label = cleanSuggestText(s.text);
+    let label = stripPropertyArea(cleanSuggestText(s.text));
+    // Gazetteer entries leak through /suggest ("Lakes Creek, Gazetteer
+    // Reference No: 18835, Type: Watercourse, …"). Keep only locality-type
+    // entries and strip the register boilerplate from the label.
+    if (/Gazetteer Reference No:/i.test(label)) {
+      if (!/Type: (Suburb|Population centre|Locality)/i.test(label)) continue;
+      label = label.replace(/,\s*Gazetteer Reference No: \d+,\s*Type: [^,]+/i, "");
+    }
     const key = label.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -182,11 +199,36 @@ async function suggestQld(query: string): Promise<Suggestion[]> {
   return out;
 }
 
+/** The locator's /suggest treats a trailing postcode as a literal prefix
+ * token and matches lot-plan ids ("4005SP297533") and survey benchmarks
+ * ("40058") instead of addresses — and "QLD"/"Australia" suffixes only
+ * dilute the match. Strip them before asking the locator. */
+function locatorQuery(query: string): string {
+  return query
+    .replace(/\b(?:qld|queensland|australia)\b/gi, " ")
+    .replace(/\b4\d{3}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/(?:,\s*)+$/g, "")
+    .trim();
+}
+
 async function geocodeQld(query: string): Promise<GeocodeHit | null> {
+  const q = locatorQuery(query);
+  const tokens = queryTokens(query);
   // Resolve through /suggest + magicKey first — it handles partial and
-  // suburb-fuzzy input far better than a raw candidate search.
+  // suburb-fuzzy input far better than a raw candidate search. Never
+  // trust the single top suggestion blindly: /suggest ranks per source
+  // locator, and for "50 Macquarie Street, Teneriffe" its first row can
+  // be a Macquarie Street 300 km away. Prefer the first suggestion that
+  // mentions every word the user typed (street AND suburb); when none
+  // does (legit at suburb boundaries — typed Graceville, official
+  // address says Chelmer) keep the locator's own order.
   try {
-    const [top] = await qldSuggest(query, 1);
+    const sugs = await qldSuggest(q, 8);
+    const top =
+      sugs.find((s) => coversTokens(cleanSuggestText(s.text), tokens)) ??
+      sugs[0];
     if (top) {
       const cands = await qldFindCandidates(top.text, 6, top.magicKey);
       const best = cands[0];
@@ -201,8 +243,11 @@ async function geocodeQld(query: string): Promise<GeocodeHit | null> {
   } catch {
     /* fall through to the direct candidate search */
   }
-  const candidates = await qldFindCandidates(query, 15);
-  const best = candidates.find((c) => c.score >= 70) ?? candidates[0];
+  const candidates = await qldFindCandidates(q, 15);
+  // Same locality preference on the direct path.
+  const covering = candidates.filter((c) => coversTokens(qldLabel(c), tokens));
+  const pool = covering.length > 0 ? covering : candidates;
+  const best = pool.find((c) => c.score >= 70) ?? pool[0];
   if (!best) return null;
   return {
     lat: best.location.y,
@@ -276,12 +321,14 @@ async function geocodeNominatim(query: string): Promise<GeocodeHit | null> {
 
 // ── Google ───────────────────────────────────────────────────────────────
 
-type AutocompletePrediction = {
-  place_id: string;
-  description: string;
-  structured_formatting?: {
-    main_text?: string;
-    secondary_text?: string;
+type NewPlacePrediction = {
+  placePrediction?: {
+    placeId?: string;
+    text?: { text?: string };
+    structuredFormat?: {
+      mainText?: { text?: string };
+      secondaryText?: { text?: string };
+    };
   };
 };
 
@@ -289,41 +336,51 @@ async function suggestGoogle(
   query: string,
   key: string,
 ): Promise<Suggestion[]> {
-  // Places Autocomplete — designed for type-as-you-search. Returns
-  // predictions with place_id; coords come from Geocoding/Details on
-  // pick. Restricted to AU + biased to Brisbane LGA.
-  const url = new URL(
-    "https://maps.googleapis.com/maps/api/place/autocomplete/json",
-  );
-  url.searchParams.set("input", query);
-  url.searchParams.set("key", key);
-  url.searchParams.set("components", "country:au");
-  url.searchParams.set("types", "geocode");
-  const res = await fetch(url.toString());
-  if (!res.ok) return [];
-  const body = (await res.json()) as {
-    status: string;
-    predictions?: AutocompletePrediction[];
-    error_message?: string;
-  };
-  if (body.status !== "OK" && body.status !== "ZERO_RESULTS") {
-    console.warn(
-      "[geocoder] google places autocomplete:",
-      body.status,
-      body.error_message,
-    );
+  // Places API (New) autocomplete — the legacy
+  // maps/api/place/autocomplete endpoint returns REQUEST_DENIED for
+  // projects created after the deprecation cutoff, so this must use the
+  // v1 places:autocomplete surface. Covers addresses AND establishments
+  // ("westfield chermside") in one call, AU-restricted + QLD-biased.
+  const res = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+    },
+    body: JSON.stringify({
+      input: query,
+      includedRegionCodes: ["AU"],
+      locationBias: {
+        rectangle: {
+          low: { latitude: BBOX.latMin, longitude: BBOX.lonMin },
+          high: { latitude: BBOX.latMax, longitude: BBOX.lonMax },
+        },
+      },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    console.warn("[geocoder] google places autocomplete:", res.status, err.slice(0, 200));
     return [];
   }
-  return (body.predictions ?? []).slice(0, 6).map((p) => ({
-    id: `g:${p.place_id}`,
-    displayName: p.description,
-    lat: null,
-    lng: null,
-    primary: p.structured_formatting?.main_text ?? splitDisplayName(p.description).primary,
-    secondary:
-      p.structured_formatting?.secondary_text ??
-      splitDisplayName(p.description).secondary,
-  }));
+  const body = (await res.json()) as { suggestions?: NewPlacePrediction[] };
+  const out: Suggestion[] = [];
+  for (const s of body.suggestions ?? []) {
+    const p = s.placePrediction;
+    const text = p?.text?.text;
+    if (!p?.placeId || !text) continue;
+    out.push({
+      id: `g:${p.placeId}`,
+      displayName: text,
+      lat: null,
+      lng: null,
+      primary: p.structuredFormat?.mainText?.text ?? splitDisplayName(text).primary,
+      secondary:
+        p.structuredFormat?.secondaryText?.text ?? splitDisplayName(text).secondary,
+    });
+    if (out.length >= 6) break;
+  }
+  return out;
 }
 
 type GeocodingResult = {
@@ -385,6 +442,35 @@ async function geocodeGoogle(
 
 const GOOGLE_KEY = () => process.env.GOOGLE_GEOCODING_API_KEY ?? "";
 
+// ── Token coverage ───────────────────────────────────────────────────────
+//
+// The QLD locator's /suggest happily prefix-matches on the FIRST word and
+// ignores the rest: "westfield chermside" returns Westfield (Longreach) and
+// Westfield Station (Kumbarilla) — nothing in Chermside. A suggestion that
+// doesn't mention every meaningful word the user typed is a weak match, and
+// when NONE of them do we let OSM (which indexes POIs) take the top slots.
+
+const TOKEN_STOPWORDS = new Set(["qld", "queensland", "australia", "the"]);
+
+function queryTokens(query: string): string[] {
+  return (query.toLowerCase().match(/[a-z]{3,}/g) ?? []).filter(
+    (t) => !TOKEN_STOPWORDS.has(t),
+  );
+}
+
+function coversTokens(label: string, tokens: string[]): boolean {
+  const l = label.toLowerCase();
+  return tokens.every((t) => l.includes(t));
+}
+
+/** Street-address-shaped input ("12 Oxley Rd …"). For these the QLD
+ * locator is authoritative and token mismatches are usually just suburb
+ * boundary naming (typed Graceville, official address says Chelmer) — do
+ * NOT let an OSM street centroid outrank an exact lot address. */
+function looksLikeStreetAddress(query: string): boolean {
+  return /^\s*\d/.test(query);
+}
+
 export async function suggestAddresses(query: string): Promise<Suggestion[]> {
   if (query.trim().length < 3) return [];
   const key = GOOGLE_KEY();
@@ -396,21 +482,79 @@ export async function suggestAddresses(query: string): Promise<Suggestion[]> {
       console.error("[geocoder] google suggest failed, falling back:", err);
     }
   }
+  const tokens = queryTokens(query);
+  let qld: Suggestion[] = [];
   try {
-    const out = await suggestQld(query);
-    if (out.length > 0) return out;
+    qld = await suggestQld(query);
   } catch (err) {
     console.error("[geocoder] qld locator suggest failed, falling back:", err);
   }
-  try {
-    return await suggestNominatim(query);
-  } catch {
-    return [];
+  // Address-shaped queries: trust the locator's own ordering outright.
+  if (looksLikeStreetAddress(query) && qld.length > 0) return qld;
+  const covering = qld.filter((s) => coversTokens(s.displayName, tokens));
+  if (covering.length > 0) {
+    // Good matches exist — surface them first, weak prefix-matches after.
+    const rest = qld.filter((s) => !coversTokens(s.displayName, tokens));
+    return [...covering, ...rest].slice(0, 6);
   }
+  // No QLD suggestion mentions every word — landmark/POI-style query.
+  // Merge OSM results (QLD-bounded) ahead of the weak prefix matches.
+  try {
+    const nom = await suggestNominatim(query);
+    const seen = new Set<string>();
+    const merged: Suggestion[] = [];
+    for (const s of [...nom, ...qld]) {
+      const k = s.displayName.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      merged.push(s);
+      if (merged.length >= 6) break;
+    }
+    if (merged.length > 0) return merged;
+  } catch {
+    /* fall through */
+  }
+  return qld;
 }
 
 export async function geocodeAddress(query: string): Promise<GeocodeHit | null> {
   const key = GOOGLE_KEY();
+
+  // Provider order is deliberate, and NOT Google-first:
+  //
+  //   1. QLD locator, but only when it produces an EXACT street-number
+  //      match. Its address points come from the state address register
+  //      and sit on the parcel itself, so for parcel-based due diligence
+  //      it beats Google's geometric rooftop — which can land on the
+  //      neighbour (33 Heath St pinned 66 m off, flipping the resolved
+  //      lot from 240/RP11234 to 248/RP11234 and the character verdict
+  //      with it).
+  //   2. Google for everything the locator can't nail exactly: unlisted
+  //      street numbers (50 Macquarie St Teneriffe), house numbers on
+  //      big sites (1019 Ann St Newstead resolves street-level only),
+  //      POIs, unit addresses.
+  //   3. QLD partial hit, then Nominatim, as before.
+  //
+  // (Google Places still powers the suggestion dropdown — this order is
+  // about the final coordinates only.)
+  const streetNum = query.match(/^\s*(\d+)[a-z]?\b(?!\s*\/)/i)?.[1] ?? null;
+  let qldHit: GeocodeHit | null = null;
+  let qldTried = false;
+  if (streetNum) {
+    qldTried = true;
+    try {
+      qldHit = await geocodeQld(query);
+      if (
+        qldHit &&
+        new RegExp(`^${streetNum}\\b`).test(qldHit.displayName.trim())
+      ) {
+        return qldHit;
+      }
+    } catch (err) {
+      console.error("[geocoder] qld locator geocode failed:", err);
+    }
+  }
+
   if (key) {
     try {
       const hit = await geocodeGoogle(query, key);
@@ -419,9 +563,31 @@ export async function geocodeAddress(query: string): Promise<GeocodeHit | null> 
       console.error("[geocoder] google geocode failed, falling back:", err);
     }
   }
+  // Locator's inexact hit (street/complex level) is still better than
+  // nothing when Google is unavailable.
+  if (qldTried && qldHit) return qldHit;
   try {
     const hit = await geocodeQld(query);
-    if (hit) return hit;
+    if (hit) {
+      // Landmark-style query resolved to something that doesn't mention the
+      // words the user typed (the locator prefix-matches the first word and
+      // can land hundreds of km away — "Westfield Chermside" → Westfield
+      // homestead, Longreach). Prefer an OSM hit that actually matches.
+      const tokens = queryTokens(query);
+      if (
+        !looksLikeStreetAddress(query) &&
+        tokens.length > 0 &&
+        !coversTokens(hit.displayName, tokens)
+      ) {
+        try {
+          const nom = await geocodeNominatim(query);
+          if (nom && coversTokens(nom.displayName, tokens)) return nom;
+        } catch {
+          /* keep the QLD hit */
+        }
+      }
+      return hit;
+    }
   } catch (err) {
     console.error("[geocoder] qld locator geocode failed, falling back:", err);
   }

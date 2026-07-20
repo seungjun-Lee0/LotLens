@@ -98,6 +98,53 @@ export function insetParcelPolygon(g: Geometry, factor = 0.997): Geometry {
   return g;
 }
 
+type ParcelFeature = {
+  geometry?: Geometry | null;
+  properties?: Record<string, unknown> | null;
+};
+
+/** Squared degree-space distance (lng scaled by cos lat) from the pin to
+ * the nearest vertex of the feature's rings. Coarse but plenty to rank
+ * "which neighbouring lot is closest to the pin". */
+function parcelDistanceSq(f: ParcelFeature, lat: number, lng: number): number {
+  const g = f.geometry;
+  if (!g) return Infinity;
+  const kx = Math.cos((lat * Math.PI) / 180);
+  const polys: number[][][][] =
+    g.type === "Polygon" ? [g.coordinates as number[][][]] :
+    g.type === "MultiPolygon" ? (g.coordinates as number[][][][]) : [];
+  let best = Infinity;
+  for (const poly of polys) {
+    for (const ring of poly) {
+      for (const [x, y] of ring) {
+        const dx = (x - lng) * kx;
+        const dy = y - lat;
+        const d = dx * dx + dy * dy;
+        if (d < best) best = d;
+      }
+    }
+  }
+  return best;
+}
+
+const hasLotPlan = (f: ParcelFeature) =>
+  !!f.geometry && !!(f.properties as { lotplan?: unknown } | null)?.lotplan;
+
+function toParcelInfo(f: ParcelFeature): ParcelInfo {
+  const p = (f.properties ?? {}) as Record<string, unknown>;
+  return {
+    ...EMPTY,
+    polygon: f.geometry ?? null,
+    lotPlan: str(p.lotplan),
+    lotNumber: str(p.lot),
+    planNumber: str(p.plan),
+    areaM2: num(p.lot_area),
+    tenure: str(p.tenure),
+    suburb: str(p.locality),
+    lga: str(p.shire_name),
+  };
+}
+
 export async function fetchPropertyParcel(
   lat: number,
   lng: number,
@@ -114,22 +161,39 @@ export async function fetchPropertyParcel(
     });
     // Road/rail/water reserves come back with null lotplan — prefer a real
     // lot if the point straddles boundaries.
-    const f =
-      fc.features.find((x) => (x.properties as { lotplan?: unknown })?.lotplan) ??
-      fc.features[0];
-    if (!f || !f.geometry) return EMPTY;
-    const p = (f.properties ?? {}) as Record<string, unknown>;
-    return {
-      ...EMPTY,
-      polygon: f.geometry,
-      lotPlan: str(p.lotplan),
-      lotNumber: str(p.lot),
-      planNumber: str(p.plan),
-      areaM2: num(p.lot_area),
-      tenure: str(p.tenure),
-      suburb: str(p.locality),
-      lga: str(p.shire_name),
-    };
+    const direct =
+      fc.features.find(hasLotPlan) ?? fc.features.find((x) => !!x.geometry);
+    if (direct && hasLotPlan(direct)) return toParcelInfo(direct);
+
+    // The pin missed the cadastre (interpolated geocodes drop onto the
+    // road; large sites can pin on internal reserves). Search ~40 m out
+    // and take the REAL lot nearest to the pin — without this the whole
+    // report runs point-only: no lot polygon, no lot-clipped overlay
+    // checks (heritage/easements silently under-report).
+    const near = await queryArcGIS(PARCEL_LAYER, {
+      geometry: { x: lng, y: lat, spatialReference: 4326 },
+      geometryType: "esriGeometryPoint",
+      inSR: 4326,
+      outFields: "lot,plan,lotplan,lot_area,tenure,parcel_typ,locality,shire_name",
+      returnGeometry: true,
+      bufferDegrees: 0.00036, // ~40 m
+      maxAllowableOffset: 0.00001,
+    });
+    const lots = near.features.filter(hasLotPlan);
+    if (lots.length > 0) {
+      lots.sort(
+        (a, b) => parcelDistanceSq(a, lat, lng) - parcelDistanceSq(b, lat, lng),
+      );
+      console.warn(
+        `[property] pin missed cadastre at ${lat.toFixed(6)},${lng.toFixed(6)} — using nearest lot ${
+          (lots[0].properties as { lotplan?: string })?.lotplan
+        }`,
+      );
+      return toParcelInfo(lots[0]);
+    }
+
+    // Nothing real nearby — keep whatever the point hit (reserve) or EMPTY.
+    return direct?.geometry ? toParcelInfo(direct) : EMPTY;
   } catch (err) {
     console.error("[property] parcel lookup failed:", err);
     return EMPTY;

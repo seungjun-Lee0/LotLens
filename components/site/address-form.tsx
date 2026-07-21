@@ -253,7 +253,7 @@ export function AddressForm({
           autoComplete="off"
           aria-autocomplete="list"
           aria-expanded={showDropdown}
-          className="h-11 flex-1 min-w-0 border-0 bg-transparent px-2 text-[14.5px] shadow-none focus-visible:ring-0 dark:bg-transparent sm:text-[15px]"
+          className="h-11 flex-1 min-w-0 border-0 bg-transparent px-2 text-[16px] shadow-none focus-visible:ring-0 dark:bg-transparent sm:text-[15px]"
           aria-label="Queensland address"
         />
         <Button
@@ -334,6 +334,13 @@ export function AddressForm({
             </ul>
           )}
           </div>
+          {/* Places API ToS: autocomplete shown without a Google map must
+              carry Google attribution near the results. */}
+          {suggestions.some((s) => s.id.startsWith("g:")) && (
+            <div className="px-3 pb-1 pt-1.5 text-right text-[10px] text-muted-foreground/70">
+              Powered by Google
+            </div>
+          )}
         </div>,
         document.body,
       )}

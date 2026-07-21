@@ -114,6 +114,9 @@
   --apple-yellow: #ffcc00;
   --apple-gray: #8e8e93;
   --selected-property: #ffcc00;
+  /* Severity scale "Low" — apple yellow is unreadable as text on light
+     surfaces, so light mode uses a darker gold. See lib/risk-style.ts. */
+  --risk-low: #a87f00;
 
   /* Hero background layer strength — the near-white light aerial swallows
      faint overlays, so light mode runs them noticeably stronger. */
@@ -177,6 +180,7 @@
   --apple-yellow: #ffd60a;
   --apple-gray: #98989d;
   --selected-property: #ffd60a;
+  --risk-low: #ffd60a;
 
   --hero-layer: 0.4;
   --hero-layer-pinned: 0.65;

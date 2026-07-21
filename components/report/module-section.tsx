@@ -7,6 +7,7 @@ import { MODULE_META } from "@/lib/module-meta";
 import { extractOverlays, type OverlayFeature } from "@/lib/overlays";
 import type { ReportModuleRow } from "@/lib/pipeline";
 import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
+import { RISK_STYLE } from "@/lib/risk-style";
 import type { Module, RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
@@ -330,33 +331,24 @@ function ModuleFacts({
 // (previously a separate risk badge duplicated this and both read
 // "clear/none" together on empty modules). ──────────────────────────────
 
-const RISK_LABEL: Record<RiskLevel, string> = {
-  high: "High",
-  medium: "Medium",
-  low: "Low",
-  very_low: "Very low",
-  none: "",
-};
-
 function StatusPill({
   hasConsideration,
   risk,
-  tint,
   failed = false,
 }: {
   hasConsideration: boolean;
   risk: RiskLevel;
-  tint: string;
   /** Source unreachable this run — neutral "couldn't check", not green. */
   failed?: boolean;
 }) {
+  // Severity is colour-coded on ONE shared scale (lib/risk-style.ts) —
+  // never the module tint, or a heritage "high" and a flooding "low"
+  // would both just read as their module colour.
   const color = failed
     ? "var(--apple-orange)"
-    : hasConsideration
-      ? tint
-      : "var(--apple-green)";
+    : RISK_STYLE[hasConsideration ? risk : "none"].cssVar;
   const Icon = failed || hasConsideration ? TriangleAlert : Check;
-  const riskLabel = hasConsideration ? RISK_LABEL[risk] : "";
+  const riskLabel = hasConsideration ? RISK_STYLE[risk].label : "";
   return (
     <div
       className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
@@ -441,7 +433,7 @@ export function ModuleSection({
   const factsContent = raw ? ModuleFacts({ module: row.module, raw }) : null;
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(15,23,42,0.12)]">
+    <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm">
       {/* Header: name + clarifying question */}
       <div className="flex flex-col gap-3 px-5 pt-6 sm:flex-row sm:items-end sm:justify-between sm:px-10 sm:pt-9">
         <div className="flex items-center gap-3">
@@ -485,7 +477,6 @@ export function ModuleSection({
           <StatusPill
             hasConsideration={row.hasConsideration}
             risk={risk}
-            tint={meta.tint}
             failed={raw?.fetchFailed === true}
           />
         </div>

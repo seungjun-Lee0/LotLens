@@ -32,6 +32,10 @@ export type SessionUser = {
   credits: number;
   /** False for Google-only accounts (they can add a password in /account). */
   hasPassword: boolean;
+  /** PDF report branding (subscriber feature). */
+  brandName: string | null;
+  brandColor: string | null;
+  brandLogoUrl: string | null;
 };
 
 type UserRow = {
@@ -44,6 +48,9 @@ type UserRow = {
   current_period_end: string | null;
   credits: number;
   has_password: boolean;
+  brand_name: string | null;
+  brand_color: string | null;
+  brand_logo_url: string | null;
 };
 
 function secretKey(): Uint8Array {
@@ -106,6 +113,9 @@ function toSessionUser(row: UserRow): SessionUser {
     currentPeriodEnd: row.current_period_end,
     credits: row.credits ?? 0,
     hasPassword: row.has_password,
+    brandName: row.brand_name ?? null,
+    brandColor: row.brand_color ?? null,
+    brandLogoUrl: row.brand_logo_url ?? null,
   };
 }
 
@@ -122,7 +132,8 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     const rows = (await sql`
       SELECT id, email, name, plan, subscription_status,
              stripe_customer_id, current_period_end, credits,
-             (password_hash IS NOT NULL) AS has_password
+             (password_hash IS NOT NULL) AS has_password,
+             brand_name, brand_color, brand_logo_url
       FROM users WHERE id = ${userId} LIMIT 1
     `) as UserRow[];
     if (rows.length === 0) return null;

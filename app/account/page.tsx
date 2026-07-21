@@ -6,6 +6,7 @@ import {
   SubscribeButton,
 } from "@/components/site/billing-buttons";
 import { NameForm, PasswordForm } from "@/components/site/account-security";
+import { BrandingForm } from "@/components/site/branding-form";
 import {
   PLAN_QUOTAS,
   getSessionUser,
@@ -183,6 +184,26 @@ export default async function AccountPage({
                 </div>
               );
             })}
+          </section>
+        )}
+
+        {/* Report branding — subscriber feature */}
+        {subscriber && (
+          <section className="glass flex flex-col gap-4 rounded-3xl p-6">
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Report branding
+              </div>
+              <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
+                Your name, accent colour and logo replace the default LotLens
+                header on every PDF fact pack you export.
+              </p>
+            </div>
+            <BrandingForm
+              initialName={user.brandName ?? ""}
+              initialColor={user.brandColor ?? ""}
+              initialLogoUrl={user.brandLogoUrl ?? ""}
+            />
           </section>
         )}
 

@@ -84,6 +84,13 @@ create table if not exists password_resets (
 );
 create index if not exists password_resets_user_idx on password_resets(user_id);
 
+-- PDF report branding (subscriber feature): the fact pack renders the
+-- customer's name/logo/accent instead of plain LotLens.
+-- brand_color is #rrggbb; brand_logo_url an https PNG/JPG.
+alter table users add column if not exists brand_name text;
+alter table users add column if not exists brand_color text;
+alter table users add column if not exists brand_logo_url text;
+
 -- One row per report a subscriber unlocked against their monthly quota.
 create table if not exists report_usage (
   id         uuid primary key default gen_random_uuid(),

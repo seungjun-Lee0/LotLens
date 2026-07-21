@@ -1,12 +1,5 @@
 import type { RiskLevel } from "@/lib/db";
-
-const STYLE: Record<RiskLevel, { label: string; tint: string }> = {
-  high:     { label: "High",          tint: "var(--apple-red)" },
-  medium:   { label: "Medium",        tint: "var(--apple-orange)" },
-  low:      { label: "Low",           tint: "var(--apple-teal)" },
-  very_low: { label: "Very low",      tint: "var(--apple-yellow)" },
-  none:     { label: "No consideration", tint: "var(--apple-green)" },
-};
+import { RISK_STYLE } from "@/lib/risk-style";
 
 export function RiskBadge({
   level,
@@ -15,21 +8,22 @@ export function RiskBadge({
   level: RiskLevel;
   size?: "sm" | "md";
 }) {
-  const s = STYLE[level];
+  const s = RISK_STYLE[level];
+  const label = level === "none" ? "No consideration" : s.label;
   return (
     <span
       className={
         "glass-tint inline-flex items-center gap-1.5 rounded-full font-medium " +
         (size === "sm" ? "px-2.5 py-1 text-[11px]" : "px-3 py-1.5 text-[12px]")
       }
-      style={{ ["--tint" as string]: s.tint }}
+      style={{ ["--tint" as string]: s.cssVar }}
     >
       <span
         aria-hidden
         className="size-1.5 rounded-full"
-        style={{ background: s.tint }}
+        style={{ background: s.cssVar }}
       />
-      {s.label}
+      {label}
     </span>
   );
 }

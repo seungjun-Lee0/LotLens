@@ -1,6 +1,7 @@
 import { Check, TriangleAlert } from "lucide-react";
 
 import { MODULE_META } from "@/lib/module-meta";
+import { RISK_RANK, RISK_STYLE, riskOf } from "@/lib/risk-style";
 import type { ReportPayload } from "@/lib/pipeline";
 
 // Brisbane CBD GPO (approx). Used for the "distance to CBD" stat in the
@@ -34,14 +35,42 @@ function formatDate(iso: string): string {
   }
 }
 
+function isFailed(m: ReportPayload["modules"][number]): boolean {
+  return (
+    !!m.raw &&
+    typeof m.raw === "object" &&
+    (m.raw as Record<string, unknown>).fetchFailed === true
+  );
+}
+
 export function AtAGlance({ payload }: { payload: ReportPayload }) {
   const { report, address, modules, considerationCount } = payload;
-  const failedCount = modules.filter(
-    (m) =>
-      !!m.raw &&
-      typeof m.raw === "object" &&
-      (m.raw as Record<string, unknown>).fetchFailed === true,
-  ).length;
+  const failedCount = modules.filter(isFailed).length;
+
+  // Verdict layer: flagged modules first, most severe on top, then failed
+  // checks; everything clear collapses into a compact strip below. The
+  // canonical module order stays in the report BODY — this block is the
+  // "read the punchline first" view.
+  const attention = modules
+    .filter((m) => m.hasConsideration || isFailed(m))
+    .sort((a, b) => {
+      const fa = isFailed(a) ? 1 : 0;
+      const fb = isFailed(b) ? 1 : 0;
+      if (fa !== fb) return fa - fb; // failed checks after real findings
+      return (
+        RISK_RANK[riskOf(b.riskLevel, b.hasConsideration)] -
+        RISK_RANK[riskOf(a.riskLevel, a.hasConsideration)]
+      );
+    });
+  const clear = modules.filter((m) => !m.hasConsideration && !isFailed(m));
+  const topLine = attention
+    .filter((m) => !isFailed(m))
+    .slice(0, 3)
+    .map(
+      (m) =>
+        `${MODULE_META[m.module].name} (${RISK_STYLE[riskOf(m.riskLevel, m.hasConsideration)].label})`,
+    )
+    .join(", ");
   const distanceKm = haversineKm(CBD, { lat: address.lat, lng: address.lng });
   const zoningRow = modules.find((m) => m.module === "zoning");
   const zoningRaw =
@@ -56,7 +85,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
   const zoneFamily = (zoningRaw?.lvl1Zone as string | null) ?? null;
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(15,23,42,0.12)]">
+    <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm">
       <div className="grid grid-cols-1 gap-x-8 gap-y-6 px-5 py-6 sm:gap-y-8 sm:px-10 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
         {/* Left — title + 5 module rows */}
         <div className="flex flex-col gap-5 sm:gap-6">
@@ -65,78 +94,117 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
               At a glance
             </h2>
             <p className="mt-2 max-w-md text-pretty text-[13.5px] leading-relaxed text-muted-foreground sm:text-[14px]">
-              Public-data modules summarising what we found at this
-              address. {considerationCount === 0
+              {considerationCount === 0
                 ? failedCount === 0
-                  ? "Nothing of concern."
-                  : ""
-                : `${considerationCount} module${considerationCount > 1 ? "s have" : " has"} something worth reading.`}
+                  ? "All 15 public-data checks came back clear at this address."
+                  : "Nothing of concern found in the checks that ran."
+                : `${considerationCount} of ${modules.length} checks need your attention${topLine ? ` — most important: ${topLine}` : ""}.`}
               {failedCount > 0 &&
                 ` ${failedCount} check${failedCount > 1 ? "s" : ""} couldn't reach ${failedCount > 1 ? "their sources" : "its source"} this run — re-run to retry.`}
             </p>
           </div>
 
-          <ul className="flex flex-col gap-2.5">
-            {modules.map((m) => {
-              const meta = MODULE_META[m.module];
-              const Icon = meta.icon;
-              const failed =
-                !!m.raw &&
-                typeof m.raw === "object" &&
-                (m.raw as Record<string, unknown>).fetchFailed === true;
-              const Status = failed || m.hasConsideration ? TriangleAlert : Check;
-              const tint = failed
-                ? "var(--apple-orange)"
-                : m.hasConsideration
-                  ? meta.tint
-                  : "var(--apple-green)";
-              return (
-                <li
-                  key={m.module}
-                  className="flex items-center gap-3 rounded-2xl border border-border/40 bg-background/40 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3"
-                >
-                  <div
-                    className="flex size-8 shrink-0 items-center justify-center rounded-xl sm:size-9"
-                    style={{
-                      background: `color-mix(in oklab, ${meta.tint} 14%, transparent)`,
-                      color: meta.tint,
-                    }}
-                  >
-                    <Icon className="size-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[14px] font-semibold tracking-tight sm:text-[15px]">
-                      {meta.name}
-                    </div>
-                    <div className="truncate text-[11px] text-muted-foreground sm:text-[11.5px]">
-                      {meta.sourceLabel}
-                    </div>
-                  </div>
-                  <div
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] sm:gap-2 sm:px-3 sm:text-[11px] sm:tracking-[0.14em]"
-                    style={{
-                      background: `color-mix(in oklab, ${tint} 14%, transparent)`,
-                      color: tint,
-                    }}
-                  >
-                    <span
-                      className="flex size-4 items-center justify-center rounded-full"
-                      style={{ background: tint, color: "white" }}
+          {attention.length > 0 && (
+            <div>
+              <div className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Needs attention ({attention.length})
+              </div>
+              <ul className="flex flex-col gap-2.5">
+                {attention.map((m) => {
+                  const meta = MODULE_META[m.module];
+                  const Icon = meta.icon;
+                  const failed = isFailed(m);
+                  const level = riskOf(m.riskLevel, m.hasConsideration);
+                  // Severity on the shared scale; module identity on the icon.
+                  const tint = failed
+                    ? "var(--apple-orange)"
+                    : RISK_STYLE[level].cssVar;
+                  const summary = report.narrative[m.module]?.summary;
+                  return (
+                    <li
+                      key={m.module}
+                      className="flex items-start gap-3 rounded-2xl border border-border/40 bg-background/40 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3"
                     >
-                      <Status className="size-2.5" strokeWidth={3.5} />
-                    </span>
-                    <span className="hidden sm:inline">
-                      {failed
-                        ? "Not checked"
-                        : m.hasConsideration
-                          ? "Considerations"
-                          : "All clear"}
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                      <div
+                        className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl sm:size-9"
+                        style={{
+                          background: `color-mix(in oklab, ${meta.tint} 14%, transparent)`,
+                          color: meta.tint,
+                        }}
+                      >
+                        <Icon className="size-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[14px] font-semibold tracking-tight sm:text-[15px]">
+                          {meta.name}
+                        </div>
+                        {failed ? (
+                          <div className="text-[12px] leading-snug text-muted-foreground">
+                            Source unreachable this run — re-run the checks.
+                          </div>
+                        ) : summary ? (
+                          <div className="line-clamp-2 text-[12px] leading-snug text-muted-foreground sm:text-[12.5px]">
+                            {summary}
+                          </div>
+                        ) : (
+                          <div className="truncate text-[11px] text-muted-foreground">
+                            {meta.sourceLabel}
+                          </div>
+                        )}
+                      </div>
+                      <div
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] sm:gap-2 sm:px-3 sm:text-[11px] sm:tracking-[0.14em]"
+                        style={{
+                          background: `color-mix(in oklab, ${tint} 14%, transparent)`,
+                          color: tint,
+                        }}
+                      >
+                        <span
+                          className="flex size-4 items-center justify-center rounded-full"
+                          style={{ background: tint, color: "white" }}
+                        >
+                          <TriangleAlert className="size-2.5" strokeWidth={3.5} />
+                        </span>
+                        <span className="hidden sm:inline">
+                          {failed ? "Not checked" : RISK_STYLE[level].label}
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {clear.length > 0 && (
+            <div>
+              <div className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Checked &amp; clear ({clear.length})
+              </div>
+              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {clear.map((m) => {
+                  const meta = MODULE_META[m.module];
+                  const Icon = meta.icon;
+                  return (
+                    <li
+                      key={m.module}
+                      className="flex items-center gap-2.5 rounded-xl border border-border/40 bg-background/30 px-3 py-2"
+                    >
+                      <Icon className="size-3.5 shrink-0" style={{ color: meta.tint }} />
+                      <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+                        {meta.name}
+                      </span>
+                      <Check
+                        className="size-3.5 shrink-0"
+                        strokeWidth={3}
+                        style={{ color: "var(--apple-green)" }}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Right — metadata sidebar */}

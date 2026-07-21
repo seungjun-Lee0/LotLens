@@ -20,7 +20,8 @@ import { MODULE_META, APPLE_HEX } from "@/lib/module-meta";
 import { extractOverlays, type OverlayFeature } from "@/lib/overlays";
 import type { ReportPayload } from "@/lib/pipeline";
 import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
-import type { Module } from "@/lib/db";
+import { RISK_RANK, RISK_STYLE, riskOf } from "@/lib/risk-style";
+import type { Module, RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
 // ── Apple-ish tokens (mirrors apple.com / iCloud system surfaces) ────────
@@ -36,8 +37,18 @@ const PANEL_BG = "#fbfbfd";     // very light surface for callouts
 const DISCLAIMER =
   "This report aggregates public data for informational purposes only. It is not legal, financial, or planning advice. Confirm all details with a qualified professional, conveyancer, or the relevant Council before making decisions.";
 
-/** One per module — null when staticmaps render fails on that module. */
+/** One per module — null when the map render fails on that module. */
 export type ModuleMapPng = { module: Module; png: Buffer | null };
+
+/** Customer branding (subscriber feature) — replaces the plain LotLens
+ * identity on the cover/footers and adds an accent rule to every page.
+ * `logo` is pre-fetched to a Buffer by the route (React-PDF must not
+ * fetch mid-render). */
+export type ReportBranding = {
+  name: string | null;
+  color: string | null;
+  logo: Buffer | null;
+};
 
 Font.registerHyphenationCallback((w) => [w]);
 
@@ -71,6 +82,31 @@ function formatDate(iso: string): string {
 type RawAttrs = Record<string, unknown>;
 function asArr<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
+}
+
+/** Cover one-liner from a module summary: the AI lead restates the full
+ * address ("Westfield Chermside, Gympie Rd, … carries high flood risk…"),
+ * which wastes the whole line on the cover — strip it, uppercase the
+ * first letter, and truncate at a WORD boundary (mid-word "registered
+ * c…" reads broken). */
+function coverLine(
+  summary: string | undefined,
+  address: string,
+): string | null {
+  if (!summary) return null;
+  let s = summary.trim();
+  const addr = address.trim();
+  if (addr && s.toLowerCase().startsWith(addr.toLowerCase())) {
+    s = s.slice(addr.length).replace(/^[\s,—–-]+/, "");
+  }
+  if (s.length > 0) s = s[0].toUpperCase() + s.slice(1);
+  const MAX = 95;
+  if (s.length > MAX) {
+    const cut = s.slice(0, MAX);
+    const atWord = cut.slice(0, Math.max(40, cut.lastIndexOf(" ")));
+    s = `${atWord.replace(/[\s,;:—–-]+$/, "")}…`;
+  }
+  return s || null;
 }
 
 function legendItemsFromOverlays(overlays: OverlayFeature[]): { color: string; label: string }[] {
@@ -126,15 +162,15 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   title: {
-    fontSize: 26,
+    fontSize: 20,
     fontFamily: "Helvetica-Bold",
-    lineHeight: 1.05,
+    lineHeight: 1.1,
     color: TEXT_PRIMARY,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   question: {
-    marginTop: 6,
-    fontSize: 11,
+    marginTop: 5,
+    fontSize: 10,
     color: TEXT_BODY,
     lineHeight: 1.4,
   },
@@ -320,7 +356,7 @@ const styles = StyleSheet.create({
   },
   disclaimerText: { fontSize: 9.5, color: TEXT_BODY, lineHeight: 1.55 },
 
-  divider: { height: 0.5, backgroundColor: HAIRLINE, marginVertical: 16 },
+  divider: { height: 0.5, backgroundColor: HAIRLINE, marginVertical: 12 },
 
   // ── Footer ────────────────────────────────────────────────────────
   footer: {
@@ -477,39 +513,56 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
 function ModulePage({
   module,
   hasConsideration,
+  riskLevel,
   narrative,
   raw,
   mapPng,
   address,
+  branding,
 }: {
   module: Module;
   hasConsideration: boolean;
+  riskLevel: RiskLevel | null;
   narrative: ModuleNarrative | undefined;
   raw: RawAttrs | undefined;
   mapPng: Buffer | null;
   address: string;
+  branding: ReportBranding | null;
 }) {
   const meta = MODULE_META[module];
-  const facts = factsRows(module, raw);
-  const sources = Array.from(new Set(narrative?.sources ?? []));
+  // ONE page per module: lists are capped below and the page never wraps,
+  // so a heritage lot with 30 register entries can't spill a second page.
+  const allFacts = factsRows(module, raw);
+  const facts = allFacts.slice(0, 8);
+  const factsMore = allFacts.length - facts.length;
+  const questions = (narrative?.questions_to_ask ?? []).slice(0, 4);
+  const sources = Array.from(new Set(narrative?.sources ?? [])).slice(0, 4);
   const failed = raw?.fetchFailed === true;
-  const statusColor = failed
-    ? APPLE_HEX.orange
-    : hasConsideration
-      ? meta.tintHex
-      : APPLE_HEX.green;
+  // Severity colour rides the SHARED risk scale (lib/risk-style.ts) — the
+  // same red/orange/gold everywhere, never the module tint, so relative
+  // seriousness is readable at a flip-through.
+  const level = riskOf(riskLevel, hasConsideration);
+  const statusColor = failed ? APPLE_HEX.orange : RISK_STYLE[level].hex;
   const statusLabel = failed
     ? "Not checked — source unavailable"
     : hasConsideration
-      ? "Considerations identified"
+      ? `Considerations · ${RISK_STYLE[level].label}`
       : "No considerations identified";
-  const legendItems = splitLegendItems(
+  const legendAll = splitLegendItems(
     extractOverlays(module, raw),
     extractOverlays(module, raw, { scope: "property" }),
   );
+  const legendItems = {
+    applies: legendAll.applies.slice(0, 7),
+    nearby: legendAll.nearby.slice(0, Math.max(0, 9 - Math.min(7, legendAll.applies.length))),
+  };
+  const legendMore =
+    legendAll.applies.length + legendAll.nearby.length -
+    (legendItems.applies.length + legendItems.nearby.length);
 
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={styles.page} wrap={false}>
+      <BrandRule branding={branding} />
       {/* Header */}
       <View>
         <Text style={styles.eyebrow}>0{moduleIndex(module)} · {meta.name.toUpperCase()}</Text>
@@ -567,6 +620,11 @@ function ModulePage({
                   <Text style={styles.factVal}>{f.val}</Text>
                 </View>
               ))}
+              {factsMore > 0 && (
+                <Text style={{ fontSize: 8, color: TEXT_MUTED, marginTop: 2 }}>
+                  +{factsMore} more — see the online report for the full list.
+                </Text>
+              )}
             </View>
           )}
 
@@ -577,10 +635,10 @@ function ModulePage({
         </View>
 
         <View style={styles.rightCol}>
-          {narrative?.questions_to_ask?.length ? (
+          {questions.length > 0 ? (
             <>
               <Text style={styles.sectionLabel}>Questions to ask</Text>
-              {narrative.questions_to_ask.map((q, i) => (
+              {questions.map((q, i) => (
                 <View key={i} style={styles.bullet}>
                   <Text style={styles.bulletDot}>·</Text>
                   <Text style={styles.bulletTxt}>{q}</Text>
@@ -614,6 +672,11 @@ function ModulePage({
               </Text>
             </View>
           ))}
+          {legendMore > 0 && (
+            <Text style={{ fontSize: 8, color: TEXT_MUTED }}>
+              +{legendMore} more layers on the online map.
+            </Text>
+          )}
 
           {sources.length > 0 && (
             <>
@@ -629,7 +692,7 @@ function ModulePage({
         </View>
       </View>
 
-      <Footer address={address} />
+      <Footer address={address} branding={branding} />
     </Page>
   );
 }
@@ -657,8 +720,41 @@ function moduleIndex(m: Module): number {
 
 // ── At a glance page ──────────────────────────────────────────────────────
 
-function AtAGlancePage({ payload }: { payload: ReportPayload }) {
+function pdfIsFailed(m: ReportPayload["modules"][number]): boolean {
+  return (
+    !!m.raw &&
+    typeof m.raw === "object" &&
+    (m.raw as RawAttrs).fetchFailed === true
+  );
+}
+
+/** Flagged/failed modules in reading order: most severe first, failed
+ * checks last. Shared by the cover, the page-number references and the
+ * document's module-page order so "p. N" on the cover stays truthful. */
+function attentionOrder(modules: ReportPayload["modules"]) {
+  return modules
+    .filter((m) => m.hasConsideration || pdfIsFailed(m))
+    .sort((a, b) => {
+      const fa = pdfIsFailed(a) ? 1 : 0;
+      const fb = pdfIsFailed(b) ? 1 : 0;
+      if (fa !== fb) return fa - fb;
+      return (
+        RISK_RANK[riskOf(b.riskLevel, b.hasConsideration)] -
+        RISK_RANK[riskOf(a.riskLevel, a.hasConsideration)]
+      );
+    });
+}
+
+function AtAGlancePage({
+  payload,
+  branding,
+}: {
+  payload: ReportPayload;
+  branding: ReportBranding | null;
+}) {
   const { report, address, modules, considerationCount } = payload;
+  const attention = attentionOrder(modules);
+  const clear = modules.filter((m) => !m.hasConsideration && !pdfIsFailed(m));
   const distanceKm = haversineKm(BRISBANE_CBD, { lat: address.lat, lng: address.lng });
   const zoningRow = modules.find((m) => m.module === "zoning");
   const zRaw =
@@ -670,7 +766,39 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
   const zoneFamily = (zRaw?.lvl1Zone as string | null) ?? null;
 
   return (
-    <Page size="A4" style={styles.page}>
+    // wrap={false}: the cover must stay ONE page — the attention rows'
+    // "p. N" references count from it. Rows are compacted above so even a
+    // 10-flag report fits.
+    <Page size="A4" style={styles.page} wrap={false}>
+      <BrandRule branding={branding} />
+      {branding && (branding.logo || branding.name) && (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 14,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            {branding.logo && (
+              // eslint-disable-next-line jsx-a11y/alt-text -- React-PDF Image has no alt prop.
+              <Image
+                src={branding.logo}
+                style={{ height: 26, width: 96, objectFit: "contain", objectPosition: "left", marginRight: 8 }}
+              />
+            )}
+            {branding.name && (
+              <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY }}>
+                {branding.name}
+              </Text>
+            )}
+          </View>
+          <Text style={{ fontSize: 7.5, color: TEXT_MUTED, letterSpacing: 0.8 }}>
+            PROPERTY DUE DILIGENCE
+          </Text>
+        </View>
+      )}
       <Text style={styles.eyebrow}>Property fact pack</Text>
       <Text style={styles.title}>{address.address_text}</Text>
       <Text style={styles.question}>
@@ -684,37 +812,95 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
 
       <View style={styles.body}>
         <View style={styles.leftCol}>
-          <Text style={[styles.sectionLabel, { marginBottom: 10 }]}>At a glance</Text>
-          {modules.map((m) => {
-            const meta = MODULE_META[m.module];
-            const failed =
-              !!m.raw &&
-              typeof m.raw === "object" &&
-              (m.raw as RawAttrs).fetchFailed === true;
-            const statusColor = failed
-              ? APPLE_HEX.orange
-              : m.hasConsideration
-                ? meta.tintHex
-                : APPLE_HEX.green;
-            const statusLabel = failed
-              ? "Not checked"
-              : m.hasConsideration
-                ? "Considerations"
-                : "All clear";
-            return (
-              <View key={m.module} style={styles.glanceRow}>
-                <View style={[styles.glanceSwatch, { backgroundColor: meta.tintHex }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.glanceName}>{meta.name}</Text>
-                  <Text style={styles.glanceSource}>{meta.sourceLabel}</Text>
-                </View>
-                <View style={[styles.statusPill, { backgroundColor: `${statusColor}24` }]}>
-                  <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                  <Text style={[styles.statusLabel, { color: statusColor }]}>{statusLabel}</Text>
-                </View>
+          {/* Verdict layer — editorial hairline list, not boxes: severity
+              dot + name + one address-stripped summary line, severity
+              label and page ref on the right. Compact enough that a
+              10-flag report plus the full clear list fits one page. */}
+          {attention.length > 0 && (
+            <>
+              <Text style={[styles.sectionLabel, { marginBottom: 4 }]}>
+                Needs attention ({attention.length})
+              </Text>
+              <View style={{ borderTopWidth: 0.5, borderTopColor: HAIRLINE }}>
+                {attention.map((m, idx) => {
+                  const meta = MODULE_META[m.module];
+                  const failed = pdfIsFailed(m);
+                  const level = riskOf(m.riskLevel, m.hasConsideration);
+                  const statusColor = failed ? APPLE_HEX.orange : RISK_STYLE[level].hex;
+                  const statusLabel = failed ? "Not checked" : RISK_STYLE[level].label;
+                  const line = failed
+                    ? "Source unreachable this run — re-run the checks"
+                    : coverLine(
+                        report.narrative[m.module]?.summary,
+                        address.address_text,
+                      ) ?? meta.sourceLabel;
+                  return (
+                    <View
+                      key={m.module}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingVertical: 6,
+                        borderBottomWidth: 0.5,
+                        borderBottomColor: HAIRLINE,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: 999,
+                          backgroundColor: statusColor,
+                          marginRight: 8,
+                        }}
+                      />
+                      <View style={{ flex: 1, paddingRight: 10 }}>
+                        <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY }}>
+                          {meta.name}
+                        </Text>
+                        <Text style={{ fontSize: 7.5, color: TEXT_MUTED, lineHeight: 1.35 }}>
+                          {line}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: "flex-end", width: 62 }}>
+                        <Text
+                          style={{
+                            fontSize: 7.5,
+                            fontFamily: "Helvetica-Bold",
+                            color: statusColor,
+                            letterSpacing: 0.8,
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {statusLabel}
+                        </Text>
+                        <Text style={{ fontSize: 6.5, color: TEXT_MUTED, marginTop: 1.5 }}>
+                          p. {idx + 2}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
-            );
-          })}
+            </>
+          )}
+
+          {/* Every clear check is NAMED on the cover — "safe" must be
+              visible without flipping to the evidence page. Inline names
+              stay compact at any count. */}
+          {clear.length > 0 && (
+            <>
+              <Text style={[styles.sectionLabel, { marginTop: 12, marginBottom: 3 }]}>
+                Checked &amp; clear ({clear.length})
+              </Text>
+              <Text style={{ fontSize: 8, color: TEXT_BODY, lineHeight: 1.6 }}>
+                {clear.map((m) => MODULE_META[m.module].name).join("  ·  ")}
+              </Text>
+              <Text style={{ fontSize: 7, color: TEXT_MUTED, marginTop: 3 }}>
+                Nothing found on the lot — evidence on the Checked &amp; clear page.
+              </Text>
+            </>
+          )}
         </View>
 
         <View style={styles.rightCol}>
@@ -790,16 +976,186 @@ function AtAGlancePage({ payload }: { payload: ReportPayload }) {
         </View>
       </View>
 
-      <Footer address={address.address_text} />
+      <Footer address={address.address_text} branding={branding} />
+    </Page>
+  );
+}
+
+// ── Next steps page ───────────────────────────────────────────────────────
+
+function NextStepsPage({
+  modules,
+  narrative,
+  address,
+  branding,
+}: {
+  /** Flagged modules in severity order (failed checks excluded). */
+  modules: ReportPayload["modules"];
+  narrative: ReportPayload["report"]["narrative"];
+  address: string;
+  branding: ReportBranding | null;
+}) {
+  const groups = modules
+    .map((m) => ({
+      module: m.module,
+      level: riskOf(m.riskLevel, m.hasConsideration),
+      questions: (narrative[m.module]?.questions_to_ask ?? []).slice(0, 4),
+    }))
+    .filter((g) => g.questions.length > 0);
+  if (groups.length === 0) return null;
+
+  return (
+    <Page size="A4" style={styles.page} wrap={false}>
+      <BrandRule branding={branding} />
+      <Text style={styles.eyebrow}>Take this to your conveyancer</Text>
+      <Text style={styles.title}>Next steps</Text>
+      <Text style={styles.question}>
+        Every question raised by the flagged checks, in one checklist —
+        for your conveyancer, building inspector or the Council.
+      </Text>
+      <View style={{ marginTop: 14 }}>
+        {groups.map((g) => (
+          <View key={g.module} style={{ marginBottom: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+              <View
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 999,
+                  backgroundColor: RISK_STYLE[g.level].hex,
+                  marginRight: 6,
+                }}
+              />
+              <Text style={{ fontSize: 10.5, fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY }}>
+                {MODULE_META[g.module].name}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 7.5,
+                  fontFamily: "Helvetica-Bold",
+                  color: RISK_STYLE[g.level].hex,
+                  marginLeft: 6,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.6,
+                }}
+              >
+                {RISK_STYLE[g.level].label}
+              </Text>
+            </View>
+            {g.questions.map((q, i) => (
+              <View key={i} style={{ flexDirection: "row", marginBottom: 3.5, paddingLeft: 1 }}>
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderWidth: 0.8,
+                    borderColor: HAIRLINE,
+                    borderRadius: 2,
+                    marginRight: 7,
+                    marginTop: 1.5,
+                  }}
+                />
+                <Text style={{ flex: 1, fontSize: 9, color: TEXT_BODY, lineHeight: 1.4 }}>
+                  {q}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+      <Footer address={address} branding={branding} />
+    </Page>
+  );
+}
+
+// ── Checked & clear page ─────────────────────────────────────────────────
+
+function ClearPage({
+  modules,
+  narrative,
+  address,
+  branding,
+}: {
+  modules: ReportPayload["modules"];
+  narrative: ReportPayload["report"]["narrative"];
+  address: string;
+  branding: ReportBranding | null;
+}) {
+  if (modules.length === 0) return null;
+  return (
+    <Page size="A4" style={styles.page} wrap={false}>
+      <BrandRule branding={branding} />
+      <Text style={styles.eyebrow}>Evidence of checks run</Text>
+      <Text style={styles.title}>Checked &amp; clear</Text>
+      <Text style={styles.question}>
+        These {modules.length} checks ran against the same council and
+        Queensland Government layers and found nothing on the lot.
+      </Text>
+      <View style={{ marginTop: 12 }}>
+        {modules.map((m) => {
+          const meta = MODULE_META[m.module];
+          const summary = narrative[m.module]?.summary;
+          return (
+            <View
+              key={m.module}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: SURFACE,
+                borderWidth: 0.5,
+                borderColor: HAIRLINE,
+                borderRadius: 8,
+                paddingVertical: 7,
+                paddingHorizontal: 10,
+                marginBottom: 5,
+              }}
+            >
+              <View
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 3,
+                  backgroundColor: meta.tintHex,
+                  marginRight: 8,
+                }}
+              />
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY }}>
+                  {meta.name}
+                </Text>
+                <Text style={{ fontSize: 7.5, color: TEXT_MUTED }}>
+                  {summary
+                    ? summary.length > 120
+                      ? `${summary.slice(0, 117)}…`
+                      : summary
+                    : meta.sourceLabel}
+                </Text>
+              </View>
+              <View style={[styles.statusPill, { backgroundColor: `${RISK_STYLE.none.hex}24`, marginRight: 0 }]}>
+                <View style={[styles.statusDot, { backgroundColor: RISK_STYLE.none.hex }]} />
+                <Text style={[styles.statusLabel, { color: RISK_STYLE.none.hex }]}>All clear</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      <Footer address={address} branding={branding} />
     </Page>
   );
 }
 
 // ── Disclaimer page ───────────────────────────────────────────────────────
 
-function DisclaimerPage({ address }: { address: string }) {
+function DisclaimerPage({
+  address,
+  branding,
+}: {
+  address: string;
+  branding: ReportBranding | null;
+}) {
   return (
     <Page size="A4" style={styles.page}>
+      <BrandRule branding={branding} />
       <Text style={styles.eyebrow}>End of report</Text>
       <Text style={styles.title}>Use this responsibly.</Text>
       <View style={styles.disclaimerBox}>
@@ -814,15 +1170,41 @@ function DisclaimerPage({ address }: { address: string }) {
           order a current title search via a conveyancer.
         </Text>
       </View>
-      <Footer address={address} />
+      <Footer address={address} branding={branding} />
     </Page>
   );
 }
 
-function Footer({ address }: { address: string }) {
+/** Thin accent rule across the top of every page — the branded fact
+ * pack's signature stripe. Skipped entirely without branding. */
+function BrandRule({ branding }: { branding: ReportBranding | null }) {
+  if (!branding?.color) return null;
+  return (
+    <View
+      fixed
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 5,
+        backgroundColor: branding.color,
+      }}
+    />
+  );
+}
+
+function Footer({
+  address,
+  branding,
+}: {
+  address: string;
+  branding: ReportBranding | null;
+}) {
+  const who = branding?.name ? `${branding.name} · with LotLens` : "LotLens";
   return (
     <View style={styles.footer} fixed>
-      <Text>LotLens · {address.length > 60 ? address.slice(0, 57) + "…" : address}</Text>
+      <Text>{who} · {address.length > 60 ? address.slice(0, 57) + "…" : address}</Text>
       <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
     </View>
   );
@@ -833,19 +1215,31 @@ function Footer({ address }: { address: string }) {
 export function ReportPDF({
   payload,
   maps = [],
+  branding = null,
 }: {
   payload: ReportPayload;
   /** Pre-rendered module map PNGs, one per module (Buffer or null). */
   maps?: ModuleMapPng[];
+  /** Customer branding (subscriber feature) — null renders plain LotLens. */
+  branding?: ReportBranding | null;
 }) {
   const { report, address, modules } = payload;
   const mapByModule = new Map<Module, Buffer | null>();
   for (const m of maps) mapByModule.set(m.module, m.png);
+  const docTitle = branding?.name
+    ? `${branding.name} Fact Pack · ${address.address_text}`
+    : `LotLens Fact Pack · ${address.address_text}`;
+
+  // Clear-module diet: full pages only for flagged/failed checks, in the
+  // same severity order the cover lists them (so its "p. N" references
+  // hold). Clear checks collapse to the one-page evidence summary.
+  const attention = attentionOrder(modules);
+  const clear = modules.filter((m) => !m.hasConsideration && !pdfIsFailed(m));
 
   return (
-    <Document title={`LotLens Fact Pack · ${address.address_text}`}>
-      <AtAGlancePage payload={payload} />
-      {modules.map((m) => {
+    <Document title={docTitle}>
+      <AtAGlancePage payload={payload} branding={branding} />
+      {attention.map((m) => {
         const raw =
           m.raw && typeof m.raw === "object" ? (m.raw as RawAttrs) : undefined;
         return (
@@ -853,14 +1247,28 @@ export function ReportPDF({
             key={m.module}
             module={m.module}
             hasConsideration={m.hasConsideration}
+            riskLevel={m.riskLevel}
             narrative={report.narrative[m.module]}
             raw={raw}
             mapPng={mapByModule.get(m.module) ?? null}
             address={address.address_text}
+            branding={branding}
           />
         );
       })}
-      <DisclaimerPage address={address.address_text} />
+      <NextStepsPage
+        modules={attention.filter((m) => !pdfIsFailed(m))}
+        narrative={report.narrative}
+        address={address.address_text}
+        branding={branding}
+      />
+      <ClearPage
+        modules={clear}
+        narrative={report.narrative}
+        address={address.address_text}
+        branding={branding}
+      />
+      <DisclaimerPage address={address.address_text} branding={branding} />
     </Document>
   );
 }

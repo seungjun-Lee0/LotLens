@@ -265,8 +265,13 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
           <div className="absolute left-1/2 top-[-3%] aspect-video h-[160%] translate-x-[var(--hero-shift)]">
             {/* Hero-space intent: silent above ~46% (copy/backdrop-blur
                 zone), full 64–80% (loupe centre ≈72%), gone by 92%. */}
-            <svg
-              viewBox="0 0 1600 900"
+            {/* Mask lives on an HTML wrapper, NOT the svg — Firefox resolves
+                CSS mask percentages on SVG elements against the CONTENT
+                bbox (layer paths sprawl far past the viewBox), which threw
+                the gradient wildly off for sprawling modules. A div's mask
+                uses the border box in every engine. Same fix as the loupe
+                clip-path below. */}
+            <div
               className="h-full w-full scale-105"
               style={{
                 maskImage:
@@ -275,6 +280,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                   "linear-gradient(180deg, transparent 0%, transparent 30%, rgba(0,0,0,.5) 37%, #000 42%, #000 52%, transparent 60%)",
               }}
             >
+            <svg viewBox="0 0 1600 900" className="h-full w-full">
               {!pinned &&
                 GROUPS.map((grp, gi) => (
                   <g key={`m-grp-${gi}`} className={`lens-fade${gi + 1}`}>
@@ -292,6 +298,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                 <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.5} />
               </g>
             </svg>
+            </div>
           </div>
         </div>
 
@@ -317,16 +324,23 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
             modules the chips are announcing — but a radial mask keeps the
             silhouette hugging the detail circle and fading out towards the
             page edges/text. Pinning (next svg) opens up the full suburb. */}
-        <svg
-          viewBox="0 0 1600 900"
-          preserveAspectRatio="xMidYMid slice"
-          className="absolute inset-0 h-full w-full scale-105"
+        {/* Masks live on HTML wrappers, NOT the svgs — Firefox resolves CSS
+            mask percentages on SVG elements against the CONTENT bbox (layer
+            paths sprawl far past the viewBox), so sprawling modules painted
+            way outside the intended halo. Same fix as the loupe clip-path. */}
+        <div
+          className="absolute inset-0 scale-105"
           style={{
             maskImage:
               "radial-gradient(46% 66% at 68% 47%, #000 28%, rgba(0,0,0,.4) 58%, transparent 88%)",
             WebkitMaskImage:
               "radial-gradient(46% 66% at 68% 47%, #000 28%, rgba(0,0,0,.4) 58%, transparent 88%)",
           }}
+        >
+        <svg
+          viewBox="0 0 1600 900"
+          preserveAspectRatio="xMidYMid slice"
+          className="absolute inset-0 h-full w-full"
         >
           {!pinned &&
             GROUPS.map((grp, gi) => (
@@ -339,16 +353,20 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
               </g>
             ))}
         </svg>
-        <svg
-          viewBox="0 0 1600 900"
-          preserveAspectRatio="xMidYMid slice"
-          className="absolute inset-0 h-full w-full scale-105"
+        </div>
+        <div
+          className="absolute inset-0 scale-105"
           style={{
             maskImage:
               "linear-gradient(90deg, rgba(0,0,0,.07) 0%, rgba(0,0,0,.2) 38%, rgba(0,0,0,.8) 62%, #000 80%)",
             WebkitMaskImage:
               "linear-gradient(90deg, rgba(0,0,0,.07) 0%, rgba(0,0,0,.2) 38%, rgba(0,0,0,.8) 62%, #000 80%)",
           }}
+        >
+        <svg
+          viewBox="0 0 1600 900"
+          preserveAspectRatio="xMidYMid slice"
+          className="absolute inset-0 h-full w-full"
         >
           <g
             className="transition-opacity duration-700"
@@ -361,6 +379,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
               coordinate spaces) the very spot it magnifies, so anything
               drawn there is hidden behind the lens. */}
         </svg>
+        </div>
         </div>
 
         {/* phones: calm the (sharper) mobile aerial behind the copy and

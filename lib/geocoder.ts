@@ -383,47 +383,55 @@ async function suggestGoogle(
   return out;
 }
 
-type GeocodingResult = {
-  formatted_address: string;
-  geometry: { location: { lat: number; lng: number } };
-};
-
-async function geocodeGoogle(
+// Places API (New) text search — the LANDMARK resolver only. Addresses are
+// deliberately geocoded by the QLD locator (state address register, points
+// sit on the parcel); this exists because the locator cannot resolve POI
+// names at all ("Westfield Chermside, Gympie Road…" prefix-matches a
+// homestead in Longreach). Same API + key as the autocomplete, so no
+// Geocoding API enablement is needed.
+async function searchTextGoogle(
   query: string,
   key: string,
 ): Promise<GeocodeHit | null> {
-  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-  url.searchParams.set("address", query);
-  url.searchParams.set("key", key);
-  url.searchParams.set("components", "country:AU");
-  // Strict bounds so non-Brisbane addresses still get filtered. Format
-  // for Google: sw|ne as `lat,lng|lat,lng`.
-  url.searchParams.set(
-    "bounds",
-    `${BBOX.latMin},${BBOX.lonMin}|${BBOX.latMax},${BBOX.lonMax}`,
-  );
-  const res = await fetch(url.toString());
-  if (!res.ok) return null;
-  const body = (await res.json()) as {
-    status: string;
-    results?: GeocodingResult[];
-    error_message?: string;
-  };
-  if (body.status !== "OK") {
-    if (body.status !== "ZERO_RESULTS") {
-      console.warn(
-        "[geocoder] google geocoding:",
-        body.status,
-        body.error_message,
-      );
-    }
+  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": key,
+      "X-Goog-FieldMask":
+        "places.location,places.formattedAddress,places.displayName",
+    },
+    body: JSON.stringify({
+      textQuery: query,
+      regionCode: "AU",
+      pageSize: 3,
+      locationBias: {
+        rectangle: {
+          low: { latitude: BBOX.latMin, longitude: BBOX.lonMin },
+          high: { latitude: BBOX.latMax, longitude: BBOX.lonMax },
+        },
+      },
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    console.warn("[geocoder] google searchText:", res.status, err.slice(0, 200));
     return null;
   }
-  // Filter to the Queensland bbox — Google ignores bounds when the
-  // address is unambiguous globally.
-  const hit = body.results?.find((r) => {
-    const { lat, lng } = r.geometry.location;
+  const body = (await res.json()) as {
+    places?: Array<{
+      location?: { latitude?: number; longitude?: number };
+      formattedAddress?: string;
+      displayName?: { text?: string };
+    }>;
+  };
+  // locationBias is a bias, not a filter — enforce the QLD bbox ourselves.
+  const hit = (body.places ?? []).find((p) => {
+    const lat = p.location?.latitude;
+    const lng = p.location?.longitude;
     return (
+      typeof lat === "number" &&
+      typeof lng === "number" &&
       lat >= BBOX.latMin &&
       lat <= BBOX.latMax &&
       lng >= BBOX.lonMin &&
@@ -431,10 +439,16 @@ async function geocodeGoogle(
     );
   });
   if (!hit) return null;
+  const name = hit.displayName?.text ?? "";
+  const addr = hit.formattedAddress ?? "";
+  const displayName =
+    name && addr && !addr.toLowerCase().startsWith(name.toLowerCase())
+      ? `${name}, ${addr}`
+      : addr || name;
   return {
-    lat: hit.geometry.location.lat,
-    lng: hit.geometry.location.lng,
-    displayName: hit.formatted_address,
+    lat: hit.location!.latitude!,
+    lng: hit.location!.longitude!,
+    displayName,
   };
 }
 
@@ -520,28 +534,24 @@ export async function suggestAddresses(query: string): Promise<Suggestion[]> {
 export async function geocodeAddress(query: string): Promise<GeocodeHit | null> {
   const key = GOOGLE_KEY();
 
-  // Provider order is deliberate, and NOT Google-first:
+  // Provider order is deliberate — the QLD locator owns ADDRESSES, Google
+  // Places owns LANDMARKS, and the Geocoding API is not used at all:
   //
-  //   1. QLD locator, but only when it produces an EXACT street-number
-  //      match. Its address points come from the state address register
-  //      and sit on the parcel itself, so for parcel-based due diligence
-  //      it beats Google's geometric rooftop — which can land on the
-  //      neighbour (33 Heath St pinned 66 m off, flipping the resolved
-  //      lot from 240/RP11234 to 248/RP11234 and the character verdict
-  //      with it).
-  //   2. Google for everything the locator can't nail exactly: unlisted
-  //      street numbers (50 Macquarie St Teneriffe), house numbers on
-  //      big sites (1019 Ann St Newstead resolves street-level only),
-  //      POIs, unit addresses.
-  //   3. QLD partial hit, then Nominatim, as before.
-  //
-  // (Google Places still powers the suggestion dropdown — this order is
-  // about the final coordinates only.)
+  //   1. QLD locator for anything address-shaped. Its address points come
+  //      from the state address register and sit on the parcel itself, so
+  //      for parcel-based due diligence it beats Google's geometric
+  //      rooftop — which can land on the neighbour (33 Heath St pinned
+  //      66 m off, flipping the resolved lot from 240/RP11234 to
+  //      248/RP11234 and the character verdict with it).
+  //   2. Places (New) text search ONLY when a landmark-style query
+  //      resolves to something that doesn't mention the words typed (the
+  //      locator prefix-matches the first word and can land hundreds of
+  //      km away — "Westfield Chermside" → Westfield homestead,
+  //      Longreach). Same key/API as the autocomplete.
+  //   3. Nominatim as the last resort.
   const streetNum = query.match(/^\s*(\d+)[a-z]?\b(?!\s*\/)/i)?.[1] ?? null;
   let qldHit: GeocodeHit | null = null;
-  let qldTried = false;
   if (streetNum) {
-    qldTried = true;
     try {
       qldHit = await geocodeQld(query);
       if (
@@ -553,32 +563,29 @@ export async function geocodeAddress(query: string): Promise<GeocodeHit | null> 
     } catch (err) {
       console.error("[geocoder] qld locator geocode failed:", err);
     }
+    // Inexact (street/complex-level) locator hit is still the best we
+    // have for an address-shaped query.
+    if (qldHit) return qldHit;
   }
-
-  if (key) {
-    try {
-      const hit = await geocodeGoogle(query, key);
-      if (hit) return hit;
-    } catch (err) {
-      console.error("[geocoder] google geocode failed, falling back:", err);
-    }
-  }
-  // Locator's inexact hit (street/complex level) is still better than
-  // nothing when Google is unavailable.
-  if (qldTried && qldHit) return qldHit;
   try {
     const hit = await geocodeQld(query);
     if (hit) {
-      // Landmark-style query resolved to something that doesn't mention the
-      // words the user typed (the locator prefix-matches the first word and
-      // can land hundreds of km away — "Westfield Chermside" → Westfield
-      // homestead, Longreach). Prefer an OSM hit that actually matches.
       const tokens = queryTokens(query);
       if (
         !looksLikeStreetAddress(query) &&
         tokens.length > 0 &&
         !coversTokens(hit.displayName, tokens)
       ) {
+        // Landmark mismatch — let Places text search resolve the POI,
+        // then OSM; keep the locator hit only if both fail.
+        if (key) {
+          try {
+            const g = await searchTextGoogle(query, key);
+            if (g) return g;
+          } catch {
+            /* fall through */
+          }
+        }
         try {
           const nom = await geocodeNominatim(query);
           if (nom && coversTokens(nom.displayName, tokens)) return nom;
@@ -590,6 +597,14 @@ export async function geocodeAddress(query: string): Promise<GeocodeHit | null> 
     }
   } catch (err) {
     console.error("[geocoder] qld locator geocode failed, falling back:", err);
+  }
+  if (key && !looksLikeStreetAddress(query)) {
+    try {
+      const g = await searchTextGoogle(query, key);
+      if (g) return g;
+    } catch {
+      /* fall through */
+    }
   }
   try {
     return await geocodeNominatim(query);

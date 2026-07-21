@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     "The terms that apply when you use LotLens Queensland property reports.",
 };
 
-const CONTACT_EMAIL = "sjun0500@gmail.com";
+const CONTACT_EMAIL = "hello@lotlens.au";
 
 export default function TermsPage() {
   return (

@@ -48,3 +48,5 @@ next-env.d.ts
 
 # Local Jira import/export working files
 /docs/*.csv
+
+/report

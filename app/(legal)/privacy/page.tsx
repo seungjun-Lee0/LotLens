@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     "How LotLens collects, uses and protects your information when you generate Queensland property reports.",
 };
 
-const CONTACT_EMAIL = "sjun0500@gmail.com";
+const CONTACT_EMAIL = "hello@lotlens.au";
 
 export default function PrivacyPage() {
   return (

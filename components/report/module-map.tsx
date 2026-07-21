@@ -241,21 +241,33 @@ export function ModuleMap({
           "line-width": SELECTED_PROPERTY_STYLE.lineWidth,
         },
       });
-      // Frame the property, not the polygons. We let overlay polygons
-      // extend outside the viewport. MapLibre clips them for free.
-      // Develo's reports zoom in tight (~100 m half-width); matching that
-      // makes the lot outline read at a glance and overlay tints feel
-      // immediate. Larger overlay polygons are still obvious from the
-      // colour bleeding off the edges.
+      // Frame the property, not the overlay polygons (MapLibre clips those
+      // for free). Baseline is the tight Develo-style ~115 m half-width —
+      // but the bounds EXTEND to contain the whole selected parcel, so a
+      // shopping-centre-sized lot (Westfield Chermside spans ~470 m)
+      // doesn't get its outline sliced off at the viewport edges.
       const PAD = 0.00105; // ~115 m half-width at Brisbane latitude
+      const bounds = new maplibregl.LngLatBounds(
+        [lng - PAD, lat - PAD],
+        [lng + PAD, lat + PAD],
+      );
+      const extendRings = (g: GeoJSON.Geometry) => {
+        const polys =
+          g.type === "Polygon" ? [g.coordinates] :
+          g.type === "MultiPolygon" ? g.coordinates : [];
+        for (const poly of polys as number[][][][]) {
+          for (const ring of poly) {
+            for (const [x, y] of ring) bounds.extend([x, y]);
+          }
+        }
+      };
+      if (propertyGeom !== fallbackBox) extendRings(propertyGeom);
       map.fitBounds(
-        [
-          [lng - PAD, lat - PAD],
-          [lng + PAD, lat + PAD],
-        ],
-        // Cap at z18: Brisbane Mapbox satellite tops out near its native
-        // resolution around here, so z19 overzooms and reads soft/washed.
-        { padding: 10, maxZoom: 18, duration: 0 },
+        bounds,
+        // padding gives the parcel breathing room when it drives the
+        // frame; maxZoom 18 keeps small lots from overzooming past the
+        // imagery's native resolution.
+        { padding: 28, maxZoom: 18, duration: 0 },
       );
     });
 

@@ -3,82 +3,95 @@
 // Two-stage design, built for the PDF route's "render 16 module maps of
 // the SAME frame" workload:
 //
-//   1. BASE — satellite tiles for the fixed lot-scale frame, rendered by
-//      the `staticmaps` package ONCE per (lat,lng,size) and memoised as a
-//      promise, so 16 concurrent module renders trigger a single tile
-//      fetch pass (~24 tiles) instead of ~380 duplicate downloads two at
-//      a time (staticmaps' per-instance tileRequestLimit defaults to 2 —
-//      that serial trickle was why PDF generation took tens of seconds).
+//   1. BASE — the SAME Queensland Government aerial the web report map
+//      uses (LatestStateProgram ImageServer), fetched as ONE exportImage
+//      request for the whole frame and promise-memoised, so 16 concurrent
+//      module renders share a single upstream call. No tile compositing
+//      at all — the previous tile pipeline both hammered the tile server
+//      (~380 duplicate fetches, two at a time) and scrambled the image
+//      when the Mapbox @2x URL returned 512px tiles into 256px slots.
 //   2. OVERLAYS — module polygons, cadastre hairlines, the yellow
 //      property outline and the pin are projected to pixels with plain
 //      web-mercator math and composited onto the base as an SVG layer by
 //      sharp. Pure CPU, no network, runs happily in parallel.
-//
-// Per tile usage policy: unique User-Agent, one frame's worth of tiles
-// per report. Prototype-scale traffic is well inside fair use.
 
 import sharp from "sharp";
-import StaticMaps from "staticmaps";
 
 import type { OverlayFeature } from "@/lib/overlays";
 import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
 
-// Tile source: prefer Mapbox Satellite Streets (Develo-grade imagery)
-// when NEXT_PUBLIC_MAPBOX_TOKEN is set, fall back to free Esri World
-// Imagery so the PDF still renders without a token.
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
-const SAT_TILES = MAPBOX_TOKEN
-  ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`
-  : "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const TILE_UA = "LotLens/0.1 Brisbane-DD (contact: hello@lotlens.au)";
+// Same imagery service as components/report/module-map.tsx — the PDF and
+// the on-screen report must show the identical basemap.
+const QLD_IMAGERY_EXPORT =
+  "https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/exportImage";
 
-// z19 ≈ 0.26 m/px at Brisbane latitudes → ~160 m half-width at 1200 px.
-// The Develo-style lot-scale frame, identical across every module. Both
-// Esri World Imagery and Mapbox serve z19 over QLD.
-const ZOOM = 19;
-const TILE_SIZE = 256;
+// Frame scale: ≈0.30 mercator-m/px (z19-equivalent), ≈0.26 ground-m/px at
+// Brisbane latitudes → ~160 m half-width at 1200 px. The Develo-style
+// lot-scale frame, identical across every module.
+const MERC_RES = 156543.03392 / 2 ** 19;
 
-// ── Web-mercator projection (matches staticmaps' tile math) ─────────────
+// ── Web-mercator (EPSG:3857) helpers ────────────────────────────────────
 
-const lonToX = (lon: number) => ((lon + 180) / 360) * 2 ** ZOOM;
-const latToY = (lat: number) => {
-  const r = (lat * Math.PI) / 180;
-  return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** ZOOM;
-};
-const metersPerPixel = (lat: number) =>
-  (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** ZOOM;
+const R = 6378137;
+const merX = (lon: number) => R * ((lon * Math.PI) / 180);
+const merY = (lat: number) =>
+  R * Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
 
-// ── Base imagery, one tile pass per frame ───────────────────────────────
+type Frame = { xmin: number; ymin: number; xmax: number; ymax: number };
 
-// Promise-memo so concurrent module renders share ONE in-flight tile
-// fetch. Entries expire shortly after settling — this is a per-request
-// dedupe, not a long-lived cache.
+/** Frame centred on the pin at the default lot scale, zoomed OUT (aspect
+ * preserved) just enough that the whole selected parcel fits with ~30%
+ * margin. A suburban 600 m² lot keeps the tight Develo-style frame; a
+ * shopping-centre-sized lot (Westfield Chermside is ~470 m across) scales
+ * up instead of having its outline sliced off at the edges. Capped at 10×
+ * so a pathological parcel can't zoom the map into orbit. */
+function frameFor(
+  lat: number,
+  lng: number,
+  width: number,
+  height: number,
+  propertyPolygon?: unknown | null,
+): Frame {
+  const cx = merX(lng);
+  const cy = merY(lat);
+  let hw = (width / 2) * MERC_RES;
+  let hh = (height / 2) * MERC_RES;
+  let needX = 0;
+  let needY = 0;
+  for (const poly of polygonRings(
+    propertyPolygon as { type?: string; coordinates?: unknown } | null,
+  )) {
+    for (const ring of poly) {
+      for (const [lon, la] of ring) {
+        needX = Math.max(needX, Math.abs(merX(lon) - cx) * 1.3);
+        needY = Math.max(needY, Math.abs(merY(la) - cy) * 1.3);
+      }
+    }
+  }
+  const scale = Math.min(10, Math.max(1, needX / hw, needY / hh));
+  hw *= scale;
+  hh *= scale;
+  return { xmin: cx - hw, ymin: cy - hh, xmax: cx + hw, ymax: cy + hh };
+}
+
+// ── Base imagery — one exportImage call per frame ───────────────────────
+
+// Promise-memo so concurrent module renders share ONE in-flight fetch.
+// Entries expire shortly after settling — a per-request dedupe, not a
+// long-lived cache.
 const basePromises = new Map<string, Promise<Buffer>>();
 
-function getBasePNG(lat: number, lng: number, width: number, height: number): Promise<Buffer> {
-  const key = `${lat.toFixed(6)},${lng.toFixed(6)},${width}x${height}`;
+function getBasePNG(frame: Frame, width: number, height: number): Promise<Buffer> {
+  const key = `${frame.xmin.toFixed(1)},${frame.ymin.toFixed(1)},${width}x${height}`;
   let p = basePromises.get(key);
   if (!p) {
     p = (async () => {
-      const map = new StaticMaps({
-        width,
-        height,
-        tileUrl: SAT_TILES,
-        tileSize: TILE_SIZE,
-        tileRequestHeader: { "User-Agent": TILE_UA, "Accept-Language": "en" },
-        tileRequestTimeout: 15000,
-        tileRequestLimit: 12,
-        paddingX: 0,
-        paddingY: 0,
-        // staticmaps caps zoom at 17 by default — too far out for a
-        // lot-scale frame.
-        zoomRange: { min: 1, max: 20 },
-      });
-      // Explicit centre + zoom — NEVER a bbox. staticmaps treats a
-      // 4-element "center" as one extent among many and unions it with
-      // every feature's bounds, which dragged the frame kilometres out.
-      await map.render([lng, lat], ZOOM);
-      return map.image.buffer("image/png");
+      const url =
+        `${QLD_IMAGERY_EXPORT}?bbox=${frame.xmin},${frame.ymin},${frame.xmax},${frame.ymax}` +
+        `&bboxSR=3857&imageSR=3857&size=${width},${height}&format=jpeg&transparent=false&f=image`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`QLD imagery export ${res.status}`);
+      return Buffer.from(await res.arrayBuffer());
     })();
     basePromises.set(key, p);
     p.finally(() => setTimeout(() => basePromises.delete(key), 120_000)).catch(() => {});
@@ -138,13 +151,16 @@ export async function renderModuleMapPNG({
   width?: number;
   height?: number;
 }): Promise<Buffer> {
-  const basePromise = getBasePNG(lat, lng, width, height);
+  const frame = frameFor(lat, lng, width, height, propertyPolygon);
+  const basePromise = getBasePNG(frame, width, height);
 
-  const cx = lonToX(lng);
-  const cy = latToY(lat);
+  // Linear mercator→pixel mapping over the exportImage frame — exact,
+  // because the imagery was requested in the same 3857 bbox.
+  const spanX = frame.xmax - frame.xmin;
+  const spanY = frame.ymax - frame.ymin;
   const px: Px = (lon, la) => [
-    (lonToX(lon) - cx) * TILE_SIZE + width / 2,
-    (latToY(la) - cy) * TILE_SIZE + height / 2,
+    ((merX(lon) - frame.xmin) / spanX) * width,
+    ((frame.ymax - merY(la)) / spanY) * height,
   ];
 
   const parts: string[] = [];
@@ -212,8 +228,11 @@ export async function renderModuleMapPNG({
     );
   }
 
-  // Small inner pin — exact geocoded point (3.5 m radius, as before).
-  const pinR = 3.5 / metersPerPixel(lat);
+  // Small inner pin — exact geocoded point. Sized from the ACTUAL frame
+  // resolution (which grows for oversized parcels), floored so it stays
+  // visible when the frame zooms out.
+  const groundMpp = (spanX / width) * Math.cos((lat * Math.PI) / 180);
+  const pinR = Math.max(4, 3.5 / groundMpp);
   const [pinX, pinY] = px(lng, lat);
   parts.push(
     `<circle cx="${pinX.toFixed(1)}" cy="${pinY.toFixed(1)}" r="${pinR.toFixed(1)}" fill="${SELECTED_PROPERTY_STYLE.colorHex}"/>`,
@@ -222,8 +241,11 @@ export async function renderModuleMapPNG({
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join("")}</svg>`;
 
   const base = await basePromise;
+  // JPEG out, not PNG: aerial imagery is photographic — PNG made each map
+  // ~2 MB and the 16-map fact pack a 30 MB download; JPEG q82 reads
+  // identically at print size for ~a tenth of that.
   return sharp(base)
     .composite([{ input: Buffer.from(svg) }])
-    .png()
+    .jpeg({ quality: 82, mozjpeg: true })
     .toBuffer();
 }

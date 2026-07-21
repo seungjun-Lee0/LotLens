@@ -4,10 +4,14 @@ import { Download, Lock } from "lucide-react";
 import { SiteHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { AtAGlance } from "@/components/report/at-a-glance";
+import { ClearModules } from "@/components/report/clear-modules";
 import { ModuleSection } from "@/components/report/module-section";
+import { NextSteps } from "@/components/report/next-steps";
 import { RetryChecks } from "@/components/report/retry-checks";
 import { UnlockButton } from "@/components/report/unlock-button";
+import { getSessionUser, isAdmin } from "@/lib/auth";
 import { loadReportPayload } from "@/lib/pipeline";
+import { RISK_RANK, riskOf } from "@/lib/risk-style";
 import type { Module } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -45,17 +49,35 @@ export default async function ReportPage({
   const payload = await loadReportPayload(id);
   if (!payload) notFound();
 
-  const { report, address, modules, propertyPolygon, parcelLines, paid } = payload;
-  const visibleModules = paid
-    ? modules
+  const { report, address, modules, propertyPolygon, parcelLines } = payload;
+  // Admins bypass the paywall outright — full report, no unlock, no
+  // credit spend (ADMIN_EMAILS env).
+  const paid = payload.paid || isAdmin(await getSessionUser());
+  const isFailed = (m: (typeof modules)[number]) =>
+    !!m.raw &&
+    typeof m.raw === "object" &&
+    (m.raw as Record<string, unknown>).fetchFailed === true;
+  const failedCount = modules.filter(isFailed).length;
+
+  // Clear-module diet: full sections (map + narrative) only for modules
+  // with something to say — flagged or unreachable. Clear modules render
+  // as a compact evidence strip instead of 12 screens of nothing-to-see.
+  // Body keeps the canonical module order (comparable across reports);
+  // severity-first reading lives in the At-a-glance verdict layer.
+  const attentionModules = paid
+    ? modules.filter((m) => m.hasConsideration || isFailed(m))
     : modules.filter((m) => m.module === PREVIEW_MODULE);
-  const lockedCount = paid ? 0 : modules.length - visibleModules.length;
-  const failedCount = modules.filter(
-    (m) =>
-      !!m.raw &&
-      typeof m.raw === "object" &&
-      (m.raw as Record<string, unknown>).fetchFailed === true,
-  ).length;
+  const clearModules = paid
+    ? modules.filter((m) => !m.hasConsideration && !isFailed(m))
+    : [];
+  const flaggedBySeverity = modules
+    .filter((m) => m.hasConsideration && !isFailed(m))
+    .sort(
+      (a, b) =>
+        RISK_RANK[riskOf(b.riskLevel, b.hasConsideration)] -
+        RISK_RANK[riskOf(a.riskLevel, a.hasConsideration)],
+    );
+  const lockedCount = paid ? 0 : modules.length - attentionModules.length;
 
   return (
     <>
@@ -91,9 +113,10 @@ export default async function ReportPage({
         {/* At a glance */}
         <AtAGlance payload={payload} />
 
-        {/* Module sections — flooding preview + paywall, OR all 8 once paid */}
+        {/* Module sections — full treatment for flagged/failed checks
+            (flooding preview + paywall when unpaid) */}
         <div className="flex flex-col gap-6">
-          {visibleModules.map((row) => (
+          {attentionModules.map((row) => (
             <ModuleSection
               key={row.module}
               row={row}
@@ -104,6 +127,14 @@ export default async function ReportPage({
               lotLines={parcelLines}
             />
           ))}
+
+          {paid && (
+            <NextSteps rows={flaggedBySeverity} narrative={report.narrative} />
+          )}
+
+          {paid && (
+            <ClearModules rows={clearModules} narrative={report.narrative} />
+          )}
 
           {!paid && (
             <section className="glass-strong relative overflow-hidden rounded-3xl px-6 py-10 text-center sm:px-10 sm:py-12">

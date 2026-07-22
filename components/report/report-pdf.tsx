@@ -11,11 +11,11 @@ import {
   View,
   Image,
   StyleSheet,
-  Link,
   Font,
 } from "@react-pdf/renderer";
 
 import type { ModuleNarrative } from "@/lib/anthropic";
+import { formatAuAddress } from "@/lib/format-address";
 import { MODULE_META, APPLE_HEX } from "@/lib/module-meta";
 import { extractOverlays, type OverlayFeature } from "@/lib/overlays";
 import type { ReportPayload } from "@/lib/pipeline";
@@ -24,15 +24,24 @@ import { RISK_RANK, RISK_STYLE, riskOf } from "@/lib/risk-style";
 import type { Module, RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
-// ── Apple-ish tokens (mirrors apple.com / iCloud system surfaces) ────────
+// ── Print tokens — corporate property-report palette (CoreLogic /
+// valuation-firm register: white pages, slate ink, one navy accent that
+// customer branding may override, hairline rules everywhere) ────────────
 
-const TEXT_PRIMARY = "#1d1d1f"; // Apple primary label
-const TEXT_BODY = "#3c3c43";    // Apple secondary label on light
-const TEXT_MUTED = "#86868b";   // Apple tertiary / hint
-const PAGE_BG = "#f5f5f7";      // apple.com page bg
+const TEXT_PRIMARY = "#0f172a"; // slate-900
+const TEXT_BODY = "#334155";    // slate-700
+const TEXT_MUTED = "#64748b";   // slate-500
+const PAGE_BG = "#ffffff";      // white — print-first
 const SURFACE = "#ffffff";
-const HAIRLINE = "#d2d2d7";     // Apple separator
-const PANEL_BG = "#fbfbfd";     // very light surface for callouts
+const HAIRLINE = "#e2e8f0";     // slate-200 rule
+const PANEL_BG = "#f8fafc";     // slate-50 callout fill
+const ACCENT_DEFAULT = "#1e3a8a"; // navy — overridden by brand colour
+
+/** Every page reserves this band at the bottom; the fixed footer paints
+ * an opaque strip over it, so body content can NEVER visually collide
+ * with the pagination line no matter how long it runs. */
+const FOOTER_BAND = 38;
+const HEADER_BAND = 46;
 
 const DISCLAIMER =
   "This report aggregates public data for informational purposes only. It is not legal, financial, or planning advice. Confirm all details with a qualified professional, conveyancer, or the relevant Council before making decisions.";
@@ -142,14 +151,19 @@ function splitLegendItems(
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 44,
-    paddingBottom: 44,
-    paddingHorizontal: 44,
+    // Top/bottom padding clears the fixed running header / footer bands.
+    paddingTop: HEADER_BAND + 16,
+    paddingBottom: FOOTER_BAND + 14,
+    paddingHorizontal: 42,
     fontFamily: "Helvetica",
     fontSize: 9.5,
     color: TEXT_PRIMARY,
     lineHeight: 1.5,
     backgroundColor: PAGE_BG,
+    // @react-pdf/layout 4.6 shrinks a page to its content height, which
+    // floats the fixed footer band up the page — pin every page to true
+    // A4 height.
+    minHeight: 841.89,
   },
 
   // ── Eyebrow + headline ────────────────────────────────────────────
@@ -191,10 +205,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexWrap: "wrap",
   },
+  // Fixed pill height + lineHeight 1 keeps the uppercase label optically
+  // centred in the chip (react-pdf's font-default line box sits the
+  // glyphs high otherwise); the sources line shares the same baseline
+  // treatment so the row reads level.
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 4,
+    height: 17,
     paddingHorizontal: 9,
     borderRadius: 999,
     marginRight: 8,
@@ -202,12 +220,16 @@ const styles = StyleSheet.create({
   statusDot: { width: 6, height: 6, borderRadius: 999, marginRight: 5 },
   statusLabel: {
     fontSize: 8,
+    lineHeight: 1,
+    marginTop: 1.5,
     fontFamily: "Helvetica-Bold",
     letterSpacing: 0.6,
     textTransform: "uppercase",
   },
   sourceLine: {
     fontSize: 7.5,
+    lineHeight: 1,
+    marginTop: 1.5,
     letterSpacing: 1.2,
     color: TEXT_MUTED,
     textTransform: "uppercase",
@@ -293,7 +315,9 @@ const styles = StyleSheet.create({
   legendSwatch: { width: 9, height: 9, borderRadius: 2.5, marginRight: 7 },
   legendLabel: { fontSize: 8.5, color: TEXT_BODY },
 
-  link: { fontSize: 7.5, color: APPLE_HEX.blue, textDecoration: "none", marginBottom: 1.5 },
+  // Plain text, not a Link: a printed report's references shouldn't look
+  // clickable.
+  link: { fontSize: 7.5, color: TEXT_MUTED, textDecoration: "none", marginBottom: 1.5 },
 
   // ── Body grid ─────────────────────────────────────────────────────
   body: { flexDirection: "row", marginTop: 12 },
@@ -358,15 +382,50 @@ const styles = StyleSheet.create({
 
   divider: { height: 0.5, backgroundColor: HAIRLINE, marginVertical: 12 },
 
-  // ── Footer ────────────────────────────────────────────────────────
-  footer: {
+  // ── Fixed page chrome ─────────────────────────────────────────────
+  runningHeader: {
     position: "absolute",
-    bottom: 20,
-    left: 44,
-    right: 44,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: HEADER_BAND,
+    paddingHorizontal: 42,
+    paddingTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 0.5,
+    borderBottomColor: HAIRLINE,
+    backgroundColor: PAGE_BG,
+  },
+  runningBrand: {
+    fontSize: 9,
+    fontFamily: "Helvetica-Bold",
+    color: TEXT_PRIMARY,
+    letterSpacing: 0.2,
+  },
+  runningAddress: {
+    fontSize: 7,
+    color: TEXT_MUTED,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  footerBand: {
+    // Opaque strip: paints OVER any body overflow, so content can never
+    // collide with the pagination line.
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: FOOTER_BAND,
+    paddingHorizontal: 42,
+    paddingTop: 9,
+    backgroundColor: PAGE_BG,
+    borderTopWidth: 0.5,
+    borderTopColor: HAIRLINE,
     flexDirection: "row",
     justifyContent: "space-between",
-    fontSize: 7.5,
+    fontSize: 7,
     color: TEXT_MUTED,
     letterSpacing: 0.4,
   },
@@ -382,7 +441,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
     return [
       {
         key: "Not checked",
-        val: "This source didn't respond when the report ran. No finding here means \"not checked\", not \"clear\" — re-run the checks to retry.",
+        val: "This source didn't respond when the report ran. No finding here means \"not checked\", not \"clear\". Re-run the checks to retry.",
       },
     ];
   }
@@ -447,7 +506,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
     }
     case "heritage": {
       const entries = asArr<RawAttrs>(raw.entries);
-      return entries.map((e, i) => ({ key: `Entry ${i + 1}`, val: `[${e.type}] ${e.description ?? "—"}` }));
+      return entries.map((e, i) => ({ key: `Entry ${i + 1}`, val: `[${e.type}] ${e.description ?? "No description recorded"}` }));
     }
     case "easements": {
       const rows: { key: string; val: string }[] = [];
@@ -544,7 +603,7 @@ function ModulePage({
   const level = riskOf(riskLevel, hasConsideration);
   const statusColor = failed ? APPLE_HEX.orange : RISK_STYLE[level].hex;
   const statusLabel = failed
-    ? "Not checked — source unavailable"
+    ? "Not checked · source unavailable"
     : hasConsideration
       ? `Considerations · ${RISK_STYLE[level].label}`
       : "No considerations identified";
@@ -562,7 +621,7 @@ function ModulePage({
 
   return (
     <Page size="A4" style={styles.page} wrap={false}>
-      <BrandRule branding={branding} />
+      <ChromeTop branding={branding} address={address} />
       {/* Header */}
       <View>
         <Text style={styles.eyebrow}>0{moduleIndex(module)} · {meta.name.toUpperCase()}</Text>
@@ -622,7 +681,7 @@ function ModulePage({
               ))}
               {factsMore > 0 && (
                 <Text style={{ fontSize: 8, color: TEXT_MUTED, marginTop: 2 }}>
-                  +{factsMore} more — see the online report for the full list.
+                  +{factsMore} more. See the online report for the full list.
                 </Text>
               )}
             </View>
@@ -683,16 +742,16 @@ function ModulePage({
               <View style={{ height: 12 }} />
               <Text style={styles.sectionLabel}>References</Text>
               {sources.map((url) => (
-                <Link key={url} src={url} style={styles.link}>
+                <Text key={url} style={styles.link}>
                   {prettyUrl(url)}
-                </Link>
+                </Text>
               ))}
             </>
           )}
         </View>
       </View>
 
-      <Footer address={address} branding={branding} />
+      <ChromeBottom branding={branding} />
     </Page>
   );
 }
@@ -766,41 +825,13 @@ function AtAGlancePage({
   const zoneFamily = (zRaw?.lvl1Zone as string | null) ?? null;
 
   return (
-    // wrap={false}: the cover must stay ONE page — the attention rows'
+    // wrap={false}: the summary must stay ONE page — the attention rows'
     // "p. N" references count from it. Rows are compacted above so even a
     // 10-flag report fits.
     <Page size="A4" style={styles.page} wrap={false}>
-      <BrandRule branding={branding} />
-      {branding && (branding.logo || branding.name) && (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 14,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {branding.logo && (
-              // eslint-disable-next-line jsx-a11y/alt-text -- React-PDF Image has no alt prop.
-              <Image
-                src={branding.logo}
-                style={{ height: 26, width: 96, objectFit: "contain", objectPosition: "left", marginRight: 8 }}
-              />
-            )}
-            {branding.name && (
-              <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY }}>
-                {branding.name}
-              </Text>
-            )}
-          </View>
-          <Text style={{ fontSize: 7.5, color: TEXT_MUTED, letterSpacing: 0.8 }}>
-            PROPERTY DUE DILIGENCE
-          </Text>
-        </View>
-      )}
-      <Text style={styles.eyebrow}>Property fact pack</Text>
-      <Text style={styles.title}>{address.address_text}</Text>
+      <ChromeTop branding={branding} address={formatAuAddress(address.address_text, payload.postcode)} />
+      <Text style={styles.eyebrow}>At a glance</Text>
+      <Text style={styles.title}>{formatAuAddress(address.address_text, payload.postcode)}</Text>
       <Text style={styles.question}>
         {modules.length} public-data modules.{" "}
         {considerationCount === 0
@@ -829,7 +860,7 @@ function AtAGlancePage({
                   const statusColor = failed ? APPLE_HEX.orange : RISK_STYLE[level].hex;
                   const statusLabel = failed ? "Not checked" : RISK_STYLE[level].label;
                   const line = failed
-                    ? "Source unreachable this run — re-run the checks"
+                    ? "Source unreachable this run. Re-run the checks."
                     : coverLine(
                         report.narrative[m.module]?.summary,
                         address.address_text,
@@ -875,7 +906,7 @@ function AtAGlancePage({
                           {statusLabel}
                         </Text>
                         <Text style={{ fontSize: 6.5, color: TEXT_MUTED, marginTop: 1.5 }}>
-                          p. {idx + 2}
+                          p. {idx + 3}
                         </Text>
                       </View>
                     </View>
@@ -897,7 +928,7 @@ function AtAGlancePage({
                 {clear.map((m) => MODULE_META[m.module].name).join("  ·  ")}
               </Text>
               <Text style={{ fontSize: 7, color: TEXT_MUTED, marginTop: 3 }}>
-                Nothing found on the lot — evidence on the Checked &amp; clear page.
+                Nothing found on the lot. Evidence is on the Checked &amp; clear page.
               </Text>
             </>
           )}
@@ -911,7 +942,7 @@ function AtAGlancePage({
           </View>
           <View style={styles.metaBlock}>
             <Text style={styles.metaLabel}>Address</Text>
-            <Text style={styles.metaValue}>{address.address_text}</Text>
+            <Text style={styles.metaValue}>{formatAuAddress(address.address_text, payload.postcode)}</Text>
           </View>
           {payload.parcel?.lotPlan && (
             <View style={styles.metaBlock}>
@@ -936,7 +967,7 @@ function AtAGlancePage({
                 ? /council/i.test(payload.parcel.lga)
                   ? payload.parcel.lga
                   : `${payload.parcel.lga} Council`
-                : "—"}
+                : "Not identified"}
             </Text>
           </View>
           {payload.parcel?.suburb && (
@@ -976,7 +1007,7 @@ function AtAGlancePage({
         </View>
       </View>
 
-      <Footer address={address.address_text} branding={branding} />
+      <ChromeBottom branding={branding} />
     </Page>
   );
 }
@@ -1005,17 +1036,19 @@ function NextStepsPage({
   if (groups.length === 0) return null;
 
   return (
-    <Page size="A4" style={styles.page} wrap={false}>
-      <BrandRule branding={branding} />
+    // Wrapping ALLOWED: a many-flag report paginates naturally, and the
+    // fixed chrome (header + opaque footer band) repeats on every page.
+    <Page size="A4" style={styles.page}>
+      <ChromeTop branding={branding} address={address} />
       <Text style={styles.eyebrow}>Take this to your conveyancer</Text>
       <Text style={styles.title}>Next steps</Text>
       <Text style={styles.question}>
-        Every question raised by the flagged checks, in one checklist —
+        Every question raised by the flagged checks, in one checklist
         for your conveyancer, building inspector or the Council.
       </Text>
       <View style={{ marginTop: 14 }}>
         {groups.map((g) => (
-          <View key={g.module} style={{ marginBottom: 12 }}>
+          <View key={g.module} style={{ marginBottom: 12 }} wrap={false}>
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
               <View
                 style={{
@@ -1063,7 +1096,7 @@ function NextStepsPage({
           </View>
         ))}
       </View>
-      <Footer address={address} branding={branding} />
+      <ChromeBottom branding={branding} />
     </Page>
   );
 }
@@ -1083,8 +1116,9 @@ function ClearPage({
 }) {
   if (modules.length === 0) return null;
   return (
-    <Page size="A4" style={styles.page} wrap={false}>
-      <BrandRule branding={branding} />
+    // Wrapping allowed — the fixed chrome repeats on any spill page.
+    <Page size="A4" style={styles.page}>
+      <ChromeTop branding={branding} address={address} />
       <Text style={styles.eyebrow}>Evidence of checks run</Text>
       <Text style={styles.title}>Checked &amp; clear</Text>
       <Text style={styles.question}>
@@ -1139,7 +1173,7 @@ function ClearPage({
           );
         })}
       </View>
-      <Footer address={address} branding={branding} />
+      <ChromeBottom branding={branding} />
     </Page>
   );
 }
@@ -1155,7 +1189,7 @@ function DisclaimerPage({
 }) {
   return (
     <Page size="A4" style={styles.page}>
-      <BrandRule branding={branding} />
+      <ChromeTop branding={branding} address={address} />
       <Text style={styles.eyebrow}>End of report</Text>
       <Text style={styles.title}>Use this responsibly.</Text>
       <View style={styles.disclaimerBox}>
@@ -1166,46 +1200,172 @@ function DisclaimerPage({
         <Text style={styles.disclaimerLabel}>Public data only</Text>
         <Text style={styles.disclaimerText}>
           No valuation. No QLD Title Search. Drainage, sewerage, access, and
-          private covenants are recorded on title and are not captured here —
-          order a current title search via a conveyancer.
+          private covenants are recorded on title and are not captured here.
+          Order a current title search via a conveyancer.
         </Text>
       </View>
-      <Footer address={address} branding={branding} />
+      <ChromeBottom branding={branding} />
     </Page>
   );
 }
 
-/** Thin accent rule across the top of every page — the branded fact
- * pack's signature stripe. Skipped entirely without branding. */
-function BrandRule({ branding }: { branding: ReportBranding | null }) {
-  if (!branding?.color) return null;
+// ── Cover page — full-bleed aerial in the landing-hero (light) style:
+// the washed near-grayscale aerial with the white veil baked into the
+// jpeg (see renderCoverAerial) IS the page background, slate ink over
+// the veiled zones, brand identity up top, prepared-by strip along the
+// bottom. Nothing can overlap: the type never competes with the photo. ──
+
+function CoverPage({
+  payload,
+  branding,
+  coverPng,
+}: {
+  payload: ReportPayload;
+  branding: ReportBranding | null;
+  coverPng: Buffer | null;
+}) {
+  const { report, address } = payload;
+  const accent = branding?.color ?? ACCENT_DEFAULT;
+  const who = branding?.name ?? "LotLens";
+  const subLine = [
+    payload.parcel?.suburb,
+    payload.parcel?.lotPlan
+      ? `Lot ${payload.parcel.lotNumber ?? ""} ${payload.parcel.planNumber ?? payload.parcel.lotPlan}`.replace(/\s+/g, " ")
+      : null,
+    payload.parcel?.areaM2 ? `${payload.parcel.areaM2.toLocaleString("en-AU")} m²` : null,
+  ]
+    .filter(Boolean)
+    .join("  ·  ");
+
   return (
-    <View
-      fixed
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        height: 5,
-        backgroundColor: branding.color,
-      }}
-    />
+    <Page size="A4" style={{ backgroundColor: PAGE_BG, fontFamily: "Helvetica" }} wrap={false}>
+      {/* Full-A4 flow canvas: a wrap={false} page shrinks to its content
+        * height and drops top-anchored absolutes when everything is
+        * absolute — this View pins the page to true A4 and anchors the
+        * absolute children below. */}
+      <View style={{ width: "100%", height: 841.89 }}>
+      {/* Full-bleed washed aerial (veil gradient baked into the jpeg) */}
+      {coverPng && (
+        // eslint-disable-next-line jsx-a11y/alt-text -- React-PDF Image has no alt prop.
+        <Image
+          src={coverPng}
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      )}
+      <View
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 6, backgroundColor: accent }}
+      />
+
+      {/* Brand block + the property, over the heavy top veil */}
+      <View style={{ position: "absolute", top: 58, left: 48, right: 48 }}>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          {branding?.logo && (
+            // eslint-disable-next-line jsx-a11y/alt-text -- React-PDF Image has no alt prop.
+            <Image
+              src={branding.logo}
+              style={{ height: 30, width: 110, objectFit: "contain", objectPosition: "left", marginRight: 10 }}
+            />
+          )}
+          <Text style={{ fontSize: 19, fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY, letterSpacing: -0.2 }}>
+            {who}
+          </Text>
+        </View>
+        <Text style={{ fontSize: 8.5, color: TEXT_MUTED, marginTop: 4, letterSpacing: 0.3 }}>
+          Property due diligence from public council &amp; Queensland Government data
+        </Text>
+
+        <View style={{ width: 34, height: 3, backgroundColor: accent, marginTop: 24, marginBottom: 24 }} />
+
+        <Text style={styles.eyebrow}>Property fact pack</Text>
+        <Text style={{ fontSize: 26, fontFamily: "Helvetica-Bold", lineHeight: 1.12, color: TEXT_PRIMARY, letterSpacing: -0.4 }}>
+          {formatAuAddress(address.address_text, payload.postcode)}
+        </Text>
+        {subLine && (
+          <Text style={{ fontSize: 9, color: TEXT_MUTED, marginTop: 7, letterSpacing: 0.2 }}>
+            {subLine}
+          </Text>
+        )}
+      </View>
+
+      {/* Prepared-by strip, over the heavy bottom veil */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 44,
+          left: 48,
+          right: 48,
+          borderTopWidth: 0.5,
+          // Solid 6-digit hex only: react-pdf paints rgba()/8-digit-hex
+          // BORDER colors as red (backgrounds are fine).
+          borderTopColor: "#94a3b8",
+          paddingTop: 12,
+          flexDirection: "row",
+          justifyContent: "space-between",
+        }}
+      >
+        <View>
+          <Text style={styles.metaLabel}>Prepared by</Text>
+          <Text style={{ fontSize: 9, color: TEXT_PRIMARY, fontFamily: "Helvetica-Bold" }}>
+            {who}
+            {branding?.name ? "  ·  with LotLens" : ""}
+          </Text>
+        </View>
+        <View>
+          <Text style={styles.metaLabel}>Date</Text>
+          <Text style={{ fontSize: 9, color: TEXT_PRIMARY }}>{formatDate(report.generated_at)}</Text>
+        </View>
+        <View>
+          <Text style={styles.metaLabel}>Checks run</Text>
+          <Text style={{ fontSize: 9, color: TEXT_PRIMARY }}>{payload.modules.length} public-data modules</Text>
+        </View>
+        <View>
+          <Text style={styles.metaLabel}>Report id</Text>
+          <Text style={{ fontSize: 9, color: TEXT_PRIMARY }}>{report.id.slice(0, 8)}</Text>
+        </View>
+      </View>
+      </View>
+    </Page>
   );
 }
 
-function Footer({
-  address,
+/** Fixed page chrome, industry-report style: a thin accent strip, then a
+ * running header naming the preparer (left) and the property (right) on
+ * EVERY page. Render FIRST inside a Page. */
+function ChromeTop({
   branding,
+  address,
 }: {
-  address: string;
   branding: ReportBranding | null;
+  address: string;
 }) {
-  const who = branding?.name ? `${branding.name} · with LotLens` : "LotLens";
+  const accent = branding?.color ?? ACCENT_DEFAULT;
+  const who = branding?.name ?? "LotLens";
+  const addr = address.length > 58 ? `${address.slice(0, 55)}…` : address;
   return (
-    <View style={styles.footer} fixed>
-      <Text>{who} · {address.length > 60 ? address.slice(0, 57) + "…" : address}</Text>
-      <Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} />
+    <>
+      <View
+        fixed
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: accent }}
+      />
+      <View fixed style={styles.runningHeader}>
+        <Text style={styles.runningBrand}>{who}</Text>
+        <Text style={styles.runningAddress}>{addr}</Text>
+      </View>
+    </>
+  );
+}
+
+/** Fixed footer band with an OPAQUE background — rendered LAST inside a
+ * Page so it paints over any body overflow; the pagination line can
+ * never be collided with. */
+function ChromeBottom({ branding }: { branding: ReportBranding | null }) {
+  const who = branding?.name
+    ? `${branding.name} · prepared with LotLens`
+    : "LotLens · Property Fact Pack";
+  return (
+    <View style={styles.footerBand} fixed>
+      <Text>{who}</Text>
+      <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
     </View>
   );
 }
@@ -1216,19 +1376,26 @@ export function ReportPDF({
   payload,
   maps = [],
   branding = null,
+  coverPng = null,
 }: {
   payload: ReportPayload;
   /** Pre-rendered module map PNGs, one per module (Buffer or null). */
   maps?: ModuleMapPng[];
   /** Customer branding (subscriber feature) — null renders plain LotLens. */
   branding?: ReportBranding | null;
+  /** Overlay-free aerial with the lot outline, for the cover page. */
+  coverPng?: Buffer | null;
 }) {
   const { report, address, modules } = payload;
   const mapByModule = new Map<Module, Buffer | null>();
   for (const m of maps) mapByModule.set(m.module, m.png);
+  // Conventional AU form for every place the address is shown as a label.
+  // The raw address_text (with its LGA) is kept only where it must match
+  // AI-generated summary text (coverLine's prefix strip).
+  const displayAddress = formatAuAddress(address.address_text, payload.postcode);
   const docTitle = branding?.name
-    ? `${branding.name} Fact Pack · ${address.address_text}`
-    : `LotLens Fact Pack · ${address.address_text}`;
+    ? `${branding.name} Fact Pack · ${displayAddress}`
+    : `LotLens Fact Pack · ${displayAddress}`;
 
   // Clear-module diet: full pages only for flagged/failed checks, in the
   // same severity order the cover lists them (so its "p. N" references
@@ -1238,6 +1405,7 @@ export function ReportPDF({
 
   return (
     <Document title={docTitle}>
+      <CoverPage payload={payload} branding={branding} coverPng={coverPng} />
       <AtAGlancePage payload={payload} branding={branding} />
       {attention.map((m) => {
         const raw =
@@ -1251,7 +1419,7 @@ export function ReportPDF({
             narrative={report.narrative[m.module]}
             raw={raw}
             mapPng={mapByModule.get(m.module) ?? null}
-            address={address.address_text}
+            address={displayAddress}
             branding={branding}
           />
         );
@@ -1259,16 +1427,16 @@ export function ReportPDF({
       <NextStepsPage
         modules={attention.filter((m) => !pdfIsFailed(m))}
         narrative={report.narrative}
-        address={address.address_text}
+        address={displayAddress}
         branding={branding}
       />
       <ClearPage
         modules={clear}
         narrative={report.narrative}
-        address={address.address_text}
+        address={displayAddress}
         branding={branding}
       />
-      <DisclaimerPage address={address.address_text} branding={branding} />
+      <DisclaimerPage address={displayAddress} branding={branding} />
     </Document>
   );
 }

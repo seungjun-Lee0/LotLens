@@ -45,7 +45,7 @@ export function NextSteps({
           </h2>
         </div>
         <p className="mt-3 max-w-xl text-pretty text-[13.5px] leading-relaxed text-muted-foreground sm:text-[14px]">
-          Every question raised by the flagged checks, in one place — hand
+          Every question raised by the flagged checks, in one place. Hand
           this list to your conveyancer, building inspector or the Council.
         </p>
         <div className="mt-5 flex flex-col gap-5">

@@ -10,6 +10,7 @@ import { NextSteps } from "@/components/report/next-steps";
 import { RetryChecks } from "@/components/report/retry-checks";
 import { UnlockButton } from "@/components/report/unlock-button";
 import { getSessionUser, isAdmin } from "@/lib/auth";
+import { formatAuAddress } from "@/lib/format-address";
 import { loadReportPayload } from "@/lib/pipeline";
 import { RISK_RANK, riskOf } from "@/lib/risk-style";
 import type { Module } from "@/lib/db";
@@ -91,7 +92,7 @@ export default async function ReportPage({
               Property Fact Pack
             </div>
             <h1 className="mt-2 text-balance text-[1.7rem] font-semibold leading-[1.1] tracking-tight sm:text-5xl">
-              {address.address_text}
+              {formatAuAddress(address.address_text, payload.postcode)}
             </h1>
           </div>
           {paid && (
@@ -162,7 +163,7 @@ export default async function ReportPage({
               <p className="mx-auto mt-3 max-w-md text-pretty text-[14.5px] leading-relaxed text-muted-foreground">
                 Bushfire, Coastal Hazards, Vegetation, Environment &amp; Koala,
                 Heritage, Easements, Mining, Acid Sulfate Soils, Zoning and
-                more — already fetched from council and Queensland Government
+                more, already fetched from council and Queensland Government
                 sources. Unlock to see the full per-module narrative, maps,
                 and PDF download.
               </p>

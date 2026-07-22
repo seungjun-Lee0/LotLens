@@ -45,6 +45,7 @@ import {
   insetParcelPolygon,
   type ParcelInfo,
 } from "@/lib/property";
+import { fetchPostcode } from "@/lib/postcode";
 
 type Address = {
   id: string;
@@ -371,6 +372,10 @@ export type ReportPayload = {
    * Surfaced in the At a glance sidebar so the report mirrors Develo's
    * sidebar facts. null when the parcel lookup returned nothing. */
   parcel: ParcelInfo | null;
+  /** 4-digit postcode for the address (ABS POA lookup). The QLD locator
+   * omits it, so this is resolved fresh at load and used for display only.
+   * null when the lookup fails. */
+  postcode: string | null;
   /** True if the user has paid for the report. When false the report page
    * shows Flooding as a free preview and paywalls the other 7 modules. */
   paid: boolean;
@@ -453,9 +458,10 @@ export async function loadReportPayload(
   // dwarfed by the rest of the pipeline. Cleanly replaces our previous
   // hack of using the zoning module's polygon (which actually spans
   // the whole zone-precinct area — hundreds of metres across).
-  const [parcel, parcelLines] = await Promise.all([
+  const [parcel, parcelLines, postcode] = await Promise.all([
     fetchPropertyParcel(address.lat, address.lng),
     fetchParcelLinesNear(address.lat, address.lng),
+    fetchPostcode(address.lat, address.lng),
   ]);
 
   // Zoning polygon as the final fallback when the parcel lookup misses
@@ -484,6 +490,7 @@ export async function loadReportPayload(
     propertyPolygon,
     parcelLines,
     parcel: parcel.polygon ? parcel : null,
+    postcode,
     paid: Boolean(address.paid_at),
   };
 }

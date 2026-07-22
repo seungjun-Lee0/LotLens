@@ -71,12 +71,12 @@ function renderStubFetchFailed(
   input: GenerateModuleNarrativeInput,
 ): ModuleNarrative {
   return {
-    summary: `This check couldn't be completed for ${input.address} — the data source didn't respond.`,
+    summary: `This check couldn't be completed for ${input.address} because the data source didn't respond.`,
     detail:
-      "The government/council mapping service for this module was unreachable when the report ran. No finding here means \"not checked\", not \"clear\". Re-run the checks to retry — these outages are usually brief.",
+      "The government/council mapping service for this module was unreachable when the report ran. No finding here means \"not checked\", not \"clear\". Re-run the checks to retry. These outages are usually brief.",
     questions_to_ask: [
       "Re-run the report checks to retry this source.",
-      "If it keeps failing, check the source's own website directly — the link is on the module card.",
+      "If it keeps failing, check the source's own website directly. The link is on the module card.",
     ],
     sources: [],
   };
@@ -92,7 +92,7 @@ function renderStubUnavailable(
       : "This overlay is published per-council and has not been integrated for this local government area yet.";
   return {
     summary: `This check is not yet available for ${input.address}'s council area.`,
-    detail: `${note} No finding here means "not checked", not "clear" — treat it as an open item for your conveyancer.`,
+    detail: `${note} No finding here means "not checked", not "clear". Treat it as an open item for your conveyancer.`,
     questions_to_ask: [
       "Ask the local council (or check its online planning-scheme mapping) what this overlay shows for the lot.",
       "Ask your conveyancer to include this check in their searches.",
@@ -132,7 +132,7 @@ function renderStubFlooding(
       detail:
         "Brisbane City Council's Flood Awareness Mapping does not place this address inside any creek, river, or storm tide flood polygon, and the property is not within the 2011 or 2022 historic flood extents we checked.",
       questions_to_ask: [
-        "Ask the seller about any localised drainage issues — public overlays can miss yard-scale ponding.",
+        "Ask the seller about any localised drainage issues. Public overlays can miss yard-scale ponding.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
       sources: sourcesFromRaw(raw),
@@ -161,7 +161,7 @@ function renderStubFlooding(
     questions_to_ask: [
       "What habitable floor level does the property currently sit at, vs the defined flood event level?",
       "Has the property been physically flooded in recent events? Request photos and insurance claim history.",
-      "What does flood insurance cost on this address — get a quote before contract.",
+      "What does flood insurance cost on this address? Get a quote before contract.",
     ],
     sources: sourcesFromRaw(raw),
   };
@@ -178,7 +178,7 @@ function renderStubOverlandFlow(
       detail:
         "Brisbane City Council's Overland Flow mapping does not place this address inside any polygon. The lot is unlikely to be affected by mapped stormwater run-off.",
       questions_to_ask: [
-        "Ask about local drainage problems anyway — overland flow models can miss yard-scale ponding.",
+        "Ask about local drainage problems anyway. Overland flow models can miss yard-scale ponding.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
       sources: sourcesFromRaw(raw),
@@ -190,7 +190,7 @@ function renderStubOverlandFlow(
     questions_to_ask: [
       "Are there visible drainage marks, gullies or yard erosion from past storms?",
       "Have any extensions on this lot needed Council overland-flow assessment?",
-      "What does the stormwater pathway look like at the back of the lot — fence-line drains, easements, neighbour batters?",
+      "What does the stormwater pathway look like at the back of the lot (fence-line drains, easements, neighbour batters)?",
     ],
     sources: sourcesFromRaw(raw),
   };
@@ -247,7 +247,7 @@ function renderStubVegetation(
     detail: `The property sits inside a "${cat}" polygon under BCC's City Plan 2014. Council assessment is required before clearing protected vegetation, and building envelopes may be constrained by the overlay's vegetation rules.`,
     questions_to_ask: [
       "What native species are on the lot, and are any protected at the state level?",
-      "Are there existing approved disturbance areas — driveway, building envelope, fire trail?",
+      "Are there existing approved disturbance areas (driveway, building envelope, fire trail)?",
       "Would a renovation require an arborist report or a Council pre-lodgement meeting?",
     ],
     sources: sourcesFromRaw(raw),
@@ -272,7 +272,7 @@ function renderStubFloodPlanning(
   const areas = [river, creek].filter((x): x is string => Boolean(x));
   return {
     summary: `${input.address} sits in ${areas.join(" + ")}.`,
-    detail: `Brisbane City Council's statutory flood planning overlay applies — ${areas.join(" + ")}. The numbered suffix (1 strictest, 4 mildest) determines minimum habitable floor levels, fill volumes, and excluded structures for any new build or extension. This is the legally binding control, distinct from the awareness-mapping risk indicator.`,
+    detail: `Brisbane City Council's statutory flood planning overlay applies: ${areas.join(" + ")}. The numbered suffix (1 strictest, 4 mildest) determines minimum habitable floor levels, fill volumes, and excluded structures for any new build or extension. This is the legally binding control, distinct from the awareness-mapping risk indicator.`,
     questions_to_ask: [
       "What habitable floor level will any new build / extension need to be raised to?",
       "Are there fill, excavation or excluded-structure limits that affect the build envelope?",
@@ -293,7 +293,7 @@ function renderStubBushfire(
       detail:
         "The address does not fall inside any polygon of BCC's City Plan 2014 Bushfire overlay (which captures medium and high hazard areas plus their buffers).",
       questions_to_ask: [
-        "Confirm with QFD if the property is on the statewide Bushfire Prone Area mapping — BCC's overlay is council-scope, the state map can be wider.",
+        "Confirm with QFD if the property is on the statewide Bushfire Prone Area mapping. BCC's overlay is council-scope, and the state map can be wider.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
       sources: sourcesFromRaw(raw),
@@ -301,7 +301,7 @@ function renderStubBushfire(
   }
   return {
     summary: `${input.address} is mapped as "${cat}" on the BCC bushfire overlay.`,
-    detail: `The property sits inside a "${cat}" polygon under BCC's City Plan 2014. This classification triggers planning-scheme provisions affecting new builds, vegetation management, and access — and may affect insurance premiums.`,
+    detail: `The property sits inside a "${cat}" polygon under BCC's City Plan 2014. This classification triggers planning-scheme provisions affecting new builds, vegetation management, and access, and may affect insurance premiums.`,
     questions_to_ask: [
       "What asset-protection-zone (vegetation clearance) is required for this hazard class?",
       "Is the existing dwelling compliant with BAL (Bushfire Attack Level) construction standards?",
@@ -331,7 +331,7 @@ function renderStubZoning(
   const specific = lvl2 ?? zonePrecinct ?? zoneCode ?? lvl1;
   return {
     summary: `Zoned ${specific} under BCC City Plan 2014.`,
-    detail: `Specific zone: ${lvl2 ?? "—"}. Top-level zone: ${lvl1 ?? "—"}. Precinct: ${zonePrecinct ?? "—"} (${zoneCode ?? "—"}). Zoning governs what can be built, run as a business, or subdivided on the lot. Brisbane's Centre, Mixed use, and residential zones each carry different precinct overlays — check the specific zone and precinct description against your intended use.`,
+    detail: `Specific zone: ${lvl2 ?? "not stated"}. Top-level zone: ${lvl1 ?? "not stated"}. Precinct: ${zonePrecinct ?? "not stated"} (${zoneCode ?? "no code"}). Zoning governs what can be built, run as a business, or subdivided on the lot. Brisbane's Centre, Mixed use, and residential zones each carry different precinct overlays, so check the specific zone and precinct description against your intended use.`,
     questions_to_ask: [
       "What is the maximum height / GFA / site cover under this zone?",
       "Is a granny flat / dual occupancy permitted as code-assessable or impact-assessable?",
@@ -352,7 +352,7 @@ function renderStubHeritage(
       detail:
         "BCC's State heritage area, Local heritage area, and Traditional building character overlays all return no polygons for this address. Renovation and demolition controls tied to those overlays do not apply.",
       questions_to_ask: [
-        "Even with no overlay, individual pre-1947 dwellings can attract Council interest — confirm the house's construction year.",
+        "Even with no overlay, individual pre-1947 dwellings can attract Council interest. Confirm the house's construction year.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
       sources: sourcesFromRaw(raw),
@@ -360,7 +360,7 @@ function renderStubHeritage(
   }
   const types = Array.from(new Set(entries.map((e) => String(e.type))));
   const desc = entries
-    .map((e) => `${e.type} (${e.description ?? "—"})`)
+    .map((e) => `${e.type} (${e.description ?? "no description"})`)
     .join("; ");
   return {
     summary: `${input.address} is captured by ${types.join(" + ")} overlay${types.length > 1 ? "s" : ""}.`,
@@ -386,7 +386,7 @@ function renderStubNoise(
       detail:
         "Neither the Transport noise corridor overlay nor the Airport ANEF noise overlay covers this address. New builds won't be triggered into acoustic-attenuation requirements by the overlay.",
       questions_to_ask: [
-        "Visit the property at peak commute and late evening anyway — modelled noise differs from felt noise.",
+        "Visit the property at peak commute and late evening anyway. Modelled noise differs from felt noise.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
       sources: sourcesFromRaw(raw),
@@ -395,10 +395,10 @@ function renderStubNoise(
   const parts = [t, a].filter((x): x is string => Boolean(x));
   return {
     summary: `${input.address} sits in ${parts.join(" + ")}.`,
-    detail: `Brisbane noise overlay flags this property: ${parts.join(" + ")}. New construction will trigger acoustic-attenuation requirements — rated glazing, denser walls, restrictions on habitable rooms facing the source. Practical felt noise depends on prevailing wind, time of day, and traffic mix.`,
+    detail: `Brisbane noise overlay flags this property: ${parts.join(" + ")}. New construction will trigger acoustic-attenuation requirements: rated glazing, denser walls, restrictions on habitable rooms facing the source. Practical felt noise depends on prevailing wind, time of day, and traffic mix.`,
     questions_to_ask: [
       "What rated windows and walls would a new build require here?",
-      "Is the noise mostly road, rail, or aircraft? — solutions differ.",
+      "Is the noise mostly road, rail, or aircraft? Solutions differ.",
       "Have you visited at peak hours? Modelled noise isn't always perceived noise.",
     ],
     sources: sourcesFromRaw(raw),
@@ -414,7 +414,7 @@ function renderStubSchools(
     return {
       summary: `No state school catchment was matched for ${input.address}.`,
       detail:
-        "The QLD Department of Education catchment layer returned no polygons for this address. That's unusual — confirm the address sits inside Brisbane LGA and re-run.",
+        "The QLD Department of Education catchment layer returned no polygons for this address. That's unusual. Confirm the address sits inside Brisbane LGA and re-run.",
       questions_to_ask: DISCLAIMER_FALLBACK_QUESTIONS,
       sources: sourcesFromRaw(raw),
     };
@@ -428,7 +428,7 @@ function renderStubSchools(
     .join("; ");
   return {
     summary: `${input.address} is zoned for ${schools.map((s) => s.name).join(" + ")}.`,
-    detail: `In-catchment for: ${lines}. State schools must accept in-catchment enrolments — choosing this address gives the listed schools as the guaranteed option. Out-of-catchment placements are place-dependent.`,
+    detail: `In-catchment for: ${lines}. State schools must accept in-catchment enrolments, so choosing this address gives the listed schools as the guaranteed option. Out-of-catchment placements are place-dependent.`,
     questions_to_ask: [
       "Are the catchment schools at NAPLAN / OP performance you're happy with? Check MySchool.",
       "If you're moving for school, confirm enrolment with the school before contract.",
@@ -457,7 +457,7 @@ function renderStubEasements(
       summary: `No registered easement polygons cover ${input.address}.`,
       detail: `Neither BCC's high-voltage powerline overlay nor the QSpatial DCDB easement-parcel layer places a polygon on this address. ${scope}`,
       questions_to_ask: [
-        "Order a QLD Title Search anyway — the polygon coverage misses very narrow or recently registered easements, and only the title shows the legal terms.",
+        "Order a QLD Title Search anyway. The polygon coverage misses very narrow or recently registered easements, and only the title shows the legal terms.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
       sources: sourcesFromRaw(raw),
@@ -477,9 +477,9 @@ function renderStubEasements(
   const summary = `${input.address} sits on ${parts.join(" and ")}.`;
   const detail = [
     hv &&
-      "The high-voltage overlay restricts what can be built or grown near the conductor — the easement holder can enforce vegetation clearance and prohibit habitable structures.",
+      "The high-voltage overlay restricts what can be built or grown near the conductor. The easement holder can enforce vegetation clearance and prohibit habitable structures.",
     cadastral &&
-      "QSpatial's DCDB shows registered easement parcels at this location. These are commonly drainage, sewerage, access or party-wall easements — the polygons tell you they exist; only the title shows the conditions.",
+      "QSpatial's DCDB shows registered easement parcels at this location. These are commonly drainage, sewerage, access or party-wall easements. The polygons tell you they exist; only the title shows the conditions.",
     scope,
   ]
     .filter(Boolean)
@@ -488,7 +488,7 @@ function renderStubEasements(
     summary,
     detail,
     questions_to_ask: [
-      "Order a QLD Title Search to read each easement's instrument — type, purpose, benefiting party, and any conditions.",
+      "Order a QLD Title Search to read each easement's instrument: type, purpose, benefiting party, and any conditions.",
       hv
         ? "What is the distance from any dwelling to the live powerline conductor?"
         : "Can you build over or fence within the easement, and who pays if the authority needs to dig it up?",
@@ -513,7 +513,7 @@ function renderStubEnvironment(
       detail:
         "The property is outside the SEQ koala habitat mapping (core and locally refined) and outside MSES endangered/vulnerable wildlife habitat. Ordinary tree removal and building work is not constrained by these state environmental frameworks.",
       questions_to_ask: [
-        "Council local laws can still protect individual trees — check before removing anything substantial.",
+        "Council local laws can still protect individual trees. Check before removing anything substantial.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
       sources: sourcesFromRaw(raw),
@@ -524,7 +524,7 @@ function renderStubEnvironment(
     summary: `${input.address} is affected by environmental habitat mapping: ${category ?? "koala/wildlife habitat"}.`,
     detail: `${
       habitat
-        ? "Mapped koala habitat covers part of the lot — inside a Koala Priority Area, interfering with koala habitat trees is assessable development under the Nature Conservation (Koala) Plan 2020. "
+        ? "Mapped koala habitat covers part of the lot. Inside a Koala Priority Area, interfering with koala habitat trees is assessable development under the Nature Conservation (Koala) Plan 2020. "
         : priority
           ? "The lot sits inside a Koala Priority Area, though no koala habitat is mapped on the lot itself. "
           : ""
@@ -553,7 +553,7 @@ function renderStubSteepLand(
     return {
       summary: `No landslide or steep-land overlay covers ${input.address}.`,
       detail:
-        "The council's landslide / steep land overlay does not place a polygon on this address. That doesn't guarantee flat ground — it means the site is outside the mapped hazard thresholds.",
+        "The council's landslide / steep land overlay does not place a polygon on this address. That doesn't guarantee flat ground; it means the site is outside the mapped hazard thresholds.",
       questions_to_ask: [
         "If the block is visibly sloping, budget for a contour survey before designing anything.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -565,11 +565,11 @@ function renderStubSteepLand(
   return {
     summary: `${input.address} sits in a landslide / steep land overlay${category ? ` (${category})` : ""}.`,
     detail:
-      "Mapped steep land means development assessment will usually require a geotechnical report — slope stability, cut-and-fill limits, retaining and drainage design. Existing dwellings are unaffected day-to-day, but extensions, pools and secondary dwellings on the slope face extra engineering cost and approval time.",
+      "Mapped steep land means development assessment will usually require a geotechnical report covering slope stability, cut-and-fill limits, retaining and drainage design. Existing dwellings are unaffected day-to-day, but extensions, pools and secondary dwellings on the slope face extra engineering cost and approval time.",
     questions_to_ask: [
       "Has a geotechnical report ever been done for this lot? Ask the seller for a copy.",
       "Are the existing retaining walls engineered and approved, and who owns each one?",
-      "Any signs of movement — cracked slabs, leaning fences, doors that stopped closing?",
+      "Any signs of movement (cracked slabs, leaning fences, doors that stopped closing)?",
     ],
     sources: sourcesFromRaw(raw),
   };
@@ -588,7 +588,7 @@ function renderStubAcidSulfate(
     return {
       summary: `No mapped acid sulfate soils at ${input.address}.`,
       detail:
-        "The Queensland acid sulfate soils mapping does not place this address inside a mapped ASS polygon. Note the state mapping covers coastal lowlands — being unmapped is expected for elevated or inland lots.",
+        "The Queensland acid sulfate soils mapping does not place this address inside a mapped ASS polygon. Note the state mapping covers coastal lowlands, so being unmapped is expected for elevated or inland lots.",
       questions_to_ask: [
         "If you plan deep excavation (pool, basement) near the coast, ask whether any soil testing has been done regardless.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -601,7 +601,7 @@ function renderStubAcidSulfate(
     summary: `${input.address} sits on mapped acid sulfate soils${mapCode ? ` (map code ${mapCode})` : ""}.`,
     detail: `State mapping${scale ? ` at ${scale} scale` : ""} classifies this land as ${
       meaning ?? "an acid sulfate soil area"
-    }. Undisturbed, this changes nothing day-to-day — but excavation or drainage works (pools, basements, deep footings, canal work) can oxidise sulfidic material and produce sulfuric acid, so development approval typically requires an ASS investigation and management plan, which adds cost.`,
+    }. Undisturbed, this changes nothing day-to-day. Excavation or drainage works (pools, basements, deep footings, canal work) can oxidise sulfidic material and produce sulfuric acid, so development approval typically requires an ASS investigation and management plan, which adds cost.`,
     questions_to_ask: [
       "Have previous works on the lot (pool, retaining walls) done ASS testing? Ask for the report.",
       "For planned excavation: get an indicative quote for an ASS investigation and management plan.",
@@ -639,7 +639,7 @@ function renderStubMining(
   if (kraSeparation) parts.push("a Key Resource Area separation buffer (dust/noise/blast constraints on sensitive uses)");
   for (const t of tenements.slice(0, 2)) {
     parts.push(
-      `${t.type ?? "a resource authority"}${t.status ? ` — ${String(t.status).toLowerCase()}` : ""}${t.owner ? ` (${t.owner})` : ""}`,
+      `${t.type ?? "a resource authority"}${t.status ? `, ${String(t.status).toLowerCase()}` : ""}${t.owner ? ` (${t.owner})` : ""}`,
     );
   }
 
@@ -647,11 +647,11 @@ function renderStubMining(
     summary: `${input.address} is affected by: ${parts.join("; ")}.`,
     detail: `Resource interests exist separately from surface ownership in Queensland. ${
       kraResource || kraSeparation
-        ? "KRA mapping means extractive industry (quarrying and haulage) is protected here by state policy — expect long-term noise, dust and truck movements, and constraints on adding new dwellings inside the buffer. "
+        ? "KRA mapping means extractive industry (quarrying and haulage) is protected here by state policy. Expect long-term noise, dust and truck movements, and constraints on adding new dwellings inside the buffer. "
         : ""
     }${
       tenements.length > 0
-        ? "A tenure over the lot does not by itself grant surface access, but granted mining leases carry real activity rights — the exact terms live with the Department of Resources."
+        ? "A tenure over the lot does not by itself grant surface access, but granted mining leases carry real activity rights. The exact terms live with the Department of Resources."
         : ""
     }`,
     questions_to_ask: [

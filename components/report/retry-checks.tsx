@@ -71,7 +71,7 @@ export function RetryChecks({
             Government map servers are occasionally briefly unavailable.
             {error
               ? ` Retry failed: ${error}`
-              : " Re-run the failed checks — the rest of the report is unaffected."}
+              : " Re-run the failed checks. The rest of the report is unaffected."}
           </p>
         </div>
       </div>

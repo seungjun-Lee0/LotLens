@@ -126,19 +126,6 @@ export function ModuleMap({
     });
     mapRef.current = map;
 
-    // Small centre dot gives the eye an exact geocoded point inside
-    // the "selected property" box drawn below as a map layer.
-    const el = document.createElement("div");
-    el.style.cssText = `
-      width: 8px; height: 8px;
-      border-radius: 999px;
-      background: ${SELECTED_PROPERTY_STYLE.color};
-      box-shadow:
-        0 0 0 1.5px white,
-        0 4px 10px -3px color-mix(in oklab, ${SELECTED_PROPERTY_STYLE.color} 60%, transparent);
-    `;
-    new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
-
     map.on("load", () => {
       if (overlays.length > 0) {
         map.addSource("overlays", {

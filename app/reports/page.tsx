@@ -5,6 +5,7 @@ import { ArrowRight, FileText } from "lucide-react";
 import { SiteHeader } from "@/components/site/site-header";
 import { getSessionUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { formatAuAddress } from "@/lib/format-address";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function MyReportsPage() {
           <div className="glass flex flex-col items-center gap-3 rounded-3xl px-6 py-12 text-center">
             <FileText className="size-6 text-muted-foreground" />
             <p className="text-[14px] text-muted-foreground">
-              No reports yet — run your first one from the home page.
+              No reports yet. Run your first one from the home page.
             </p>
             <Link
               href="/"
@@ -69,7 +70,7 @@ export default async function MyReportsPage() {
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-[14.5px] font-medium">
-                      {r.address_text}
+                      {formatAuAddress(r.address_text)}
                     </span>
                     <span className="mt-0.5 block text-[12px] text-muted-foreground">
                       {new Date(r.generated_at).toLocaleDateString("en-AU", {

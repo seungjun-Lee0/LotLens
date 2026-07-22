@@ -34,7 +34,7 @@ function ModuleFacts({
         }}
       >
         This source didn&apos;t respond when the report ran, so this module was
-        not checked. Re-run the checks to retry — no finding here does not
+        not checked. Re-run the checks to retry. No finding here does not
         mean &quot;clear&quot;.
       </p>
     );
@@ -59,7 +59,7 @@ function ModuleFacts({
       return (
         <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           <dt className="text-muted-foreground">Flood type</dt>
-          <dd className="font-medium">{ft ?? "—"}</dd>
+          <dd className="font-medium">{ft ?? "Not stated"}</dd>
           {ev.length > 0 && (
             <>
               <dt className="text-muted-foreground">Historic events</dt>
@@ -76,7 +76,7 @@ function ModuleFacts({
       return (
         <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           <dt className="text-muted-foreground">Risk level</dt>
-          <dd className="font-medium">{r ?? "—"}</dd>
+          <dd className="font-medium">{r ?? "Not stated"}</dd>
           {ft && (
             <>
               <dt className="text-muted-foreground">Type</dt>
@@ -92,9 +92,9 @@ function ModuleFacts({
       return (
         <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           <dt className="text-muted-foreground">Hazard category</dt>
-          <dd className="font-medium">{cat ?? "—"}</dd>
+          <dd className="font-medium">{cat ?? "Not stated"}</dd>
           <dt className="text-muted-foreground">Code</dt>
-          <dd className="font-mono text-[11px]">{code ?? "—"}</dd>
+          <dd className="font-mono text-[11px]">{code ?? "Not stated"}</dd>
         </dl>
       );
     }
@@ -206,7 +206,7 @@ function ModuleFacts({
               >
                 {e.type}
               </span>
-              <span className="text-muted-foreground">{e.description ?? "—"}</span>
+              <span className="text-muted-foreground">{e.description ?? "No description recorded"}</span>
             </li>
           ))}
         </ul>
@@ -312,7 +312,7 @@ function ModuleFacts({
       return (
         <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           <dt className="text-muted-foreground">Zone</dt>
-          <dd className="font-medium">{prec ?? code ?? "—"}</dd>
+          <dd className="font-medium">{prec ?? code ?? "Not stated"}</dd>
           {lvl2 && (
             <>
               <dt className="text-muted-foreground">Specific</dt>
@@ -320,7 +320,7 @@ function ModuleFacts({
             </>
           )}
           <dt className="text-muted-foreground">Family</dt>
-          <dd className="font-medium">{lvl1 ?? "—"}</dd>
+          <dd className="font-medium">{lvl1 ?? "Not stated"}</dd>
         </dl>
       );
     }
@@ -364,7 +364,7 @@ function StatusPill({
         <Icon className="size-2.5" strokeWidth={3.5} />
       </span>
       {failed
-        ? "Couldn't check — source unavailable"
+        ? "Couldn't check · source unavailable"
         : hasConsideration
           ? `Considerations${riskLabel ? ` · ${riskLabel}` : ""}`
           : "No considerations identified"}

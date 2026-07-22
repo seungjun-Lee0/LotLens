@@ -1,5 +1,6 @@
 import { Check, TriangleAlert } from "lucide-react";
 
+import { formatAuAddress } from "@/lib/format-address";
 import { MODULE_META } from "@/lib/module-meta";
 import { RISK_RANK, RISK_STYLE, riskOf } from "@/lib/risk-style";
 import type { ReportPayload } from "@/lib/pipeline";
@@ -98,9 +99,9 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                 ? failedCount === 0
                   ? "All 15 public-data checks came back clear at this address."
                   : "Nothing of concern found in the checks that ran."
-                : `${considerationCount} of ${modules.length} checks need your attention${topLine ? ` — most important: ${topLine}` : ""}.`}
+                : `${considerationCount} of ${modules.length} checks need your attention${topLine ? `. Most important: ${topLine}` : ""}.`}
               {failedCount > 0 &&
-                ` ${failedCount} check${failedCount > 1 ? "s" : ""} couldn't reach ${failedCount > 1 ? "their sources" : "its source"} this run — re-run to retry.`}
+                ` ${failedCount} check${failedCount > 1 ? "s" : ""} couldn't reach ${failedCount > 1 ? "their sources" : "its source"} this run. Re-run to retry.`}
             </p>
           </div>
 
@@ -140,7 +141,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                         </div>
                         {failed ? (
                           <div className="text-[12px] leading-snug text-muted-foreground">
-                            Source unreachable this run — re-run the checks.
+                            Source unreachable this run. Re-run the checks.
                           </div>
                         ) : summary ? (
                           <div className="line-clamp-2 text-[12px] leading-snug text-muted-foreground sm:text-[12.5px]">
@@ -210,7 +211,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
         {/* Right — metadata sidebar */}
         <aside className="flex min-w-0 flex-col gap-4 border-l-0 border-t border-border/40 pt-6 [overflow-wrap:anywhere] sm:gap-5 sm:pt-7 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
           <Meta label="Date of report">{formatDate(report.generated_at)}</Meta>
-          <Meta label="Address"><span className="break-words">{address.address_text}</span></Meta>
+          <Meta label="Address"><span className="break-words">{formatAuAddress(address.address_text, payload.postcode)}</span></Meta>
           {payload.parcel?.lotPlan && (
             <Meta label="Lot / Plan">
               <span className="font-mono text-[13.5px]">

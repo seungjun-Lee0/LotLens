@@ -122,6 +122,45 @@ function polygonRings(geometry: { type?: string; coordinates?: unknown } | null 
   return [];
 }
 
+/** "Selected property" SVG fragments — white halo + amber outline (real
+ * cadastre lot when present, ~60×60 m fallback box). No centre pin: the
+ * lot outline alone marks the property. */
+function propertyParts(
+  px: Px,
+  propertyPolygon: unknown | null | undefined,
+  lat: number,
+  lng: number,
+): string[] {
+  const parts: string[] = [];
+  const propRings: number[][][][] = polygonRings(
+    propertyPolygon as { type?: string; coordinates?: unknown } | null,
+  );
+  const propPaths =
+    propRings.length > 0
+      ? propRings.map((poly) => ringsToPath([poly[0]].filter(Boolean), px)).filter(Boolean)
+      : [
+          ringsToPath(
+            [[
+              [lng - 0.00028, lat - 0.00028],
+              [lng + 0.00028, lat - 0.00028],
+              [lng + 0.00028, lat + 0.00028],
+              [lng - 0.00028, lat + 0.00028],
+              [lng - 0.00028, lat - 0.00028],
+            ]],
+            px,
+          ),
+        ];
+  for (const d of propPaths) {
+    parts.push(
+      `<path d="${d}" fill="none" stroke="${SELECTED_PROPERTY_STYLE.haloHex}" stroke-width="${SELECTED_PROPERTY_STYLE.haloWidth}" stroke-linejoin="round"/>`,
+    );
+    parts.push(
+      `<path d="${d}" fill="none" stroke="${SELECTED_PROPERTY_STYLE.colorHex}" stroke-width="${SELECTED_PROPERTY_STYLE.lineWidth}" stroke-linejoin="round"/>`,
+    );
+  }
+  return parts;
+}
+
 /**
  * Render a property-centric map image at a fixed lot-scale frame with
  * overlay polygons painted in their fill colours.
@@ -198,44 +237,8 @@ export async function renderModuleMapPNG({
     }
   }
 
-  // "Selected property" highlight — the real cadastre lot polygon when
-  // present, else a ~60×60 m box centred on the geocoded point. White
-  // halo first for legibility against dark satellite imagery.
-  const propRings: number[][][][] = polygonRings(
-    propertyPolygon as { type?: string; coordinates?: unknown } | null,
-  );
-  const propPaths =
-    propRings.length > 0
-      ? propRings.map((poly) => ringsToPath([poly[0]].filter(Boolean), px)).filter(Boolean)
-      : [
-          ringsToPath(
-            [[
-              [lng - 0.00028, lat - 0.00028],
-              [lng + 0.00028, lat - 0.00028],
-              [lng + 0.00028, lat + 0.00028],
-              [lng - 0.00028, lat + 0.00028],
-              [lng - 0.00028, lat - 0.00028],
-            ]],
-            px,
-          ),
-        ];
-  for (const d of propPaths) {
-    parts.push(
-      `<path d="${d}" fill="none" stroke="${SELECTED_PROPERTY_STYLE.haloHex}" stroke-width="${SELECTED_PROPERTY_STYLE.haloWidth}" stroke-linejoin="round"/>`,
-    );
-    parts.push(
-      `<path d="${d}" fill="none" stroke="${SELECTED_PROPERTY_STYLE.colorHex}" stroke-width="${SELECTED_PROPERTY_STYLE.lineWidth}" stroke-linejoin="round"/>`,
-    );
-  }
-
-  // Small inner pin — exact geocoded point. Sized from the ACTUAL frame
-  // resolution (which grows for oversized parcels), floored so it stays
-  // visible when the frame zooms out.
-  const groundMpp = (spanX / width) * Math.cos((lat * Math.PI) / 180);
-  const pinR = Math.max(4, 3.5 / groundMpp);
-  const [pinX, pinY] = px(lng, lat);
   parts.push(
-    `<circle cx="${pinX.toFixed(1)}" cy="${pinY.toFixed(1)}" r="${pinR.toFixed(1)}" fill="${SELECTED_PROPERTY_STYLE.colorHex}"/>`,
+    ...propertyParts(px, propertyPolygon, lat, lng),
   );
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join("")}</svg>`;
@@ -247,5 +250,57 @@ export async function renderModuleMapPNG({
   return sharp(base)
     .composite([{ input: Buffer.from(svg) }])
     .jpeg({ quality: 82, mozjpeg: true })
+    .toBuffer();
+}
+
+/**
+ * Full-page portrait cover aerial in the landing-hero (light) style: the
+ * near-grayscale washed aerial the homepage hero uses, with the white
+ * veil gradient BAKED into the jpeg (react-pdf can't paint CSS
+ * gradients) — heavy at the top and bottom where the cover type sits,
+ * clear over the lot — plus the amber lot outline and pin.
+ */
+export async function renderCoverAerial({
+  lat,
+  lng,
+  propertyPolygon = null,
+  width = 1050,
+  height = 1486,
+}: {
+  lat: number;
+  lng: number;
+  propertyPolygon?: unknown | null;
+  width?: number;
+  height?: number;
+}): Promise<Buffer> {
+  const frame = frameFor(lat, lng, width, height, propertyPolygon);
+  const basePromise = getBasePNG(frame, width, height);
+  const spanX = frame.xmax - frame.xmin;
+  const spanY = frame.ymax - frame.ymin;
+  const px: Px = (lon, la) => [
+    ((merX(lon) - frame.xmin) / spanX) * width,
+    ((frame.ymax - merY(la)) / spanY) * height,
+  ];
+  const parts = propertyParts(px, propertyPolygon, lat, lng);
+  const VEIL = "#f8fafc";
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+    `<defs><linearGradient id="veil" x1="0" y1="0" x2="0" y2="1">` +
+    `<stop offset="0" stop-color="${VEIL}" stop-opacity="0.94"/>` +
+    `<stop offset="0.36" stop-color="${VEIL}" stop-opacity="0.5"/>` +
+    `<stop offset="0.6" stop-color="${VEIL}" stop-opacity="0.26"/>` +
+    `<stop offset="0.84" stop-color="${VEIL}" stop-opacity="0.6"/>` +
+    `<stop offset="1" stop-color="${VEIL}" stop-opacity="0.94"/>` +
+    `</linearGradient></defs>` +
+    `<rect width="${width}" height="${height}" fill="url(#veil)"/>` +
+    parts.join("") +
+    `</svg>`;
+  const base = await basePromise;
+  // Same wash as the homepage hero: brightness ~1.04, saturation way
+  // down, a touch less contrast.
+  return sharp(base)
+    .modulate({ brightness: 1.04, saturation: 0.18 })
+    .composite([{ input: Buffer.from(svg) }])
+    .jpeg({ quality: 80, mozjpeg: true })
     .toBuffer();
 }

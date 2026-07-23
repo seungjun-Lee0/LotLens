@@ -199,11 +199,13 @@ export function AddressForm({
   const showDropdown =
     suggestOpen && phase === "idle" && (suggestions.length > 0 || suggestLoading);
 
-  // Anchor the portal dropdown under the search pill. Position is written
-  // straight to the portal's style (before paint, so it never flashes at
-  // 0,0) and refreshed on resize; scrolling just closes the dropdown
-  // (standard combobox behaviour) so a fixed box can never drift from its
-  // anchor.
+  // Anchor the portal dropdown under the search pill. Positioned in
+  // DOCUMENT coordinates (absolute on <body>), not position:fixed — with
+  // the mobile keyboard open, iOS offsets the visual viewport and fixed
+  // boxes drift from getBoundingClientRect coords, which parked the
+  // dropdown ON TOP of the search pill. Absolute page coords stay glued
+  // to the form no matter how the viewport shifts. Written straight to
+  // the portal's style before paint so it never flashes at 0,0.
   useLayoutEffect(() => {
     if (!showDropdown) return;
     const el = wrapRef.current;
@@ -211,17 +213,31 @@ export function AddressForm({
     if (!el || !dd) return;
     const update = () => {
       const r = el.getBoundingClientRect();
-      dd.style.left = `${r.left}px`;
-      dd.style.top = `${r.top + 64}px`;
+      dd.style.left = `${r.left + window.scrollX}px`;
+      dd.style.top = `${r.top + window.scrollY + 64}px`;
       dd.style.width = `${r.width}px`;
       dd.style.visibility = "visible";
     };
     update();
     window.addEventListener("resize", update);
-    const onScroll = () => setSuggestOpen(false);
+    // Layout shifts that don't scroll (keyboard show/hide) — re-anchor.
+    window.visualViewport?.addEventListener("resize", update);
+    // Real scrolling closes the dropdown (standard combobox behaviour),
+    // but ignore the micro-scrolls browsers fire while auto-scrolling the
+    // focused input into view above the keyboard.
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      if (Math.abs(window.scrollY - lastY) > 24) {
+        setSuggestOpen(false);
+      } else {
+        update();
+      }
+      lastY = window.scrollY;
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
       window.removeEventListener("scroll", onScroll);
     };
   }, [showDropdown]);
@@ -289,7 +305,7 @@ export function AddressForm({
         <div
           ref={dropRef}
           role="listbox"
-          style={{ position: "fixed", zIndex: 80, visibility: "hidden" }}
+          style={{ position: "absolute", zIndex: 80, visibility: "hidden" }}
           className="glass-strong rounded-2xl p-1.5"
         >
           {/* Inner scroller: keeps the scrollbar inside the padding, clear

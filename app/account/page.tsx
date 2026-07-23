@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { FileText } from "lucide-react";
 
 import { SiteHeader } from "@/components/site/site-header";
 import {
@@ -63,16 +65,25 @@ export default async function AccountPage({
     <>
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 pb-24 pt-12 sm:pt-16">
-        <header>
-          <div className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Account
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Account
+            </div>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+              {user.name ?? user.email}
+            </h1>
+            {user.name && (
+              <p className="mt-1 text-[13.5px] text-muted-foreground">{user.email}</p>
+            )}
           </div>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-            {user.name ?? user.email}
-          </h1>
-          {user.name && (
-            <p className="mt-1 text-[13.5px] text-muted-foreground">{user.email}</p>
-          )}
+          <Link
+            href="/reports"
+            className="glass inline-flex h-9 items-center gap-2 rounded-full px-4 text-[13px] font-medium text-foreground/80 transition hover:text-foreground"
+          >
+            <FileText className="size-4" />
+            My reports
+          </Link>
         </header>
 
         {sp.checkout === "success" && (

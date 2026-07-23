@@ -275,16 +275,19 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
               className="h-full w-full scale-105"
               style={{
                 maskImage:
-                  "linear-gradient(180deg, transparent 0%, transparent 30%, rgba(0,0,0,.5) 37%, #000 42%, #000 52%, transparent 60%)",
+                  "linear-gradient(180deg, transparent 0%, transparent 29%, rgba(0,0,0,.55) 35%, #000 40%, #000 52%, transparent 60%)",
                 WebkitMaskImage:
-                  "linear-gradient(180deg, transparent 0%, transparent 30%, rgba(0,0,0,.5) 37%, #000 42%, #000 52%, transparent 60%)",
+                  "linear-gradient(180deg, transparent 0%, transparent 29%, rgba(0,0,0,.55) 35%, #000 40%, #000 52%, transparent 60%)",
               }}
             >
             <svg viewBox="0 0 1600 900" className="h-full w-full">
+              {/* Phones run the layers noticeably stronger than desktop:
+                  the narrow mask band + the veil already dim them twice,
+                  so the shared --hero-layer values read as barely-there. */}
               {!pinned &&
                 GROUPS.map((grp, gi) => (
                   <g key={`m-grp-${gi}`} className={`lens-fade${gi + 1}`}>
-                    <g style={{ opacity: "var(--hero-layer)" }}>
+                    <g style={{ opacity: "min(calc(var(--hero-layer) + 0.22), 0.95)" }}>
                       {grp.map((k) => (
                         <LayerPaths key={k} paths={layers[k].bg} lineWidth={1} lineOpacity={0.5} />
                       ))}
@@ -293,7 +296,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                 ))}
               <g
                 className="transition-opacity duration-700"
-                style={{ opacity: pinned ? "var(--hero-layer-pinned)" : 0 }}
+                style={{ opacity: pinned ? "min(calc(var(--hero-layer-pinned) + 0.1), 1)" : 0 }}
               >
                 <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.5} />
               </g>

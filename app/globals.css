@@ -123,9 +123,10 @@
   --hero-layer: 0.68;
   --hero-layer-pinned: 0.9;
 
-  /* Glassmorphism — tuned for subtle use on light surfaces */
-  --glass-bg: rgba(255, 255, 255, 0.65);
-  --glass-bg-strong: rgba(255, 255, 255, 0.92);
+  /* Glassmorphism — kept nearly opaque so headers, menus and chips read
+     cleanly over the hero aerial (no text bleeding through). */
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-bg-strong: rgba(255, 255, 255, 0.98);
   --glass-border: rgba(255, 255, 255, 0.6);
   --glass-shadow: 0 8px 32px -8px rgba(15, 23, 42, 0.08),
                   0 2px 8px -2px rgba(15, 23, 42, 0.06);
@@ -185,8 +186,8 @@
   --hero-layer: 0.4;
   --hero-layer-pinned: 0.65;
 
-  --glass-bg: rgba(20, 22, 30, 0.55);
-  --glass-bg-strong: rgba(20, 22, 30, 0.92);
+  --glass-bg: rgba(20, 22, 30, 0.9);
+  --glass-bg-strong: rgba(20, 22, 30, 0.98);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.5),
                   0 2px 8px -2px rgba(0, 0, 0, 0.4);
@@ -311,7 +312,11 @@
      (rail + seam) with aerial texture ghosting through, which reads as a
      hard edge where the section clips. */
   .hero-veil-light {
-    background: linear-gradient(180deg, color-mix(in oklab, var(--background) 62%, transparent) 0%, color-mix(in oklab, var(--background) 16%, transparent) 30%, color-mix(in oklab, var(--background) 12%, transparent) 60%, color-mix(in oklab, var(--background) 55%, transparent) 76%, var(--background) 88%);
+    /* The 28–54% bump is a readability wash for the preset chips +
+       pricing line strip (between the form and the loupe on the stacked
+       phone layout) — boxless alternative to frosted panels. Dips back
+       down by 62% so the loupe zone keeps its aerial contrast. */
+    background: linear-gradient(180deg, color-mix(in oklab, var(--background) 62%, transparent) 0%, color-mix(in oklab, var(--background) 30%, transparent) 28%, color-mix(in oklab, var(--background) 40%, transparent) 40%, color-mix(in oklab, var(--background) 36%, transparent) 54%, color-mix(in oklab, var(--background) 14%, transparent) 62%, color-mix(in oklab, var(--background) 55%, transparent) 76%, var(--background) 88%);
   }
   .hero-veil-dark {
     background: linear-gradient(180deg, color-mix(in oklab, var(--background) 78%, transparent) 0%, color-mix(in oklab, var(--background) 30%, transparent) 30%, color-mix(in oklab, var(--background) 26%, transparent) 60%, color-mix(in oklab, var(--background) 62%, transparent) 76%, var(--background) 88%);

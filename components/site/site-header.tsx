@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { NavAnchor } from "@/components/site/nav-anchor";
 import { ThemeToggle } from "@/components/site/theme-toggle";
+import { UserMenu } from "@/components/site/user-menu";
 import { getSessionUser, isActiveSubscriber, isAdmin } from "@/lib/auth";
 
 export async function SiteHeader() {
@@ -11,7 +12,7 @@ export async function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-30 w-full px-3 pt-3 sm:px-4 sm:pt-4">
-      <div className="glass-strong mx-auto flex h-[52px] w-full max-w-6xl items-center justify-between rounded-full px-4 sm:h-14 sm:px-5">
+      <div className="glass-strong mx-auto flex h-[60px] w-full max-w-6xl items-center justify-between rounded-full px-4 sm:h-14 sm:px-5">
         <Link
           href="/"
           className="flex items-center gap-2.5 text-[16px] font-semibold tracking-tight sm:text-[18px]"
@@ -66,6 +67,8 @@ export async function SiteHeader() {
               >
                 My reports
               </Link>
+              {/* Phones: the inline links above are hidden — the report
+                  list, account and sign-out all live in the avatar menu. */}
               {showCredits && user && (
                 <Link
                   href="/account"
@@ -85,24 +88,16 @@ export async function SiteHeader() {
                   {user.credits} credits
                 </Link>
               )}
-              <Link
-                href="/account"
-                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition hover:bg-foreground/5 hover:text-foreground"
-              >
-                <span
-                  aria-hidden
-                  className="flex size-7 items-center justify-center rounded-full text-[12px] font-semibold text-white"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, var(--apple-blue), var(--apple-purple))",
-                  }}
-                >
-                  {(user.name ?? user.email).slice(0, 1).toUpperCase()}
-                </span>
-                <span className="hidden max-w-[120px] truncate sm:inline">
-                  Account
-                </span>
-              </Link>
+              {/* Theme toggle sits to the LEFT of the avatar so the
+                  profile stays hard right. */}
+              <ThemeToggle />
+              <UserMenu
+                label={user.name ?? user.email}
+                initial={(user.name ?? user.email).slice(0, 1).toUpperCase()}
+                isAdmin={admin}
+                showCredits={showCredits}
+                credits={user.credits}
+              />
             </>
           ) : (
             <>
@@ -122,10 +117,9 @@ export async function SiteHeader() {
               >
                 Sign up
               </Link>
+              <ThemeToggle />
             </>
           )}
-
-          <ThemeToggle />
         </nav>
       </div>
     </header>

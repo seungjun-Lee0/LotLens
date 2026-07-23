@@ -198,6 +198,8 @@ function bushfireColor(props: Record<string, unknown>) {
   if (d.includes("medium"))           return { fillColor: DEVELO_HEX.fireMedium,   legendLabel: "Medium potential intensity" };
   if (d.includes("buffer") || d.includes("impact"))
                                       return { fillColor: DEVELO_HEX.fireBuffer,   legendLabel: "Potential impact buffer" };
+  // QFD awareness vector tiles (fallback source) carry no intensity class.
+  if (d.includes("prone"))            return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "Bushfire prone area" };
   return { fillColor: "#94a3b8", legendLabel: label || "Hazard area" };
 }
 
@@ -367,11 +369,11 @@ export function extractOverlays(
       pushFC(out, i.overall, floodingColor);
       pushFC(out, i.historic2022, () => ({
         fillColor: DEVELO_HEX.histFeb2022,
-        legendLabel: "Flood event — Feb 2022",
+        legendLabel: "Flood event (Feb 2022)",
       }));
       pushFC(out, i.historic2011, () => ({
         fillColor: DEVELO_HEX.histJan2011,
-        legendLabel: "Flood event — Jan 2011",
+        legendLabel: "Flood event (Jan 2011)",
       }));
       return out;
     }
@@ -388,11 +390,11 @@ export function extractOverlays(
       const i = inner as Record<string, unknown>;
       pushFC(out, i.stormHigh, () => ({
         fillColor: DEVELO_HEX.stormHigh,
-        legendLabel: "Storm tide — high hazard area",
+        legendLabel: "Storm tide (high hazard area)",
       }));
       pushFC(out, i.stormMedium, () => ({
         fillColor: DEVELO_HEX.stormMedium,
-        legendLabel: "Storm tide — medium hazard area",
+        legendLabel: "Storm tide (medium hazard area)",
       }));
       pushFC(out, i.erosion, () => ({
         fillColor: DEVELO_HEX.coastalErosion,

@@ -8,6 +8,7 @@ import { SiteHeader } from "@/components/site/site-header";
 import { getSessionUser, isAdmin } from "@/lib/auth";
 import { SUBSCRIPTION_PLANS } from "@/lib/stripe";
 import { getDb } from "@/lib/db";
+import { formatAuAddress } from "@/lib/format-address";
 
 export const dynamic = "force-dynamic";
 
@@ -238,7 +239,7 @@ export default async function AdminPage() {
                         href={`/report/${r.id}`}
                         className="font-medium underline-offset-2 hover:underline"
                       >
-                        {r.address_text}
+                        {formatAuAddress(r.address_text)}
                       </Link>
                     </td>
                     <td className="max-w-[180px] truncate px-4 py-2.5 text-muted-foreground">

@@ -14,9 +14,10 @@ import {
 } from "@/components/report/report-pdf";
 import { getSessionUser, isAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { formatAuAddress } from "@/lib/format-address";
 import { extractOverlays } from "@/lib/overlays";
 import { loadReportPayload } from "@/lib/pipeline";
-import { renderModuleMapPNG } from "@/lib/static-map";
+import { renderCoverAerial, renderModuleMapPNG } from "@/lib/static-map";
 
 // Branding of the report's owner (subscriber feature). The logo is
 // fetched here — React-PDF can't fetch mid-render — with a size cap so a
@@ -103,6 +104,13 @@ export async function GET(
         typeof row.raw === "object" &&
         (row.raw as Record<string, unknown>).fetchFailed === true),
   );
+  // Cover aerial: full-page portrait in the landing-hero light style —
+  // washed imagery, white veil baked in, lot outline + pin.
+  const coverPromise = renderCoverAerial({
+    lat: payload.address.lat,
+    lng: payload.address.lng,
+    propertyPolygon: payload.propertyPolygon,
+  }).catch(() => null);
   const maps: ModuleMapPng[] = await Promise.all(
     needsMap.map(async (row) => {
       const overlays = extractOverlays(row.module, row.raw);
@@ -125,10 +133,15 @@ export async function GET(
   );
 
   const buffer = await renderToBuffer(
-    <ReportPDF payload={payload} maps={maps} branding={branding} />,
+    <ReportPDF
+      payload={payload}
+      maps={maps}
+      branding={branding}
+      coverPng={await coverPromise}
+    />,
   );
 
-  const safeAddr = payload.address.address_text
+  const safeAddr = formatAuAddress(payload.address.address_text, payload.postcode)
     .replace(/[^a-zA-Z0-9 _-]/g, "")
     .trim()
     .replace(/\s+/g, "_")

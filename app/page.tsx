@@ -170,9 +170,13 @@ export default function Home() {
           scrollable, and anything calling scrollIntoView/focus inside (rail
           pins, keyboard tabbing) could shift the whole hero sideways over
           the oversized aerial canvas. clip cannot scroll, ever. */}
+      {/* Pull up under the sticky header and pad the content back down by
+          the SAME amount, so the hero aerial fills behind it with no gap.
+          Header height is 72px on both breakpoints now (mobile pt-3 12 +
+          60px pill; desktop pt-4 16 + 56px pill). */}
       <section
         id="top"
-        className="relative -mt-16 overflow-clip pt-16 sm:-mt-[72px] sm:pt-[72px]"
+        className="relative -mt-[72px] overflow-clip pt-[72px]"
       >
         <HeroShowcase data={heroDemo}>
           {/* copy + live address form */}

@@ -294,9 +294,9 @@ export function ModuleMap({
         style={{ background: "var(--muted)" }}
         aria-label="Property location map"
       />
-      <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 max-w-[72%] sm:left-auto sm:right-3 sm:top-3 sm:max-w-[48%]">
+      <div className="pointer-events-none absolute left-2 top-2 z-10 max-w-[58%] sm:left-auto sm:right-3 sm:top-3 sm:max-w-[48%]">
         <div
-          className="rounded-xl px-2.5 py-2 text-[10.5px] leading-tight shadow-[0_4px_18px_-6px_rgba(0,0,0,0.4)] sm:text-[11px]"
+          className="rounded-lg px-1.5 py-1 text-[8.5px] leading-tight shadow-[0_4px_18px_-6px_rgba(0,0,0,0.4)] sm:rounded-xl sm:px-2.5 sm:py-2 sm:text-[11px]"
           style={{
             background: "rgba(255,255,255,0.92)",
             backdropFilter: "saturate(180%) blur(14px)",
@@ -304,10 +304,10 @@ export function ModuleMap({
             color: "#1d1d1f",
           }}
         >
-          <ul className="flex flex-col gap-1">
-            <li className="flex items-center gap-2">
+          <ul className="flex flex-col gap-0.5 sm:gap-1">
+            <li className="flex items-center gap-1.5 sm:gap-2">
               <span
-                className="size-2.5 shrink-0 rounded-sm"
+                className="size-1.5 shrink-0 rounded-sm sm:size-2.5"
                 style={{
                   background: SELECTED_PROPERTY_STYLE.color,
                   outline: `1px solid color-mix(in oklab, ${SELECTED_PROPERTY_STYLE.color} 75%, transparent)`,
@@ -316,9 +316,9 @@ export function ModuleMap({
               <span className="truncate font-medium">{SELECTED_PROPERTY_STYLE.label}</span>
             </li>
             {appliesItems.map((item) => (
-              <li key={`applies-${item.color}-${item.label}`} className="flex items-center gap-2">
+              <li key={`applies-${item.color}-${item.label}`} className="flex items-center gap-1.5 sm:gap-2">
                 <span
-                  className="size-2.5 shrink-0 rounded-sm"
+                  className="size-1.5 shrink-0 rounded-sm sm:size-2.5"
                   style={{
                     background: item.color,
                     outline: `1px solid color-mix(in oklab, ${item.color} 75%, transparent)`,
@@ -330,10 +330,10 @@ export function ModuleMap({
             {nearbyItems.map((item) => (
               <li
                 key={`nearby-${item.color}-${item.label}`}
-                className="flex items-center gap-2 opacity-65"
+                className="flex items-center gap-1.5 opacity-65 sm:gap-2"
               >
                 <span
-                  className="size-2.5 shrink-0 rounded-sm"
+                  className="size-1.5 shrink-0 rounded-sm sm:size-2.5"
                   style={{
                     background: item.color,
                     outline: `1px solid color-mix(in oklab, ${item.color} 65%, transparent)`,

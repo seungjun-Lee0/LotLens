@@ -1,6 +1,6 @@
 import { Check, TriangleAlert } from "lucide-react";
 
-import { formatAuAddress } from "@/lib/format-address";
+import { formatAuAddress, stripAddressPrefix } from "@/lib/format-address";
 import { MODULE_META } from "@/lib/module-meta";
 import { RISK_RANK, RISK_STYLE, riskOf } from "@/lib/risk-style";
 import type { ReportPayload } from "@/lib/pipeline";
@@ -120,7 +120,12 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                   const tint = failed
                     ? "var(--apple-orange)"
                     : RISK_STYLE[level].cssVar;
-                  const summary = report.narrative[m.module]?.summary;
+                  // Drop the redundant address restatement — the whole
+                  // report is about this one address.
+                  const summary = stripAddressPrefix(
+                    report.narrative[m.module]?.summary ?? "",
+                    address.address_text,
+                  );
                   return (
                     <li
                       key={m.module}

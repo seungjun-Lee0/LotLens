@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { AtAGlance } from "@/components/report/at-a-glance";
 import { ClearModules } from "@/components/report/clear-modules";
 import { ModuleSection } from "@/components/report/module-section";
+import { ModuleNav } from "@/components/report/module-nav";
 import { NextSteps } from "@/components/report/next-steps";
 import { RetryChecks } from "@/components/report/retry-checks";
 import { UnlockButton } from "@/components/report/unlock-button";
@@ -185,6 +186,19 @@ export default async function ReportPage({
           <p className="text-pretty">{DISCLAIMER}</p>
         </section>
       </main>
+
+      {/* Floating jump-to-module nav — only when the body has enough
+          full sections to make scrolling a chore. */}
+      {paid && (
+        <ModuleNav
+          items={attentionModules.map((m) => ({
+            module: m.module,
+            riskLevel: m.riskLevel,
+            hasConsideration: m.hasConsideration,
+            failed: isFailed(m),
+          }))}
+        />
+      )}
 
       <SiteFooter />
     </>

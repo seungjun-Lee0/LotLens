@@ -99,3 +99,48 @@ export function formatAuAddress(
 
   return parts.join(", ");
 }
+
+/**
+ * Strip a leading address restatement from a narrative summary. The stub
+ * (and the LLM) prefix each summary with the full address — "250 Sherwood
+ * Road, Rocklea, Brisbane City, QLD carries high flood risk…" — which is
+ * pure redundancy in a report that is already about that one address. Drop
+ * the leading address clause and re-capitalise, so cards read
+ * "Carries high flood risk…". Leaves summaries that don't start with the
+ * address untouched.
+ */
+export function stripAddressPrefix(
+  summary: string,
+  addressText: string | null | undefined,
+): string {
+  if (!summary) return summary;
+  const addr = (addressText ?? "").trim();
+  if (!addr) return summary;
+  const lower = summary.toLowerCase();
+
+  // Primary path: the summary starts with the exact stored address (the
+  // stub/LLM restates address_text verbatim). Slice it off cleanly, drop
+  // the connecting whitespace/comma, and re-capitalise the verb.
+  if (lower.startsWith(addr.toLowerCase())) {
+    const rest = summary.slice(addr.length).replace(/^[\s,]+/, "");
+    return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : summary;
+  }
+
+  // Fallback: the summary's address differs slightly after the suburb. Match
+  // "<street>, <suburb>" and additionally consume the trailing "LGA, STATE"
+  // run before the verb ("…, Brisbane City, QLD carries …").
+  const head = addr.split(",").slice(0, 2).join(",").trim();
+  if (head && lower.startsWith(head.toLowerCase())) {
+    const rest = summary
+      .slice(head.length)
+      // one or two comma-separated locality tokens, then an optional state +
+      // postcode — but NOT the verb that follows.
+      .replace(
+        /^(?:\s*,\s*[A-Za-z][A-Za-z .'-]*){0,2}\s*,?\s*(?:QLD|NSW|VIC|SA|WA|TAS|NT|ACT)?\s*\d{0,4}\s*/i,
+        "",
+      )
+      .replace(/^[\s,]+/, "");
+    return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : summary;
+  }
+  return summary;
+}

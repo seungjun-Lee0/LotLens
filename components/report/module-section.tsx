@@ -163,11 +163,11 @@ function ModuleFacts({
         : [];
       if (schools.length === 0) return null;
       return (
-        <ul className="flex flex-col gap-1 text-[12.5px]">
+        <ul className="flex flex-col gap-1.5 text-[12.5px]">
           {schools.map((s, i) => (
-            <li key={i} className="flex items-start gap-2">
+            <li key={i} className="grid grid-cols-[112px_1fr] items-baseline gap-2.5">
               <span
-                className="mt-0.5 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
+                className="w-full rounded-full px-2 py-0.5 text-center text-[9px] uppercase tracking-normal whitespace-nowrap"
                 style={{
                   background:
                     "color-mix(in oklab, var(--apple-teal) 14%, transparent)",
@@ -433,7 +433,10 @@ export function ModuleSection({
   const factsContent = raw ? ModuleFacts({ module: row.module, raw }) : null;
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm">
+    <section
+      id={`module-${row.module}`}
+      className="scroll-mt-24 overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm"
+    >
       {/* Header: name + clarifying question */}
       <div className="flex flex-col gap-3 px-5 pt-6 sm:flex-row sm:items-end sm:justify-between sm:px-10 sm:pt-9">
         <div className="flex items-center gap-3">

@@ -50,3 +50,6 @@ next-env.d.ts
 /docs/*.csv
 
 /report
+# Third-party reference reports and exports — not ours to redistribute
+/reports/
+Jira.csv

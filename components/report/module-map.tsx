@@ -156,9 +156,11 @@ export function ModuleMap({
             "line-cap": "round",
           },
           paint: {
-            "line-color": ["get", "fillColor"],
-            "line-width": 1.8,
-            "line-opacity": 0.95,
+            // Darkened fill colour (see lib/overlays.ts) at full opacity —
+            // a same-hue outline over a 35% fill blurs into it.
+            "line-color": ["coalesce", ["get", "strokeColor"], ["get", "fillColor"]],
+            "line-width": 2.4,
+            "line-opacity": 1,
           },
         });
       }

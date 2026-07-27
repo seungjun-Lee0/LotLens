@@ -9,6 +9,54 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Suggestion } from "@/app/api/geocode/suggest/route";
 
+// ── Address completeness heuristic ──────────────────────────────────────
+//
+// A partial address still geocodes — to the wrong lot. "12 Oxley Rd" with
+// no suburb resolves to whichever Oxley Rd the provider likes best, and
+// the buyer gets a confident-looking report on someone else's property.
+// So anything hand-typed (as opposed to picked from the suggestion list)
+// gets checked for the four parts a Queensland address needs, and the
+// user confirms before we spend a run on it.
+
+const STREET_TYPE =
+  /\b(st|street|rd|road|ave?|avenue|dr|drive|ct|court|cres|crescent|pde|parade|tce|terrace|ln|lane|way|cl|close|pl|place|blvd|bvd|boulevard|hwy|highway|esp|esplanade|gr|grove|cct|circuit|cir|circle|mews|rise|ridge|loop|link|walk|row|quay|qy|glen|heights|hts|pkwy|parkway|sq|square|track|trk|outlook|vista|view|vw|entrance|approach|arcade|crest|downs|gdns|gardens|key|nook|retreat|bend|bay|chase|corso|dale|edge|end|fairway|grange|green|haven|island|junction|mall|meander|pocket|point|promenade|reach|reserve|ring|run|strand|waters)\b\.?/i;
+
+/** Human labels for the address parts that look absent. Empty = looks
+ * complete. Deliberately lenient — this gates a confirm dialog, not the
+ * submit itself, so a false positive costs one extra click. */
+function addressGaps(raw: string): string[] {
+  const s = raw.trim();
+  const gaps: string[] = [];
+
+  // Drop a leading unit/lot prefix so the street number check sees the
+  // street number, not the unit number.
+  const body = s.replace(
+    /^\s*(unit|apt|apartment|suite|shop|lot|u)\s*\.?\s*\d+[a-z]?\s*[,/-]?\s*/i,
+    "",
+  );
+  if (!/^\d+[a-z]?(\s*[-/]\s*\d+[a-z]?)?\s+\S/.test(body)) gaps.push("a street number");
+  if (!STREET_TYPE.test(s)) gaps.push("a street type (St, Rd, Ave…)");
+
+  const hasPostcode = /\b[49]\d{3}\b/.test(s);
+  const hasState = /\b(qld|queensland)\b/i.test(s);
+
+  // Suburb = whatever survives after the state/postcode and the street
+  // type are removed. "12 Oxley Rd, Graceville QLD 4075" leaves
+  // "Graceville"; "12 Oxley Rd" leaves nothing.
+  const trimmed = s
+    .replace(/\b(qld|queensland)\b/gi, "")
+    .replace(/\b[49]\d{3}\b/g, "")
+    .replace(/[\s,]+$/, "")
+    .trim();
+  const m = STREET_TYPE.exec(trimmed);
+  const tail = m ? trimmed.slice(m.index + m[0].length).replace(/^[\s,]+/, "") : "";
+  if (!tail) gaps.push("a suburb");
+
+  if (!hasPostcode && !hasState) gaps.push("a state or postcode");
+
+  return gaps;
+}
+
 const STEPS = [
   { key: "geocode",  label: "Locating address",            tint: "var(--apple-blue)" },
   { key: "overlays", label: "Pulling council overlay data", tint: "var(--apple-orange)" },
@@ -40,6 +88,9 @@ export function AddressForm({
   const [phase, setPhase] = useState<Phase>("idle");
   const [step, setStep] = useState<StepKey | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Non-null while the "this address looks incomplete" dialog is up; holds
+  // the parts addressGaps() thinks are missing.
+  const [confirmGaps, setConfirmGaps] = useState<string[] | null>(null);
 
   // Suggestions state — debounced fetch on input change.
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -132,6 +183,16 @@ export function AddressForm({
   }, [suggestOpen]);
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Enter NEVER starts a run — "Run report" is the only trigger. Typing
+    // an address and hitting Enter used to fire a full geocode → overlays
+    // → narrative pass off a half-finished string. Here it only commits a
+    // highlighted suggestion, or dismisses the list.
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (suggestOpen && activeIdx >= 0) applySuggestion(suggestions[activeIdx]);
+      else setSuggestOpen(false);
+      return;
+    }
     if (!suggestOpen || suggestions.length === 0) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -139,12 +200,28 @@ export function AddressForm({
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIdx((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
-    } else if (e.key === "Enter" && activeIdx >= 0) {
-      e.preventDefault();
-      applySuggestion(suggestions[activeIdx]);
     } else if (e.key === "Escape") {
       setSuggestOpen(false);
     }
+  }
+
+  /** "Run report" entry point. An address picked from the suggestion list
+   * is provider-verified and runs straight through; a hand-typed one has
+   * to clear addressGaps() or get an explicit confirm first. */
+  function requestRun() {
+    const address = value.trim();
+    if (!address || phase === "running") return;
+    setSuggestOpen(false);
+    if (address === lastPickedRef.current) {
+      submit();
+      return;
+    }
+    const gaps = addressGaps(address);
+    if (gaps.length > 0) {
+      setConfirmGaps(gaps);
+      return;
+    }
+    submit();
   }
 
   // One straight run: geocode → overlays → narrative → navigate.
@@ -197,7 +274,23 @@ export function AddressForm({
 
   const isBusy = phase === "running";
   const showDropdown =
-    suggestOpen && phase === "idle" && (suggestions.length > 0 || suggestLoading);
+    suggestOpen &&
+    phase === "idle" &&
+    confirmGaps === null &&
+    (suggestions.length > 0 || suggestLoading);
+
+  // Escape dismisses the confirm dialog back to editing.
+  useEffect(() => {
+    if (confirmGaps === null) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setConfirmGaps(null);
+        inputRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [confirmGaps]);
 
   // Anchor the portal dropdown under the search pill. Positioned in
   // DOCUMENT coordinates (absolute on <body>), not position:fixed — with
@@ -248,7 +341,7 @@ export function AddressForm({
         className="glass-strong flex w-full items-center gap-2 rounded-full p-2 pl-4 sm:pl-5"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!isBusy) submit();
+          requestRun();
         }}
       >
         <MapPin className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -361,10 +454,91 @@ export function AddressForm({
         document.body,
       )}
 
+      {/* "This address looks incomplete" confirm — portalled to <body> for
+          the same overflow reasons as the dropdown. */}
+      {confirmGaps !== null && createPortal(
+        <div
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 p-4 backdrop-blur-[2px] sm:items-center"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setConfirmGaps(null);
+              inputRef.current?.focus();
+            }
+          }}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="addr-confirm-title"
+            className="glass-strong w-full max-w-md rounded-3xl p-5 sm:p-6"
+          >
+            <div className="flex items-start gap-3">
+              <span
+                className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full"
+                style={{ background: "color-mix(in oklab, var(--apple-orange) 18%, transparent)" }}
+              >
+                <MapPin className="size-4" style={{ color: "var(--apple-orange)" }} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <h2 id="addr-confirm-title" className="text-[15px] font-semibold text-foreground">
+                  Check this address before we run it
+                </h2>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  We couldn&apos;t see{" "}
+                  <span className="font-medium text-foreground/85">
+                    {confirmGaps.join(", ").replace(/, ([^,]*)$/, " and $1")}
+                  </span>
+                  . An incomplete address can match the wrong lot, and the report
+                  would describe someone else&apos;s property.
+                </p>
+                <p className="mt-3 rounded-xl bg-foreground/5 px-3 py-2 text-[13px] break-words text-foreground">
+                  {value.trim()}
+                </p>
+                <p className="mt-2 text-[12.5px] text-muted-foreground">
+                  Picking from the suggestion list is the surest way to get the
+                  right lot.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-full px-4 text-[13.5px]"
+                onClick={() => {
+                  setConfirmGaps(null);
+                  submit();
+                }}
+              >
+                Run anyway
+              </Button>
+              <Button
+                type="button"
+                autoFocus
+                className="h-10 rounded-full px-5 text-[13.5px] font-medium text-white"
+                style={{
+                  background:
+                    "linear-gradient(135deg, var(--apple-blue), color-mix(in oklab, var(--apple-blue) 70%, var(--apple-purple)))",
+                }}
+                onClick={() => {
+                  setConfirmGaps(null);
+                  inputRef.current?.focus();
+                  if (suggestions.length > 0) setSuggestOpen(true);
+                }}
+              >
+                Edit address
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {presets && presets.length > 0 && phase === "idle" && (
         <div className="flex flex-wrap items-center justify-center gap-2 text-[12.5px] sm:text-[13px]">
           {/* over the hero aerial: light mode needs near-foreground ink */}
-          <span className="text-foreground/75 dark:text-muted-foreground">Try one of ours —</span>
+          <span className="text-foreground/75 dark:text-muted-foreground">Try one of ours:</span>
           {presets.map((p) => (
             <button
               key={p.label}

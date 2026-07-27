@@ -206,16 +206,27 @@ export async function renderModuleMapPNG({
 
   // Module overlays — evenodd so polygon holes render correctly (an
   // upgrade over the old outer-ring-only drawing).
+  //
+  // Fills go down in one pass, outlines in a second pass on top: painted
+  // per-polygon, a neighbouring polygon's fill lands over the edge that
+  // was just stroked and eats half its width. The outline uses the
+  // darkened stroke colour (lib/overlays.ts) at a width that survives the
+  // ~0.44× downscale from this 1200 px render to the PDF page.
+  const outlines: string[] = [];
   for (const f of overlays) {
     for (const poly of polygonRings(f.geometry as { type?: string; coordinates?: unknown } | null)) {
       const d = ringsToPath(poly, px);
       if (!d) continue;
       const c = f.properties.fillColor;
       parts.push(
-        `<path d="${d}" fill="${c}" fill-opacity="${f.properties.fillOpacity ?? 0.35}" fill-rule="evenodd" stroke="${c}" stroke-width="1.6" stroke-linejoin="round"/>`,
+        `<path d="${d}" fill="${c}" fill-opacity="${f.properties.fillOpacity ?? 0.35}" fill-rule="evenodd"/>`,
+      );
+      outlines.push(
+        `<path d="${d}" fill="none" stroke="${f.properties.strokeColor ?? c}" stroke-width="3.2" stroke-linejoin="round"/>`,
       );
     }
   }
+  parts.push(...outlines);
 
   // Cadastre lot boundaries — faint white hairlines so zone fills read
   // per-lot (Develo-style) instead of as one flat colour wash.

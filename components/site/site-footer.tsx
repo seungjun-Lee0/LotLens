@@ -7,7 +7,7 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-border/40 bg-background/40">
       <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-2 px-4 py-6 text-center text-[11.5px] text-muted-foreground sm:flex-row sm:px-6 sm:text-left sm:text-[12px]">
-        <span>LotLens — Queensland Due Diligence</span>
+        <span>LotLens · Queensland Due Diligence</span>
         <nav className="flex items-center gap-4">
           <Link href="/privacy" className="transition hover:text-foreground">
             Privacy

@@ -5,7 +5,14 @@ import { ThemeToggle } from "@/components/site/theme-toggle";
 import { UserMenu } from "@/components/site/user-menu";
 import { getSessionUser, isActiveSubscriber, isAdmin } from "@/lib/auth";
 
-export async function SiteHeader() {
+export async function SiteHeader({
+  /** Show the Modules / Pricing / FAQ anchors. They scroll to sections that
+   * only exist on the landing page, so every other route opts out and gets
+   * a header carrying just the brand and the account controls. */
+  sectionNav = false,
+}: {
+  sectionNav?: boolean;
+} = {}) {
   const user = await getSessionUser();
   const showCredits = isActiveSubscriber(user);
   const admin = isAdmin(user);
@@ -32,24 +39,28 @@ export async function SiteHeader() {
           </span>
         </Link>
         <nav className="flex items-center gap-2 text-[13px] text-muted-foreground">
-          <NavAnchor
-            href="/#modules"
-            className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground sm:inline"
-          >
-            Modules
-          </NavAnchor>
-          <NavAnchor
-            href="/#pricing"
-            className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground sm:inline"
-          >
-            Pricing
-          </NavAnchor>
-          <NavAnchor
-            href="/#faq"
-            className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground md:inline"
-          >
-            FAQ
-          </NavAnchor>
+          {sectionNav && (
+            <>
+              <NavAnchor
+                href="/#modules"
+                className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground sm:inline"
+              >
+                Modules
+              </NavAnchor>
+              <NavAnchor
+                href="/#pricing"
+                className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground sm:inline"
+              >
+                Pricing
+              </NavAnchor>
+              <NavAnchor
+                href="/#faq"
+                className="hidden rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground md:inline"
+              >
+                FAQ
+              </NavAnchor>
+            </>
+          )}
 
           {user ? (
             <>
@@ -101,6 +112,9 @@ export async function SiteHeader() {
             </>
           ) : (
             <>
+              {/* Phones get Log in only. Sign up is one tap away from the
+                  login page ("Create an account"), so a second CTA up here
+                  just crowds a 60px pill. */}
               <Link
                 href="/login"
                 className="rounded-full px-3 py-1.5 transition hover:bg-foreground/5 hover:text-foreground"
@@ -109,7 +123,7 @@ export async function SiteHeader() {
               </Link>
               <Link
                 href="/signup"
-                className="rounded-full px-3.5 py-1.5 font-medium text-white transition hover:brightness-105"
+                className="hidden rounded-full px-3.5 py-1.5 font-medium text-white transition hover:brightness-105 sm:inline"
                 style={{
                   background:
                     "linear-gradient(135deg, var(--apple-blue), color-mix(in oklab, var(--apple-blue) 70%, var(--apple-purple)))",
@@ -117,7 +131,9 @@ export async function SiteHeader() {
               >
                 Sign up
               </Link>
-              <ThemeToggle />
+              <span className="hidden sm:inline-flex">
+                <ThemeToggle />
+              </span>
             </>
           )}
         </nav>

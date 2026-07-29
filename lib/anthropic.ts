@@ -62,6 +62,10 @@ export async function generateModuleNarrative(
     case "steep_land":     return renderStubSteepLand(input);
     case "acid_sulfate":   return renderStubAcidSulfate(input);
     case "mining":         return renderStubMining(input);
+    case "stormwater":     return renderStubStormwater(input);
+    case "water_sewer":    return renderStubWaterSewer(input);
+    case "local_plans":    return renderStubLocalPlans(input);
+    case "transport":      return renderStubTransport(input);
     case "schools":        return renderStubSchools(input);
     case "zoning":         return renderStubZoning(input);
   }
@@ -548,14 +552,48 @@ function renderStubSteepLand(
   const raw = readRaw(input);
   const category = (raw.category as string | null) ?? null;
   const risk = (raw.riskLevel as string) ?? "none";
+  const elev = (raw.elevation ?? null) as {
+    highM: number;
+    lowM: number;
+    fallM: number | null;
+    interval: string;
+    scope: string;
+  } | null;
+  // The measured fall is the concrete half of this module and applies
+  // statewide, so it leads wherever it exists — including on the
+  // informational path where no council overlay was available.
+  //
+  // fallM === null means one contour level, i.e. flat to within the
+  // interval. Saying "a fall of 0 m" there would claim a precision the
+  // contours don't have.
+  const where = elev
+    ? elev.scope === "lot"
+      ? "across the lot"
+      : "immediately around the property"
+    : "";
+  const fallText = !elev
+    ? null
+    : elev.fallM === null
+      ? `Measured from ${elev.interval} contours, the ground ${where} sits at about ${elev.highM} m AHD and is flat to within the ${elev.interval.split(" ")[0]} m contour interval.`
+      : `Measured from ${elev.interval} contours, the land ${where} runs from about ${elev.lowM} m to ${elev.highM} m AHD — a fall of roughly ${elev.fallM} m.`;
 
-  if (risk === "none") {
+  if (risk === "none" || risk === "informational") {
     return {
-      summary: `No landslide or steep-land overlay covers ${input.address}.`,
-      detail:
-        "The council's landslide / steep land overlay does not place a polygon on this address. That doesn't guarantee flat ground; it means the site is outside the mapped hazard thresholds.",
+      summary: !elev
+        ? `No landslide or steep-land overlay covers ${input.address}.`
+        : elev.fallM === null
+          ? `${input.address} is effectively flat${category ? "" : ", with no landslide overlay mapped"}.`
+          : `${input.address} falls about ${elev.fallM} m${category ? "" : ", with no landslide overlay mapped"}.`,
+      detail: [
+        fallText,
+        "The council's landslide / steep land overlay does not place a hazard polygon on this address. That is not a promise of flat ground — it means the site sits outside the mapped hazard thresholds. A big fall across a small lot still costs money to build on regardless of what the overlay says: benched slabs or a pole frame, engineered retaining, and more involved stormwater.",
+      ]
+        .filter(Boolean)
+        .join(" "),
       questions_to_ask: [
-        "If the block is visibly sloping, budget for a contour survey before designing anything.",
+        elev && elev.fallM !== null && elev.fallM >= 3
+          ? "With this much fall, get a builder's view on site costs before you commit — benching, retaining and drainage add up fast."
+          : "If the block is visibly sloping, budget for a contour survey before designing anything.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
       sources: sourcesFromRaw(raw),
@@ -564,8 +602,12 @@ function renderStubSteepLand(
 
   return {
     summary: `${input.address} sits in a landslide / steep land overlay${category ? ` (${category})` : ""}.`,
-    detail:
+    detail: [
+      fallText,
       "Mapped steep land means development assessment will usually require a geotechnical report covering slope stability, cut-and-fill limits, retaining and drainage design. Existing dwellings are unaffected day-to-day, but extensions, pools and secondary dwellings on the slope face extra engineering cost and approval time.",
+    ]
+      .filter(Boolean)
+      .join(" "),
     questions_to_ask: [
       "Has a geotechnical report ever been done for this lot? Ask the seller for a copy.",
       "Are the existing retaining walls engineered and approved, and who owns each one?",
@@ -660,6 +702,204 @@ function renderStubMining(
         ? "Ask council whether a new dwelling or extension is assessable inside the KRA separation area."
         : "Has the tenure holder ever exercised access or compensation rights over this lot?",
       "Ask neighbours about blasting, dust or haulage traffic patterns.",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubStormwater(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const assets = asArr<{
+    kind: string;
+    pipeType: string | null;
+    owner: string | null;
+    diameter: string | null;
+    public: boolean;
+  }>(raw.assets);
+  const publicOnLot = raw.hasPublicAssetOnLot === true;
+  const nearby = raw.networkNearby === true;
+
+  if (assets.length === 0 && !nearby) {
+    return {
+      summary: `No mapped stormwater infrastructure on or near ${input.address}.`,
+      detail:
+        "Council's stormwater asset network shows no pipe, manhole, gully or outlet on the lot or in the immediate street. That removes the build-over question, but it also means you should confirm where roof and surface water is lawfully discharged before planning any new hard surfaces.",
+      questions_to_ask: [
+        "Where does stormwater from this property currently discharge, and is that point lawful?",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  if (!publicOnLot) {
+    const privateCount = assets.length;
+    return {
+      summary: `No Council stormwater main crosses ${input.address}.`,
+      detail: `${
+        privateCount > 0
+          ? `The ${privateCount} mapped asset${privateCount > 1 ? "s" : ""} on the lot ${privateCount > 1 ? "are" : "is"} privately owned — the property's own roof-water and surface drainage, which you can alter as part of ordinary building work. `
+          : ""
+      }Council's network runs in the surrounding street rather than through the lot, so building over a public main is not a constraint here. The connection point still matters for any new roof area, paving or pool.`,
+      questions_to_ask: [
+        "Is there a lawful point of discharge for stormwater, and where does it connect?",
+        "If you plan to add roof area or paving: will the existing drainage take the extra flow?",
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  const main = assets.find((a) => a.public);
+  const descriptor = [main?.diameter, main?.pipeType?.toLowerCase()]
+    .filter(Boolean)
+    .join(" ");
+  return {
+    summary: `A Council stormwater ${main?.kind.toLowerCase() ?? "asset"} crosses ${input.address}${descriptor ? ` (${descriptor})` : ""}.`,
+    detail:
+      "Publicly owned stormwater infrastructure on the lot is a genuine constraint on what you can build and where. Council approval is required to build over or near it, and approval is not automatic: a pool, shed, carport, deck or rear extension sitting over the main can be refused, or approved only on condition the main is relocated at your cost. This obligation does not appear on the title, so it is easy to miss before contract.",
+    questions_to_ask: [
+      "Get the exact alignment and depth from Council — the mapped line is indicative and can sit metres from the real pipe.",
+      "If you have a build in mind: does it sit over or within the clearance zone of the main, and what would relocation cost?",
+      "Have any existing structures been built over the main without approval? That becomes your problem at settlement.",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubLocalPlans(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const planName = (raw.planName as string | null) ?? null;
+  const precincts = asArr<{ name: string; code: string | null; subPrecinct: string | null }>(
+    raw.precincts,
+  );
+
+  if (!planName && precincts.length === 0) {
+    return {
+      summary: `${input.address} is not inside a neighbourhood plan.`,
+      detail:
+        "No neighbourhood plan covers this address, so the zone code in the Zoning module is the operative control — there is no suburb-specific layer lifting or tightening it. That makes the zone easier to read, but it also means none of the height or density uplift that neighbourhood plans sometimes grant applies here.",
+      questions_to_ask: [
+        "Is a neighbourhood plan being drafted for this area? A plan in progress can change the picture before you'd settle.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  const precinctText = precincts
+    .map((p) => `${p.name}${p.code ? ` (${p.code})` : ""}${p.subPrecinct ? ` — ${p.subPrecinct}` : ""}`)
+    .join("; ");
+
+  return {
+    summary: `${input.address} is in the ${planName ?? "local"} plan${precinctText ? `, precinct ${precinctText}` : ""}.`,
+    detail:
+      "A neighbourhood plan sits inside the planning scheme and applies rules specific to this area on top of the zone. It can raise permitted height near a centre or station, change density, or impose built-form controls that protect an existing streetscape. The practical effect is that the zone code alone does not tell you what can be built here — the two have to be read together, and where they differ the plan usually governs.",
+    questions_to_ask: [
+      "What does this precinct change about height, density or setbacks compared with the base zone?",
+      "Is the plan currently under review or amendment? Draft versions can shift what's achievable.",
+      "If you're buying for development potential: have a town planner confirm the yield under the plan, not the zone.",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubTransport(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const stops = asArr<{ kind: string; name: string | null; distanceM: number }>(raw.stops);
+
+  if (stops.length === 0) {
+    return {
+      summary: `No TransLink stop is mapped within walking distance of ${input.address}.`,
+      detail:
+        "No train station, ferry terminal, tram or bus stop was found inside the search radius. For most addresses this means the property is car-dependent, which is worth factoring into both running costs and resale.",
+      questions_to_ask: [
+        "What is the nearest service, and how long is the drive or walk to it?",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  const nearest = stops[0];
+  const list = stops
+    .map((s) => `${s.kind.toLowerCase()} ${s.name ? `(${s.name}) ` : ""}${s.distanceM} m`)
+    .join(", ");
+
+  return {
+    summary: `Nearest public transport at ${input.address}: ${nearest.kind.toLowerCase()}${nearest.name ? ` at ${nearest.name}` : ""}, about ${nearest.distanceM} m away.`,
+    detail: `Within the search radius: ${list}. Distances are straight-line, so the real walk is longer wherever hills, a river or a dead-end street get in the way — in parts of Brisbane that difference is substantial. Frequency matters more than proximity: a stop on a turn-up-and-go line is worth considerably more than a closer one served a few times a day.`,
+    questions_to_ask: [
+      "Which routes actually serve the nearest stop, and how frequent are they at peak and on weekends?",
+      "Walk the route to the stop before you buy — check the gradient, the crossings and how it feels after dark.",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubWaterSewer(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const assets = asArr<{
+    kind: string;
+    diameterMm: number | null;
+    material: string | null;
+    isMain: boolean;
+  }>(raw.assets);
+  const mains = assets.filter((a) => a.isMain);
+  const severe = raw.hasTrunkOrPressureMainOnLot === true;
+  const nearby = raw.networkNearby === true;
+
+  if (!raw.hasMainOnLot && assets.length === 0 && !nearby) {
+    return {
+      summary: `No Urban Utilities water or sewer main is mapped at ${input.address}.`,
+      detail:
+        "Neither a sewer main, a water main nor a manhole was found on the lot or in the immediate street. For an established suburb that is unusual enough to be worth confirming — an unconnected lot changes what it costs to build, because connecting to the network becomes your expense.",
+      questions_to_ask: [
+        "Is the property connected to reticulated water and sewer, or on tank and septic?",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  if (!raw.hasMainOnLot) {
+    return {
+      summary: `No Urban Utilities main crosses ${input.address}.`,
+      detail:
+        "The water and sewer network runs in the surrounding street rather than through the lot, so building over a main is not a constraint here. Any service connection on the lot is this property's own line to the network and carries no build-over obligation. That leaves the back yard free of the buried-infrastructure problem that catches out a lot of Brisbane extensions.",
+      questions_to_ask: [
+        "Confirm the connection points before designing anything that changes where services enter the site.",
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  const biggest = mains.reduce<{ kind: string; diameterMm: number | null } | null>(
+    (best, a) => (!best || (a.diameterMm ?? 0) > (best.diameterMm ?? 0) ? a : best),
+    null,
+  );
+  const descriptor = biggest
+    ? `${biggest.diameterMm ? `${biggest.diameterMm} mm ` : ""}${biggest.kind.toLowerCase()}`
+    : "main";
+
+  return {
+    summary: `An Urban Utilities ${descriptor} crosses ${input.address}.`,
+    detail: severe
+      ? `This is a rising main or a trunk-sized gravity main, which is the serious end of this finding. Urban Utilities will generally not permit building over one at all, so the alignment functions as a no-build corridor through the lot — with the setback either side, it can remove most of the usable back yard for building purposes. Relocation is occasionally possible and is expensive. If any part of your plan for this property involves building behind the house, resolve this before contract, not after.`
+      : `Building over or near a Urban Utilities main requires their approval, and it is not automatic. A pool, shed, carport, deck, granny flat or rear extension over the alignment can be refused, or approved subject to concrete encasement, piered foundations bridging the main, or relocation at your cost. None of this appears on the title, so it is easy to miss before contract — and it binds you once you own the land.`,
+    questions_to_ask: [
+      "Get the exact alignment and depth from Urban Utilities — the mapped line is indicative and can sit metres from the real pipe.",
+      severe
+        ? "Ask Urban Utilities directly whether anything can be built over this main, and what the setback either side is."
+        : "If you have a build in mind: does it sit over the main or within the clearance zone, and what would encasement or relocation cost?",
+      "Have any existing structures been built over the main without approval? That becomes your liability at settlement.",
     ],
     sources: sourcesFromRaw(raw),
   };

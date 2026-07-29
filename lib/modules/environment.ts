@@ -105,15 +105,18 @@ export async function fetchEnvironmentData(
   const hasWildlifeHabitat = wildlife.features.length > 0;
 
   // Core habitat inside a priority area is the strongest regulatory
-  // trigger; habitat or MSES wildlife alone is a medium consideration;
-  // priority-area-only (no mapped habitat on the lot) is informational.
+  // trigger; habitat or MSES wildlife alone is a medium consideration.
+  // Priority-area-only (no mapped habitat on the lot) is genuinely
+  // informational: the Koala Priority Area blankets most of urban SEQ, so
+  // grading it a severity would put a warning on nearly every report while
+  // constraining nothing on this lot.
   const riskLevel: RiskLevel =
     hasKoalaHabitat && inKoalaPriorityArea
       ? "high"
       : hasKoalaHabitat || hasWildlifeHabitat
         ? "medium"
         : inKoalaPriorityArea
-          ? "low"
+          ? "informational"
           : "none";
 
   const parts: string[] = [];

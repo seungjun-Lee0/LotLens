@@ -23,6 +23,10 @@ export const RISK_STYLE: Record<RiskLevel, RiskStyle> = {
   // bright yellow in dark), print uses a dark gold.
   low:      { label: "Low",       cssVar: "var(--risk-low)",     hex: "#b08a00" },
   very_low: { label: "Very low",  cssVar: "var(--apple-teal)",   hex: "#1f8fc4" },
+  // Deliberately OFF the hot→cold ramp: neutral grey, so an informational
+  // finding can never be misread as "the mildest warning". It sits in its
+  // own lane with its own heading, so it doesn't compete for ramp colours.
+  informational: { label: "For information", cssVar: "var(--apple-gray)", hex: "#6b7280" },
   none:     { label: "All clear", cssVar: "var(--apple-green)",  hex: "#248a3d" },
 };
 
@@ -35,11 +39,36 @@ export function riskOf(
   return riskLevel ?? (hasConsideration ? "medium" : "none");
 }
 
-/** Sort weight, most severe first. */
+/**
+ * The module found something, but that something is not a warning —
+ * a school catchment, the zone code, the nearest bus stop.
+ *
+ * These rows keep `hasConsideration: true` so they still get a full
+ * report section and PDF page (that flag is what allocates them). This
+ * predicate is what everything ELSE must branch on: the consideration
+ * count, the "Needs attention" list, Next steps, and the ⚠ chip.
+ */
+export function isInformational(
+  riskLevel: RiskLevel | null | undefined,
+  hasConsideration: boolean,
+): boolean {
+  return hasConsideration && riskOf(riskLevel, hasConsideration) === "informational";
+}
+
+/** A genuine warning: the module found something AND it's a risk. */
+export function isFlagged(
+  riskLevel: RiskLevel | null | undefined,
+  hasConsideration: boolean,
+): boolean {
+  return hasConsideration && !isInformational(riskLevel, hasConsideration);
+}
+
+/** Sort weight, most severe first. Informational is off the ramp. */
 export const RISK_RANK: Record<RiskLevel, number> = {
   high: 4,
   medium: 3,
   low: 2,
   very_low: 1,
+  informational: 0,
   none: 0,
 };

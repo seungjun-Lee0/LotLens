@@ -32,6 +32,7 @@ import {
   type OverlayAdapter,
 } from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
+import { RISK_RANK } from "@/lib/risk-style";
 import { unavailableForLga, type Region } from "@/lib/region";
 
 const FAM_OVERALL =
@@ -110,7 +111,7 @@ async function fetchCouncilFlooding(
   const { point, context } = await queryOverlayAdapter(adapter, lat, lng, lot);
   // The lot can straddle several flood bands and feature order isn't
   // deterministic — grade every returned band and keep the worst.
-  const RANK: Record<RiskLevel, number> = { high: 4, medium: 3, low: 2, very_low: 1, none: 0 };
+  const RANK = RISK_RANK;
   const label = overlayLabels(point, adapter.labelFields).reduce<string | null>(
     (worst, l) =>
       RANK[classifyCouncilFlood(l)] > RANK[classifyCouncilFlood(worst)] ? l : worst,
@@ -247,14 +248,14 @@ export async function fetchFloodingData(
     ]);
 
   // A lot-polygon query can straddle several risk bands — report the worst.
-  const RISK_RANK: Record<RiskLevel, number> = { high: 4, medium: 3, low: 2, very_low: 1, none: 0 };
+
   const worstOverall = [...overall.features].sort(
     (a, b) =>
       RISK_RANK[normalizeRisk(String(asAttrs(b).FLOOD_RISK ?? ""))] -
       RISK_RANK[normalizeRisk(String(asAttrs(a).FLOOD_RISK ?? ""))],
   )[0];
   const overallAttrs = asAttrs(worstOverall);
-  const riskLevel = normalizeRisk(
+  const mappedRisk = normalizeRisk(
     typeof overallAttrs.FLOOD_RISK === "string" ? overallAttrs.FLOOD_RISK : null,
   );
   const floodType =
@@ -266,7 +267,14 @@ export async function fetchFloodingData(
   const ev11 = pickHistoric(h2011, "January 2011");
   if (ev11) historicEvents.push(ev11);
 
-  const hasConsideration = riskLevel !== "none" || historicEvents.length > 0;
+  // A lot outside every current FAM band that nonetheless went under in
+  // 2011 or 2022 is not "all clear" — flood reality beats flood model. It
+  // used to keep riskLevel='none' while flagging hasConsideration, which
+  // rendered as a green warning chip reading "Considerations · All clear".
+  // Promote it to Low so severity and finding agree.
+  const riskLevel: RiskLevel =
+    mappedRisk === "none" && historicEvents.length > 0 ? "low" : mappedRisk;
+  const hasConsideration = riskLevel !== "none";
 
   return {
     riskLevel,

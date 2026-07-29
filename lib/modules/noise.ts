@@ -22,6 +22,7 @@ import {
   type OverlayAdapter,
 } from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
+import { RISK_RANK } from "@/lib/risk-style";
 import { unavailableForLga, type Region } from "@/lib/region";
 
 const TRANSPORT_NOISE =
@@ -101,7 +102,7 @@ async function fetchCouncilNoise(
     adapters.map((a) => queryOverlayAdapter(a, lat, lng, lot)),
   );
   // Worst corridor across every adapter's features — order isn't stable.
-  const RANK: Record<RiskLevel, number> = { high: 4, medium: 3, low: 2, very_low: 1, none: 0 };
+  const RANK = RISK_RANK;
   const label = results
     .flatMap((r, i) => overlayLabels(r.point, adapters[i].labelFields))
     .reduce<string | null>(

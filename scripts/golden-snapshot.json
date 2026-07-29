@@ -49,8 +49,8 @@
         "available": true
       },
       "steep_land": {
-        "riskLevel": "none",
-        "hasConsideration": false,
+        "riskLevel": "informational",
+        "hasConsideration": true,
         "available": true
       },
       "acid_sulfate": {
@@ -62,13 +62,27 @@
         "hasConsideration": false
       },
       "schools": {
-        "riskLevel": "low",
+        "riskLevel": "informational",
         "hasConsideration": true
       },
       "zoning": {
-        "riskLevel": "low",
+        "riskLevel": "informational",
         "hasConsideration": true,
         "available": true
+      },
+      "stormwater": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": true
+      },
+      "local_plans": {
+        "riskLevel": "informational",
+        "hasConsideration": true,
+        "available": true
+      },
+      "transport": {
+        "riskLevel": "informational",
+        "hasConsideration": true
       }
     }
   },
@@ -122,12 +136,12 @@
         "available": false
       },
       "steep_land": {
-        "riskLevel": "none",
-        "hasConsideration": false,
-        "available": false
+        "riskLevel": "informational",
+        "hasConsideration": true,
+        "available": true
       },
       "acid_sulfate": {
-        "riskLevel": "low",
+        "riskLevel": "informational",
         "hasConsideration": true
       },
       "mining": {
@@ -135,23 +149,37 @@
         "hasConsideration": false
       },
       "schools": {
-        "riskLevel": "low",
+        "riskLevel": "informational",
         "hasConsideration": true
       },
       "zoning": {
-        "riskLevel": "low",
+        "riskLevel": "informational",
         "hasConsideration": true,
         "available": true
+      },
+      "stormwater": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": false
+      },
+      "local_plans": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": false
+      },
+      "transport": {
+        "riskLevel": "informational",
+        "hasConsideration": true
       }
     }
   },
   "maroochydore-sc": {
     "label": "Maroochydore (Sunshine Coast)",
-    "lotPlan": null,
+    "lotPlan": "2SP100059",
     "lga": "Sunshine Coast Regional",
     "modules": {
       "flooding": {
-        "riskLevel": "medium",
+        "riskLevel": "low",
         "hasConsideration": true,
         "available": true
       },
@@ -186,8 +214,8 @@
         "hasConsideration": false
       },
       "easements": {
-        "riskLevel": "none",
-        "hasConsideration": false
+        "riskLevel": "high",
+        "hasConsideration": true
       },
       "noise": {
         "riskLevel": "low",
@@ -195,12 +223,12 @@
         "available": true
       },
       "steep_land": {
-        "riskLevel": "none",
-        "hasConsideration": false,
+        "riskLevel": "informational",
+        "hasConsideration": true,
         "available": true
       },
       "acid_sulfate": {
-        "riskLevel": "low",
+        "riskLevel": "informational",
         "hasConsideration": true
       },
       "mining": {
@@ -208,13 +236,27 @@
         "hasConsideration": false
       },
       "schools": {
-        "riskLevel": "low",
+        "riskLevel": "informational",
         "hasConsideration": true
       },
       "zoning": {
-        "riskLevel": "low",
+        "riskLevel": "informational",
         "hasConsideration": true,
         "available": true
+      },
+      "stormwater": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": false
+      },
+      "local_plans": {
+        "riskLevel": "none",
+        "hasConsideration": false,
+        "available": false
+      },
+      "transport": {
+        "riskLevel": "informational",
+        "hasConsideration": true
       }
     }
   }

@@ -122,14 +122,16 @@ export async function fetchMiningData(
 
   // A quarry footprint or granted mining lease over the lot is a serious
   // flag; a separation buffer or granted exploration permit is a medium
-  // consideration; applications only are informational.
+  // consideration. Ungranted tenure (applications, lapsed permits) is
+  // informational — exploration applications blanket whole regions and
+  // authorise nothing on the surface, so a severity there is noise.
   const riskLevel: RiskLevel =
     inKraResourceArea || grantedLease
       ? "high"
       : inKraSeparationArea || anyGranted
         ? "medium"
         : tenements.length > 0
-          ? "low"
+          ? "informational"
           : "none";
 
   const parts: string[] = [];

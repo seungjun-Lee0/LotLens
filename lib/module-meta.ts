@@ -7,7 +7,7 @@
 // two stay in sync.
 
 import type { LucideIcon } from "lucide-react";
-import { CloudRain, Droplets, Flame, GraduationCap, Landmark, LayoutGrid, Leaf, Mountain, PawPrint, ScrollText, TrendingUp, Volume2, Waves, Wind } from "lucide-react";
+import { CloudRain, Droplets, Flame, GraduationCap, Landmark, LayoutGrid, Leaf, Map, Mountain, PawPrint, ScrollText, TrainFront, TrendingUp, Volume2, Waves, Wind } from "lucide-react";
 
 import type { Module } from "@/lib/db";
 
@@ -291,10 +291,13 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
       "Councils map land where slope, soil and geology create landslide risk, typically slopes above 15%. Building on mapped steep land usually triggers geotechnical assessment requirements: a site-specific report on stability, cut-and-fill limits, retaining design and drainage before approval.",
       "Steep lots also cost more to build on regardless of hazard mapping: benched slabs or pole homes, engineered retaining walls, and more complex stormwater management. If you're comparing a flat lot and a steep lot at similar prices, the steep one usually carries a five-figure construction premium.",
     ],
-    note: "Landslide overlays are council planning-scheme layers and their thresholds differ by LGA. A lot outside the overlay can still be steep, so check the contours and get a site inspection for anything visibly sloping. This module is available where a council adapter exists (Brisbane, Moreton Bay, Sunshine Coast, Redland today).",
+    note: "Two halves, with different coverage. The elevation range is measured from statewide LiDAR contours and is available at every Queensland address. The landslide hazard overlay is a council planning-scheme layer with thresholds that differ by LGA, and is integrated for Brisbane, Moreton Bay, Sunshine Coast and Redland today. A lot outside the overlay can still be steep — the fall figure is the honest check.",
     legend: [
       { label: "Landslide hazard / high slope", color: D.steepHigh, colorHex: D.steepHigh },
       { label: "Steep land overlay area",        color: D.steep,     colorHex: D.steep },
+      { label: "Higher ground (contour)",        color: "#ef4444",    colorHex: "#ef4444" },
+      { label: "Mid slope (contour)",            color: "#4ade80",    colorHex: "#4ade80" },
+      { label: "Lower ground (contour)",         color: "#38bdf8",    colorHex: "#38bdf8" },
     ],
   },
 
@@ -332,6 +335,83 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
       { label: "KRA resource/processing area", color: D.kraResource,   colorHex: D.kraResource },
       { label: "KRA separation buffer",        color: D.kraSeparation, colorHex: D.kraSeparation },
       { label: "Resource authority (tenure)",  color: D.tenement,      colorHex: D.tenement },
+    ],
+  },
+
+  stormwater: {
+    name: "Stormwater",
+    question: "Are there stormwater pipes on or near the property?",
+    tint: "var(--apple-blue)",
+    tintHex: APPLE_HEX.blue,
+    icon: Waves,
+    sourceLabel: "Brisbane City Council · Stormwater assets (existing)",
+    thingsToKnow: [
+      "Council stormwater pipes collect roof and surface water from a run of properties and carry it away to the street drainage system. They are frequently laid through back yards rather than under the road, which means a main can cross a lot with nothing on the title to say so.",
+      "You need Council approval to build over or near a Council stormwater main, and it is not automatic. A pool, shed, carport, deck or rear extension sitting over a pipe can be refused outright or made conditional on relocating the main at your cost. If you are buying with a build in mind, this is the layer to check before you sign.",
+    ],
+    note: "This layer includes privately owned drainage (a house's own roof-water pipes) alongside Council mains — only the publicly owned assets create a build-over obligation, and the module distinguishes them. Pipe positions are indicative: the mapped line can sit metres from the real one, and depth is often unrecorded. Order a dial-before-you-dig plan and a survey before excavating. Brisbane's water and sewer mains are owned by Urban Utilities and are not in this dataset.",
+    legend: [
+      { label: "Council stormwater pipe", color: D.floodMedium, colorHex: D.floodMedium },
+      { label: "Private drainage pipe",   color: D.floodLow,    colorHex: D.floodLow },
+      { label: "Manhole / gully / outlet", color: D.floodHigh,  colorHex: D.floodHigh },
+    ],
+  },
+
+  water_sewer: {
+    name: "Water & Sewer",
+    question: "Are there water or sewer mains on the property?",
+    tint: "var(--apple-teal)",
+    tintHex: APPLE_HEX.teal,
+    icon: Droplets,
+    sourceLabel: "Urban Utilities · Water and sewer network (open data)",
+    thingsToKnow: [
+      "Sewer mains in Brisbane were commonly laid through back yards rather than under the road, so a main can run the length of a lot with nothing on the title to say so. The property owner cannot build over or near it without Urban Utilities' approval, and that obligation passes to whoever buys the land.",
+      "The consequence lands on anything you want to add: a pool, shed, carport, deck, granny flat or rear extension over a main can be refused, or approved only with concrete encasement or relocation at your cost. A rising (pressure) main or a trunk-sized gravity main is usually an outright no-build corridor. If you're paying a premium for back-yard space, this is the check that tells you whether you can use it.",
+    ],
+    note: "Mapped alignments are indicative and can sit metres from the real pipe; depth is often approximate. Before excavating, order a dial-before-you-dig plan and have the main located on site. Urban Utilities supplies Brisbane, Ipswich, Lockyer Valley, Scenic Rim and Somerset — other areas are served by a different retailer and are not in this dataset.",
+    legend: [
+      { label: "Sewer gravity main",  color: D.easementCadastre, colorHex: D.easementCadastre },
+      { label: "Sewer pressure main", color: D.easementHV,       colorHex: D.easementHV },
+      { label: "Water main",          color: D.stormMedium,      colorHex: D.stormMedium },
+      { label: "Sewer manhole",       color: D.heritageState,    colorHex: D.heritageState },
+      { label: "Service connection",  color: D.stormLow,         colorHex: D.stormLow },
+    ],
+  },
+
+  local_plans: {
+    name: "Local Plans",
+    question: "Is the property in a neighbourhood or local area plan?",
+    tint: "var(--apple-indigo)",
+    tintHex: APPLE_HEX.indigo,
+    icon: Map,
+    sourceLabel: "Brisbane City Council · City Plan 2014 neighbourhood plans",
+    thingsToKnow: [
+      "A neighbourhood plan sits inside the planning scheme and gives a specific suburb or centre its own rules. It works alongside the zone and can change it: extra height near a station, higher density around a centre, or tighter built-form controls to protect an established streetscape.",
+      "This is where development upside usually lives, and where it usually dies. Two lots in the same zone on the same street can have very different potential if one is inside a precinct that lifts the height limit and the other isn't. Read the zone and the neighbourhood plan together, never the zone alone.",
+    ],
+    note: "Neighbourhood plans are amended over time and a plan may be in draft or under review when you buy. The precinct shown here is the currently adopted mapping. For anything involving development, confirm the current version with Council or a town planner before relying on it.",
+    legend: [
+      { label: "Neighbourhood plan area", color: D.zoneOther, colorHex: D.zoneOther },
+      { label: "Plan precinct",           color: D.zoneMixed, colorHex: D.zoneMixed },
+    ],
+  },
+
+  transport: {
+    name: "Public Transport",
+    question: "What public transport is within walking distance?",
+    tint: "var(--apple-green)",
+    tintHex: APPLE_HEX.green,
+    icon: TrainFront,
+    sourceLabel: "TransLink stops (Queensland Government)",
+    thingsToKnow: [
+      "Distance to a train station, busway station or ferry terminal is one of the more durable drivers of residential value in Brisbane, because it doesn't change when the market does. A property inside comfortable walking distance of frequent transport holds a premium through cycles.",
+      "Frequency matters more than proximity. A bus stop 100 m away served four times a day is worth less than a station 900 m away on a turn-up-and-go line. Check the actual timetable for the routes at the nearest stop rather than assuming the distance tells the story.",
+    ],
+    note: "Distances here are straight-line from the property, not walking distance — hills, river crossings and dead-end streets can make the real walk considerably longer. Routes and stops change: confirm current services on the TransLink journey planner.",
+    legend: [
+      { label: "Train station",  color: D.zoneCentre,      colorHex: D.zoneCentre },
+      { label: "Ferry terminal", color: D.vegWaterway,     colorHex: D.vegWaterway },
+      { label: "Bus stop",       color: D.vegBiodiversity, colorHex: D.vegBiodiversity },
     ],
   },
 

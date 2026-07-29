@@ -27,11 +27,37 @@ import type { Module } from "@/lib/db";
 
 export type OverlayFeature = Feature<
   Geometry,
-  { fillColor: string; legendLabel: string; fillOpacity?: number }
+  {
+    fillColor: string;
+    /** Darkened `fillColor`, used for the polygon outline. Derived here so
+     * the web map and the PDF renderer stroke identically. */
+    strokeColor: string;
+    legendLabel: string;
+    fillOpacity?: number;
+  }
 >;
 
 type Classified = { fillColor: string; legendLabel: string; fillOpacity?: number };
 type OverlayScope = "context" | "property";
+
+/** Outline colour for a fill: the same hue scaled down to a FIXED
+ * brightness. A same-colour outline over a 35%-opacity fill reads as a
+ * soft blur, and a constant multiplier leaves the pale "very low" tiers
+ * (#bfdbfe, #cffafe) with edges as washed out as their fills. Pinning the
+ * brightest channel to `target` instead gives every tier an equally
+ * definite edge — the fill still carries the severity — on screen and in
+ * print. Scaling all three channels keeps the hue. */
+function outlineColor(hex: string, target = 0.4): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const rgb = [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+  const peak = Math.max(...rgb);
+  if (peak === 0) return hex;
+  // Only ever darkens — a fill already below `target` keeps its own value.
+  const factor = Math.min(1, (target * 255) / peak);
+  return `#${rgb.map((c) => Math.round(c * factor).toString(16).padStart(2, "0")).join("")}`;
+}
 
 // ── Develo-style overlay palette ─────────────────────────────────────────
 
@@ -114,7 +140,56 @@ export const DEVELO_HEX = {
   // Steep land / landslide
   steepHigh: "#9a3412",
   steep:     "#f59e0b",
+
+
+  // Water & sewer (Urban Utilities)
+  uuGravityMain:  "#a21caf",
+  uuPressureMain: "#db2777",
+  uuWaterMain:    "#06b6d4",
+  uuManhole:      "#7e22ce",
+  uuService:      "#67e8f9",
+
+  // Stormwater assets
+  swPublicPipe:  "#2563eb",
+  swPrivatePipe: "#93c5fd",
+  swStructure:   "#1e3a8a",
+
+  // Neighbourhood / local plans
+  planArea:     "#6366f1",
+  planPrecinct: "#f97316",
+
+  // Public transport stops
+  stopTrain: "#dc2626",
+  stopFerry: "#0284c7",
+  stopBus:   "#84cc16",
+  stopTram:  "#a855f7",
 };
+
+/**
+ * Contour ramp, low → high. Mirrors the Department of Resources styling:
+ * the colour IS the elevation, so slope reads at a glance instead of every
+ * line being one indistinguishable brown.
+ *
+ * Exported because the map, the web legend and the PDF legend all have to
+ * draw the same gradient — a second copy would drift.
+ */
+export const CONTOUR_RAMP = [
+  "#7dd3fc", "#38bdf8", "#22d3ee", "#4ade80", "#a3e635",
+  "#facc15", "#fb923c", "#f97316", "#ef4444",
+] as const;
+
+/** Ramp colour at `t` ∈ [0,1], clamped. */
+export function contourColorAt(t: number): string {
+  const i = Math.round(Math.min(1, Math.max(0, t)) * (CONTOUR_RAMP.length - 1));
+  return CONTOUR_RAMP[i];
+}
+
+/**
+ * Every contour shares ONE legend label so the swatch list collapses to a
+ * single row — which the renderers then swap for a gradient bar. Per-
+ * elevation labels would produce ~20 rows and blow the legend budget.
+ */
+export const CONTOUR_LEGEND_LABEL = "Contour line";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -135,10 +210,11 @@ function pushFC(
   for (const f of fc.features) {
     if (!f.geometry) continue;
     const props = (f.properties ?? {}) as Record<string, unknown>;
+    const classified = classify(props);
     out.push({
       type: "Feature",
       geometry: f.geometry,
-      properties: classify(props),
+      properties: { ...classified, strokeColor: outlineColor(classified.fillColor) },
     });
   }
 }
@@ -348,6 +424,45 @@ function zoningColor(props: Record<string, unknown>): Classified {
   return { fillColor: DEVELO_HEX.zoneOther, legendLabel: String(props.LVL1_ZONE ?? props.ZONEDESC ?? props.LABEL ?? props.ZONE_PREC ?? "Other"), fillOpacity: o };
 }
 
+// Stormwater is a LINE/POINT network, not an area. `fillOpacity` is
+// irrelevant for lines — MapLibre paints those from strokeColor — but the
+// public/private split has to survive into the legend, because only the
+// public assets carry a build-over obligation.
+function stormwaterColor(props: Record<string, unknown>): Classified {
+  const owner = String(props.OWNER ?? "").toUpperCase();
+  const isPrivate = owner === "PRIVATE" || owner === "UNKNOWN" || owner === "";
+  const type = String(props.PIPETYPE ?? "").toLowerCase();
+  if (isPrivate)
+    return {
+      fillColor: DEVELO_HEX.swPrivatePipe,
+      legendLabel: type ? `Private drainage (${type.toLowerCase()})` : "Private drainage pipe",
+    };
+  return {
+    fillColor: DEVELO_HEX.swPublicPipe,
+    legendLabel: "Council stormwater pipe",
+  };
+}
+
+// Plan boundaries are suburb-scale — a filled wash would bury the aerial,
+// and the information is the BOUNDARY. Outline only, same treatment as
+// school catchments.
+function localPlanAreaColor(): Classified {
+  return {
+    fillColor: DEVELO_HEX.planArea,
+    legendLabel: "Neighbourhood plan area",
+    fillOpacity: 0,
+  };
+}
+
+function localPlanPrecinctColor(props: Record<string, unknown>): Classified {
+  const name = String(props.LP_PREC ?? "").trim();
+  return {
+    fillColor: DEVELO_HEX.planPrecinct,
+    legendLabel: name ? `Precinct: ${name}` : "Plan precinct",
+    fillOpacity: 0.12,
+  };
+}
+
 // ── Public extractor ─────────────────────────────────────────────────────
 
 export function extractOverlays(
@@ -442,9 +557,39 @@ export function extractOverlays(
       }));
       return out;
     }
-    case "steep_land":
-      pushFC(out, inner, steepColor);
+    case "steep_land": {
+      // Rows written before the contour enrichment stored a bare
+      // FeatureCollection; newer ones store { overlay, contours }. Paint
+      // both shapes so historical reports keep rendering.
+      if (isFC(inner)) {
+        pushFC(out, inner, steepColor);
+        return out;
+      }
+      const i = inner as Record<string, unknown>;
+      pushFC(out, i.overlay, steepColor);
+      // The ramp is normalised to the elevations actually in view, not to
+      // absolute height — a 45–53 m ridge and a 0–8 m riverside flat both
+      // need the full colour range to show their own slope.
+      const contourElevations: number[] = [];
+      if (isFC(i.contours)) {
+        for (const f of i.contours.features) {
+          const e = (f.properties ?? {}).elevation_m;
+          if (typeof e === "number" && Number.isFinite(e)) contourElevations.push(e);
+        }
+      }
+      const lo = contourElevations.length ? Math.min(...contourElevations) : 0;
+      const hi = contourElevations.length ? Math.max(...contourElevations) : 0;
+      pushFC(out, i.contours, (props) => {
+        const e = props.elevation_m;
+        const t = typeof e === "number" && hi > lo ? (e - lo) / (hi - lo) : 0.5;
+        return {
+          fillColor: contourColorAt(t),
+          legendLabel: CONTOUR_LEGEND_LABEL,
+          fillOpacity: 0,
+        };
+      });
       return out;
+    }
     case "acid_sulfate": {
       const i = inner as Record<string, unknown>;
       // Finest scale wins visually; paint 25k over 100k.
@@ -512,6 +657,59 @@ export function extractOverlays(
     case "schools":
       pushFC(out, inner, schoolsColor);
       return out;
+    case "stormwater": {
+      const i = inner as Record<string, unknown>;
+      pushFC(out, i.pipe, stormwaterColor);
+      // Structures share one legend entry: at map zoom a manhole and a
+      // gully are the same dot, and three near-identical rows would just
+      // pad the legend.
+      const structure = () => ({
+        fillColor: DEVELO_HEX.swStructure,
+        legendLabel: "Manhole / gully / outlet",
+      });
+      pushFC(out, i.manhole, structure);
+      pushFC(out, i.gully, structure);
+      pushFC(out, i.endStructure, structure);
+      return out;
+    }
+    case "water_sewer": {
+      const i = inner as Record<string, unknown>;
+      const line = (color: string, label: string) => () => ({
+        fillColor: color,
+        legendLabel: label,
+      });
+      pushFC(out, i.gravity, line(DEVELO_HEX.uuGravityMain, "Sewer gravity main"));
+      pushFC(out, i.pressure, line(DEVELO_HEX.uuPressureMain, "Sewer pressure main"));
+      pushFC(out, i.waterMain, line(DEVELO_HEX.uuWaterMain, "Water main"));
+      pushFC(out, i.manhole, line(DEVELO_HEX.uuManhole, "Sewer manhole"));
+      // Both service types share a legend row: they're the property's own
+      // connections, and splitting them adds a line without adding meaning.
+      const service = line(DEVELO_HEX.uuService, "Service connection");
+      pushFC(out, i.sewerService, service);
+      pushFC(out, i.waterService, service);
+      return out;
+    }
+    case "local_plans": {
+      const i = inner as Record<string, unknown>;
+      pushFC(out, i.boundary, localPlanAreaColor);
+      pushFC(out, i.precinct, localPlanPrecinctColor);
+      return out;
+    }
+    case "transport": {
+      // Keyed by the human-readable mode name the fetcher used, so the
+      // legend reads "Train station" without a second lookup table.
+      const i = inner as Record<string, unknown>;
+      const tint: Record<string, string> = {
+        "Train station": DEVELO_HEX.stopTrain,
+        "Ferry terminal": DEVELO_HEX.stopFerry,
+        "Bus stop": DEVELO_HEX.stopBus,
+        "Tram stop": DEVELO_HEX.stopTram,
+      };
+      for (const [kind, color] of Object.entries(tint)) {
+        pushFC(out, i[kind], () => ({ fillColor: color, legendLabel: kind }));
+      }
+      return out;
+    }
     case "zoning":
       pushFC(out, inner, zoningColor);
       return out;

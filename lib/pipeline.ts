@@ -2,7 +2,7 @@
 //
 // Two phases, both addressed by address_id:
 //
-//   1. fetchOverlaysForAddress() — hits the 15 module sources in parallel,
+//   1. fetchOverlaysForAddress() — hits every module source in parallel,
 //      writes one council_data row per module. Each fetch settles
 //      independently: a source that's down becomes a fetchFailed row
 //      (risk_level NULL) instead of sinking the whole report.
@@ -21,12 +21,16 @@ import { fetchEnvironmentData } from "@/lib/modules/environment";
 import { fetchFloodingData } from "@/lib/modules/flooding";
 import { fetchFloodPlanningData } from "@/lib/modules/flood-planning";
 import { fetchHeritageData } from "@/lib/modules/heritage";
+import { fetchLocalPlansData } from "@/lib/modules/local-plans";
 import { fetchMiningData } from "@/lib/modules/mining";
 import { fetchNoiseData } from "@/lib/modules/noise";
 import { fetchOverlandFlowData } from "@/lib/modules/overland-flow";
 import { fetchSchoolsData } from "@/lib/modules/schools";
 import { fetchSteepLandData } from "@/lib/modules/steep-land";
 import { fetchStormTideData } from "@/lib/modules/storm-tide";
+import { fetchStormwaterData } from "@/lib/modules/stormwater";
+import { fetchTransportData } from "@/lib/modules/transport";
+import { fetchWaterSewerData } from "@/lib/modules/water-sewer";
 import { fetchVegetationData } from "@/lib/modules/vegetation";
 import { fetchZoningData } from "@/lib/modules/zoning";
 import { slimGeoJson } from "@/lib/geo-slim";
@@ -35,6 +39,8 @@ import { regionFromParcel } from "@/lib/region";
 import { generateModuleNarrative, type ModuleNarrative } from "@/lib/anthropic";
 import {
   getDb,
+  MODULE_ORDER,
+  WATER_SEWER_ENABLED,
   type CouncilDataRow,
   type Module,
   type RiskLevel,
@@ -46,6 +52,7 @@ import {
   type ParcelInfo,
 } from "@/lib/property";
 import { fetchPostcode } from "@/lib/postcode";
+import { isFlagged } from "@/lib/risk-style";
 
 type Address = {
   id: string;
@@ -127,7 +134,7 @@ export async function fetchOverlaysForAddress(
       fetch_failed: string | null;
     }>;
     const allFresh =
-      existing.length === 15 &&
+      existing.length === MODULE_ORDER.length &&
       existing.every(
         (r) =>
           r.fetch_failed !== "true" &&
@@ -135,7 +142,7 @@ export async function fetchOverlaysForAddress(
       );
     if (allFresh) {
       console.log(
-        `[overlays] reusing fresh council_data for ${addressId} (all 15 rows < ${FRESH_REUSE_MS / 60_000} min old)`,
+        `[overlays] reusing fresh council_data for ${addressId} (all ${MODULE_ORDER.length} rows < ${FRESH_REUSE_MS / 60_000} min old)`,
       );
       return {
         addressId,
@@ -218,28 +225,23 @@ export async function fetchOverlaysForAddress(
   tasks.set("easements", settle("easements", fetchEasementsData(addr.lat, addr.lng, region, lot)));
   tasks.set("noise", settle("noise", fetchNoiseData(addr.lat, addr.lng, region, lot)));
   tasks.set("steep_land", settle("steep_land", fetchSteepLandData(addr.lat, addr.lng, region, lot)));
+  tasks.set("stormwater", settle("stormwater", fetchStormwaterData(addr.lat, addr.lng, region, lot)));
+  // Dark until Urban Utilities confirms reuse terms — see WATER_SEWER_ENABLED.
+  // Guarded here as well as in MODULE_ORDER so the flag can never leave a
+  // task running whose result nothing reads.
+  if (WATER_SEWER_ENABLED) {
+    tasks.set("water_sewer", settle("water_sewer", fetchWaterSewerData(addr.lat, addr.lng, region, lot)));
+  }
+  tasks.set("local_plans", settle("local_plans", fetchLocalPlansData(addr.lat, addr.lng, region, lot)));
+  // Transport is point-based: "what's near the front door", not "what
+  // touches the parcel". A lot polygon would only widen the search.
+  tasks.set("transport", settle("transport", fetchTransportData(addr.lat, addr.lng)));
   // Zoning stays point-based too: a lot is in one zone for practical
   // purposes, and BCC's point-query zone polygon doubles as the parcel
   // fallback for the report's yellow lot outline.
   tasks.set("zoning", settle("zoning", fetchZoningData(addr.lat, addr.lng, region)));
 
-  const ORDER: Module[] = [
-    "flooding",
-    "flood_planning",
-    "overland_flow",
-    "storm_tide",
-    "bushfire",
-    "vegetation",
-    "environment",
-    "heritage",
-    "easements",
-    "noise",
-    "steep_land",
-    "acid_sulfate",
-    "mining",
-    "schools",
-    "zoning",
-  ];
+  const ORDER = MODULE_ORDER;
   const settled = await Promise.all(ORDER.map((m) => tasks.get(m)!));
 
   console.log(
@@ -253,8 +255,8 @@ export async function fetchOverlaysForAddress(
   const failedModules = ORDER.filter((_, i) => !settled[i].ok);
   if (failedModules.length === ORDER.length) {
     // Nothing came back at all — that's our outage (or the machine's
-    // network), not 15 independent source outages. Persisting 15 blank
-    // rows would cache a useless report, so fail the run outright.
+    // network), not N independent source outages. Persisting a full set of
+    // blank rows would cache a useless report, so fail the run outright.
     throw new Error(
       "all module sources failed — aborting instead of writing an empty report",
     );
@@ -292,10 +294,10 @@ export async function fetchOverlaysForAddress(
   });
 
   // Idempotent replace. Each invocation drops the address's previous rows
-  // and rewrites the fifteen fresh ones.
+  // and rewrites the full fresh set.
   await sql`DELETE FROM council_data WHERE address_id = ${addressId}`;
 
-  // 15 independent single-row inserts — run them concurrently. Neon's
+  // One independent single-row insert per module — run them concurrently. Neon's
   // HTTP driver issues one stateless request per statement (~30 ms), so
   // sequential would cost ~450 ms; parallel costs one round-trip.
   // slimGeoJson caps polygon vertex counts before upload — the Brisbane
@@ -421,23 +423,7 @@ export async function loadReportPayload(
     "module" | "risk_level" | "has_consideration" | "source_name" | "source_url" | "raw_response"
   >[];
 
-  const ordered: Module[] = [
-    "flooding",
-    "flood_planning",
-    "overland_flow",
-    "storm_tide",
-    "bushfire",
-    "vegetation",
-    "environment",
-    "heritage",
-    "easements",
-    "noise",
-    "steep_land",
-    "acid_sulfate",
-    "mining",
-    "schools",
-    "zoning",
-  ];
+  const ordered = MODULE_ORDER;
   const byModule = new Map(rows.map((r) => [r.module as Module, r]));
   const modules: ReportModuleRow[] = ordered
     .filter((m) => byModule.has(m))
@@ -486,7 +472,13 @@ export async function loadReportPayload(
     },
     address,
     modules,
-    considerationCount: modules.filter((m) => m.hasConsideration).length,
+    // Warnings only. Informational modules (school catchment, zone code,
+    // nearest stops) set hasConsideration so they keep a full section, but
+    // counting them here would put "N checks need your attention" on every
+    // report and make the all-clear case unreachable.
+    considerationCount: modules.filter((m) =>
+      isFlagged(m.riskLevel, m.hasConsideration),
+    ).length,
     propertyPolygon,
     parcelLines,
     parcel: parcel.polygon ? parcel : null,

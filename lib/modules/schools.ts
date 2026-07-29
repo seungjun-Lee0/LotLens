@@ -26,9 +26,10 @@ export type SchoolRow = {
 };
 
 export type SchoolsResult = {
-  /** Schools is informational, not a risk axis. We surface 'low' when
-   * any catchment was matched (every address is in at least one) and
-   * 'none' as a couldn't-resolve fallback. */
+  /** Schools is informational, not a risk axis — every address is inside
+   * at least one catchment, so a severity here would fire on every single
+   * report. 'informational' keeps the section and map but stays out of the
+   * consideration count; 'none' is the couldn't-resolve fallback. */
   riskLevel: RiskLevel;
   schools: SchoolRow[];
   hasConsideration: boolean;
@@ -91,7 +92,7 @@ export async function fetchSchoolsData(
   const schools = Array.from(grouped.values());
 
   return {
-    riskLevel: schools.length > 0 ? "low" : "none",
+    riskLevel: schools.length > 0 ? "informational" : "none",
     schools,
     hasConsideration: schools.length > 0,
     sources: [

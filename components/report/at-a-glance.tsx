@@ -1,8 +1,14 @@
-import { Check, TriangleAlert } from "lucide-react";
+import { Check, Info, TriangleAlert } from "lucide-react";
 
 import { formatAuAddress, stripAddressPrefix } from "@/lib/format-address";
 import { MODULE_META } from "@/lib/module-meta";
-import { RISK_RANK, RISK_STYLE, riskOf } from "@/lib/risk-style";
+import {
+  isFlagged,
+  isInformational,
+  RISK_RANK,
+  RISK_STYLE,
+  riskOf,
+} from "@/lib/risk-style";
 import type { ReportPayload } from "@/lib/pipeline";
 
 // Brisbane CBD GPO (approx). Used for the "distance to CBD" stat in the
@@ -53,7 +59,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
   // canonical module order stays in the report BODY — this block is the
   // "read the punchline first" view.
   const attention = modules
-    .filter((m) => m.hasConsideration || isFailed(m))
+    .filter((m) => isFlagged(m.riskLevel, m.hasConsideration) || isFailed(m))
     .sort((a, b) => {
       const fa = isFailed(a) ? 1 : 0;
       const fb = isFailed(b) ? 1 : 0;
@@ -63,7 +69,15 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
         RISK_RANK[riskOf(a.riskLevel, a.hasConsideration)]
       );
     });
+  // Facts, not warnings — own lane so they neither raise an alarm nor get
+  // buried in "clear" (they have real content; see the body sections).
+  const info = modules.filter(
+    (m) => isInformational(m.riskLevel, m.hasConsideration) && !isFailed(m),
+  );
   const clear = modules.filter((m) => !m.hasConsideration && !isFailed(m));
+  // Denominator for "N of M checks": informational modules never fail this
+  // test, so counting them would make the ratio permanently unreachable.
+  const riskCheckCount = modules.length - info.length;
   const topLine = attention
     .filter((m) => !isFailed(m))
     .slice(0, 3)
@@ -97,9 +111,9 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
             <p className="mt-2 max-w-md text-pretty text-[13.5px] leading-relaxed text-muted-foreground sm:text-[14px]">
               {considerationCount === 0
                 ? failedCount === 0
-                  ? "All 15 public-data checks came back clear at this address."
+                  ? `All ${riskCheckCount} public-data risk checks came back clear at this address.`
                   : "Nothing of concern found in the checks that ran."
-                : `${considerationCount} of ${modules.length} checks need your attention${topLine ? `. Most important: ${topLine}` : ""}.`}
+                : `${considerationCount} of ${riskCheckCount} checks need your attention${topLine ? `. Most important: ${topLine}` : ""}.`}
               {failedCount > 0 &&
                 ` ${failedCount} check${failedCount > 1 ? "s" : ""} couldn't reach ${failedCount > 1 ? "their sources" : "its source"} this run. Re-run to retry.`}
             </p>
@@ -175,6 +189,45 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                           {failed ? "Not checked" : RISK_STYLE[level].label}
                         </span>
                       </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {info.length > 0 && (
+            <div>
+              <div className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Good to know ({info.length})
+              </div>
+              <ul className="flex flex-col gap-2">
+                {info.map((m) => {
+                  const meta = MODULE_META[m.module];
+                  const Icon = meta.icon;
+                  const summary = stripAddressPrefix(
+                    report.narrative[m.module]?.summary ?? "",
+                    address.address_text,
+                  );
+                  return (
+                    <li
+                      key={m.module}
+                      className="flex items-center gap-2.5 rounded-xl border border-border/40 bg-background/30 px-3 py-2"
+                    >
+                      <Icon className="size-3.5 shrink-0" style={{ color: meta.tint }} />
+                      <span className="shrink-0 text-[12.5px] font-medium">
+                        {meta.name}
+                      </span>
+                      {summary && (
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+                          {summary}
+                        </span>
+                      )}
+                      <Info
+                        className="size-3.5 shrink-0"
+                        strokeWidth={2.5}
+                        style={{ color: RISK_STYLE.informational.cssVar }}
+                      />
                     </li>
                   );
                 })}

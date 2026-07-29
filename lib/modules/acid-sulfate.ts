@@ -103,12 +103,15 @@ export async function fetchAcidSulfateData(
 
   // ASS presence is a management/cost consideration rather than a hazard
   // band. Codes containing S (sulfidic material at shallow depth) rate
-  // medium; anything else mapped rates low.
+  // medium — that's the case that actually costs money on excavation.
+  // Anything else mapped is informational: the state layer covers every
+  // coastal lowland, so most riverside and bayside lots are inside it with
+  // no obligation attached unless you dig.
   const riskLevel: RiskLevel = !hit
     ? "none"
     : /s[0-2]/i.test(mapCode ?? "") || /sulfid/i.test(meaning ?? "")
       ? "medium"
-      : "low";
+      : "informational";
 
   return {
     riskLevel,

@@ -30,10 +30,81 @@ export type Module =
   | "steep_land"
   | "acid_sulfate"
   | "mining"
+  | "stormwater"
+  | "water_sewer"
   | "schools"
+  | "transport"
+  | "local_plans"
   | "zoning";
 
-export type RiskLevel = "high" | "medium" | "low" | "very_low" | "none";
+/**
+ * Water & Sewer (Urban Utilities) is built and tested but switched off.
+ *
+ * The blocker is legal, not technical: UU's endpoints are public and
+ * unauthenticated, but they assert "© Urban Utilities 2019" while leaving
+ * licenseInfo as the literal string "This is a place holder for terms and
+ * conditions of using QUU Open Data". Every other source in this report is
+ * CC BY 4.0, which grants commercial redistribution; UU has granted
+ * nothing. Flip this to true only once UU confirms reuse terms in writing.
+ *
+ * The annotation is load-bearing — without it TypeScript narrows the type
+ * to `false` and reports the guarded branches as dead code.
+ */
+export const WATER_SEWER_ENABLED: boolean = false;
+
+/**
+ * Canonical report order — hazards, then constraints on building, then
+ * infrastructure over/under the lot, then planning, then lifestyle facts.
+ *
+ * This is the single source of truth: the fetch pipeline, the payload
+ * loader and the report body all read it, so a new module is added here
+ * once. The At-a-glance verdict layer and the PDF page order deliberately
+ * re-sort by severity — the canonical order is what makes two reports
+ * comparable side by side.
+ */
+export const MODULE_ORDER: Module[] = [
+  "flooding",
+  "flood_planning",
+  "overland_flow",
+  "storm_tide",
+  "bushfire",
+  "vegetation",
+  "environment",
+  "heritage",
+  "easements",
+  "stormwater",
+  // Sits with the other buried-infrastructure checks when enabled. Absent
+  // from the order = absent from the report, the fetch fan-out and the
+  // council_data row-count freshness check, all from the one flag.
+  ...(WATER_SEWER_ENABLED ? (["water_sewer"] as Module[]) : []),
+  "noise",
+  "steep_land",
+  "acid_sulfate",
+  "mining",
+  "zoning",
+  "local_plans",
+  "schools",
+  "transport",
+];
+
+/**
+ * Severity on the shared scale, plus one non-severity state.
+ *
+ * `informational` is NOT a low rung of the risk ladder — it means "this
+ * module found something, and that something is not a warning". School
+ * catchments, the zone code, the nearest bus stop and a Koala Priority
+ * Area with no habitat on the lot all land here. Informational modules
+ * keep their full report section and map (see `hasConsideration`, which
+ * stays true so the section is allocated) but are excluded from the
+ * consideration count, the "Needs attention" list and Next steps.
+ */
+export type RiskLevel =
+  | "high"
+  | "medium"
+  | "low"
+  | "very_low"
+  | "informational"
+  | "none";
 
 // ── Row types (mirror db/schema.sql) ─────────────────────────────────────
 

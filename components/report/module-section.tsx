@@ -1,13 +1,19 @@
 import { Fragment } from "react";
-import { Check, TriangleAlert } from "lucide-react";
+import { Check, Info, TriangleAlert } from "lucide-react";
 
 import { ModuleMap } from "@/components/report/module-map";
 import type { ModuleNarrative } from "@/lib/anthropic";
 import { MODULE_META } from "@/lib/module-meta";
-import { extractOverlays, type OverlayFeature } from "@/lib/overlays";
+import {
+  contourColorAt,
+  CONTOUR_LEGEND_LABEL,
+  CONTOUR_RAMP,
+  extractOverlays,
+  type OverlayFeature,
+} from "@/lib/overlays";
 import type { ReportModuleRow } from "@/lib/pipeline";
 import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
-import { RISK_STYLE } from "@/lib/risk-style";
+import { isInformational, RISK_STYLE } from "@/lib/risk-style";
 import type { Module, RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
@@ -255,11 +261,53 @@ function ModuleFacts({
     }
     case "steep_land": {
       const cat = raw.category as string | null;
-      if (!cat) return null;
+      const elev = (raw.elevation ?? null) as {
+        highM: number;
+        lowM: number;
+        fallM: number | null;
+        interval: string;
+        scope: string;
+      } | null;
+      if (!cat && !elev) return null;
       return (
         <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
-          <dt className="text-muted-foreground">Overlay</dt>
-          <dd className="font-medium">{cat}</dd>
+          {cat && (
+            <>
+              <dt className="text-muted-foreground">Overlay</dt>
+              <dd className="font-medium">{cat}</dd>
+            </>
+          )}
+          {elev && (
+            <>
+              {/* Develo's "Property High / Low / Est. Fall". Fall leads —
+                  it's the figure that moves build cost. */}
+              <dt className="text-muted-foreground">Est. fall</dt>
+              <dd className="font-medium">
+                {elev.fallM === null ? (
+                  <span className="text-muted-foreground">
+                    Flat to within {elev.interval.split(" ")[0]} m
+                  </span>
+                ) : (
+                  `${elev.fallM} m`
+                )}
+              </dd>
+              <dt className="text-muted-foreground">Elevation</dt>
+              <dd className="font-medium">
+                {elev.fallM === null
+                  ? `~${elev.highM} m AHD`
+                  : `${elev.lowM} m – ${elev.highM} m AHD`}
+              </dd>
+              <dt className="text-muted-foreground">Measured from</dt>
+              <dd className="font-medium">
+                {elev.interval} contours
+                {elev.scope === "nearby" && (
+                  <span className="text-muted-foreground">
+                    {" "}· surrounding area, no contour crosses the lot
+                  </span>
+                )}
+              </dd>
+            </>
+          )}
         </dl>
       );
     }
@@ -324,6 +372,161 @@ function ModuleFacts({
         </dl>
       );
     }
+    case "water_sewer": {
+      const assets = Array.isArray(raw.assets)
+        ? (raw.assets as {
+            kind: string;
+            diameterMm: number | null;
+            material: string | null;
+            depthM: number | null;
+            isMain: boolean;
+          }[])
+        : [];
+      const mains = assets.filter((a) => a.isMain);
+      const severe = raw.hasTrunkOrPressureMainOnLot === true;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">On the lot</dt>
+          <dd className="font-medium">
+            {mains.length === 0
+              ? "No main crosses the lot"
+              : `${mains.length} main${mains.length > 1 ? "s" : ""} / structure${mains.length > 1 ? "s" : ""}`}
+          </dd>
+          {/* Service lines are the property's own connection — listing them
+              beside the mains would blur the one distinction that matters. */}
+          {mains.slice(0, 3).map((a, i) => (
+            <Fragment key={i}>
+              <dt className="text-muted-foreground">{a.kind}</dt>
+              <dd className="font-medium">
+                {[
+                  a.diameterMm ? `${a.diameterMm} mm` : null,
+                  a.material,
+                  a.depthM ? `${a.depthM} m deep` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "Urban Utilities asset"}
+              </dd>
+            </Fragment>
+          ))}
+          <dt className="text-muted-foreground">Build over</dt>
+          <dd className="font-medium">
+            {severe
+              ? "Generally not permitted — trunk or pressure main"
+              : raw.hasMainOnLot === true
+                ? "Urban Utilities approval required"
+                : "Not triggered by mapped assets"}
+          </dd>
+        </dl>
+      );
+    }
+    case "local_plans": {
+      const plan = raw.planName as string | null;
+      const precincts = Array.isArray(raw.precincts)
+        ? (raw.precincts as {
+            name: string;
+            code: string | null;
+            subPrecinct: string | null;
+          }[])
+        : [];
+      if (!plan && precincts.length === 0) return null;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">Plan</dt>
+          <dd className="font-medium">{plan ?? "Not stated"}</dd>
+          {precincts.map((p, i) => (
+            <Fragment key={i}>
+              <dt className="text-muted-foreground">
+                {p.code ? `Precinct ${p.code}` : "Precinct"}
+              </dt>
+              <dd className="font-medium">
+                {p.name}
+                {p.subPrecinct && (
+                  <span className="text-muted-foreground"> — {p.subPrecinct}</span>
+                )}
+              </dd>
+            </Fragment>
+          ))}
+        </dl>
+      );
+    }
+    case "stormwater": {
+      const assets = Array.isArray(raw.assets)
+        ? (raw.assets as {
+            kind: string;
+            pipeType: string | null;
+            diameter: string | null;
+            material: string | null;
+            public: boolean;
+          }[])
+        : [];
+      const publicAssets = assets.filter((a) => a.public);
+      const onLot = raw.hasPublicAssetOnLot === true;
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">On the lot</dt>
+          <dd className="font-medium">
+            {assets.length === 0
+              ? "Nothing mapped"
+              : `${assets.length} asset${assets.length > 1 ? "s" : ""}`}
+            {assets.length > 0 && (
+              <span className="text-muted-foreground">
+                {" "}· {publicAssets.length} Council-owned
+              </span>
+            )}
+          </dd>
+          {/* Private roof-water runs are numerous and carry no obligation,
+              so only the Council assets get itemised. */}
+          {publicAssets.slice(0, 3).map((a, i) => (
+            <Fragment key={i}>
+              <dt className="text-muted-foreground">{a.kind}</dt>
+              <dd className="font-medium">
+                {[a.diameter, a.pipeType, a.material].filter(Boolean).join(" · ") ||
+                  "Council-owned"}
+              </dd>
+            </Fragment>
+          ))}
+          <dt className="text-muted-foreground">Build over</dt>
+          <dd className="font-medium">
+            {onLot ? "Council approval required" : "Not triggered by mapped assets"}
+          </dd>
+        </dl>
+      );
+    }
+    case "transport": {
+      const stops = Array.isArray(raw.stops)
+        ? (raw.stops as {
+            kind: string;
+            name: string | null;
+            distanceM: number;
+            wheelchair: boolean | null;
+          }[])
+        : [];
+      if (stops.length === 0) return null;
+      return (
+        <ul className="flex flex-col gap-1.5 text-[12.5px]">
+          {stops.map((s, i) => (
+            <li key={i} className="grid grid-cols-[112px_1fr] items-baseline gap-2.5">
+              <span
+                className="w-full rounded-full px-2 py-0.5 text-center text-[9px] uppercase tracking-normal whitespace-nowrap"
+                style={{
+                  background:
+                    "color-mix(in oklab, var(--apple-green) 14%, transparent)",
+                  color: "var(--apple-green)",
+                }}
+              >
+                {s.kind}
+              </span>
+              <span className="text-foreground/85">
+                <span className="font-medium">{s.name ?? "Unnamed stop"}</span>
+                <span className="text-muted-foreground">
+                  {" "}· {s.distanceM} m away
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
   }
 }
 
@@ -344,11 +547,17 @@ function StatusPill({
   // Severity is colour-coded on ONE shared scale (lib/risk-style.ts) —
   // never the module tint, or a heritage "high" and a flooding "low"
   // would both just read as their module colour.
+  //
+  // Informational rows are flagged (they own a full section) but are not
+  // warnings, so they get the off-ramp grey and an info glyph. Without
+  // this branch a school catchment renders as a gold ⚠, which is what
+  // this whole lane exists to stop.
+  const info = !failed && isInformational(risk, hasConsideration);
   const color = failed
     ? "var(--apple-orange)"
     : RISK_STYLE[hasConsideration ? risk : "none"].cssVar;
-  const Icon = failed || hasConsideration ? TriangleAlert : Check;
-  const riskLabel = hasConsideration ? RISK_STYLE[risk].label : "";
+  const Icon = failed || (hasConsideration && !info) ? TriangleAlert : info ? Info : Check;
+  const riskLabel = hasConsideration && !info ? RISK_STYLE[risk].label : "";
   return (
     <div
       className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
@@ -365,9 +574,11 @@ function StatusPill({
       </span>
       {failed
         ? "Couldn't check · source unavailable"
-        : hasConsideration
-          ? `Considerations${riskLabel ? ` · ${riskLabel}` : ""}`
-          : "No considerations identified"}
+        : info
+          ? "For information"
+          : hasConsideration
+            ? `Considerations${riskLabel ? ` · ${riskLabel}` : ""}`
+            : "No considerations identified"}
     </div>
   );
 }
@@ -403,6 +614,89 @@ function splitLegendItems(
   };
 }
 
+type ElevationLegendData = {
+  highM: number;
+  lowM: number;
+  fallM: number | null;
+  interval: string;
+  contextLowM: number | null;
+  contextHighM: number | null;
+};
+
+/**
+ * Steep Land's legend, Develo-style: a continuous elevation ramp with the
+ * property's own high/low called out against it.
+ *
+ * A swatch list can't express this. Contours aren't categories — they're
+ * samples of one continuous variable, so ~20 rows of "Contour line" says
+ * nothing while a labelled gradient says all of it at a glance.
+ */
+function ElevationLegend({ elevation }: { elevation: ElevationLegendData }) {
+  const lo = elevation.contextLowM ?? elevation.lowM;
+  const hi = elevation.contextHighM ?? elevation.highM;
+  const span = hi - lo;
+  // Where the property sits on the map's range — that's what makes the
+  // swatches match the lines actually drawn over the lot.
+  const at = (m: number) => (span > 0 ? (m - lo) / span : 0.5);
+  const intervalMetres = elevation.interval.split(" ")[0];
+  // On a flat lot high === low, so separate rows would print the same
+  // number twice. One row states the fact instead.
+  const rows: { label: string; color?: string }[] =
+    elevation.fallM === null
+      ? [
+          {
+            // Name the interval. "Flat" from 5 m contours is a weaker claim
+            // than "flat" from 1 m, and the reader is entitled to know which.
+            label: `Property est. fall: flat to within ${intervalMetres} m`,
+          },
+          {
+            label: `Property elevation: ~${Math.round(elevation.highM)} m`,
+            color: contourColorAt(at(elevation.highM)),
+          },
+        ]
+      : [
+          { label: `Property est. fall: ~${elevation.fallM} m` },
+          {
+            label: `Property high: ~${Math.round(elevation.highM)} m`,
+            color: contourColorAt(at(elevation.highM)),
+          },
+          {
+            label: `Property low: ~${Math.round(elevation.lowM)} m`,
+            color: contourColorAt(at(elevation.lowM)),
+          },
+        ];
+  return (
+    <>
+      {rows.map((r) => (
+        <li key={r.label} className="flex items-center gap-2">
+          {r.color ? (
+            <span
+              className="h-1.5 w-3 shrink-0 rounded-full"
+              style={{ background: r.color }}
+            />
+          ) : (
+            <span className="size-3 shrink-0" />
+          )}
+          <span className="text-foreground/80">{r.label}</span>
+        </li>
+      ))}
+      <li className="mt-1 flex items-stretch gap-2">
+        <span
+          className="w-3 shrink-0 rounded-full"
+          style={{
+            minHeight: "4.5rem",
+            background: `linear-gradient(to top, ${CONTOUR_RAMP.join(", ")})`,
+          }}
+        />
+        <span className="flex flex-col justify-between py-0.5 text-[11.5px] text-muted-foreground">
+          <span>{Math.round(hi)} m</span>
+          <span>{Math.round(lo)} m</span>
+        </span>
+      </li>
+    </>
+  );
+}
+
 export function ModuleSection({
   row,
   narrative,
@@ -427,7 +721,16 @@ export function ModuleSection({
       : undefined;
   const mapOverlays = extractOverlays(row.module, row.raw);
   const applicableOverlays = extractOverlays(row.module, row.raw, { scope: "property" });
-  const legendItems = splitLegendItems(mapOverlays, applicableOverlays);
+  const legendItemsAll = splitLegendItems(mapOverlays, applicableOverlays);
+  // Contours collapse to one "Contour line" row; the gradient bar below
+  // replaces it, so drop it from the swatch list rather than showing both.
+  const elevationLegend = (raw?.elevation ?? null) as ElevationLegendData | null;
+  const dropContourRow = (items: { color: string; label: string }[]) =>
+    elevationLegend ? items.filter((i) => i.label !== CONTOUR_LEGEND_LABEL) : items;
+  const legendItems = {
+    applies: dropContourRow(legendItemsAll.applies),
+    nearby: dropContourRow(legendItemsAll.nearby),
+  };
   // ModuleFacts returns null for modules with nothing to tabulate — resolve
   // it first so we don't render an empty facts box around nothing.
   const factsContent = raw ? ModuleFacts({ module: row.module, raw }) : null;
@@ -575,6 +878,7 @@ export function ModuleSection({
                 />
                 <span className="text-foreground/80">{SELECTED_PROPERTY_STYLE.label}</span>
               </li>
+              {elevationLegend && <ElevationLegend elevation={elevationLegend} />}
               {legendItems.applies.map((item) => (
                 <li key={`applies-${item.color}-${item.label}`} className="flex items-center gap-2">
                   <span

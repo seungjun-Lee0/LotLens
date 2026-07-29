@@ -13,7 +13,7 @@ import { UnlockButton } from "@/components/report/unlock-button";
 import { getSessionUser, isAdmin } from "@/lib/auth";
 import { formatAuAddress } from "@/lib/format-address";
 import { loadReportPayload } from "@/lib/pipeline";
-import { RISK_RANK, riskOf } from "@/lib/risk-style";
+import { isFlagged, isInformational, RISK_RANK, riskOf } from "@/lib/risk-style";
 import type { Module } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -61,19 +61,28 @@ export default async function ReportPage({
     (m.raw as Record<string, unknown>).fetchFailed === true;
   const failedCount = modules.filter(isFailed).length;
 
-  // Clear-module diet: full sections (map + narrative) only for modules
-  // with something to say — flagged or unreachable. Clear modules render
-  // as a compact evidence strip instead of 12 screens of nothing-to-see.
+  // Three lanes, all reading from the same two facts on each row:
+  //   flagged        → full section, ⚠, counted, feeds Next steps
+  //   informational  → full section, neutral chip, NOT counted
+  //   clear          → compact evidence strip, no map
+  // Note what informational is NOT: it is not the "clear" lane. School
+  // catchments and the zone code are the content buyers actually read, so
+  // they keep their map and narrative — they just stop shouting.
   // Body keeps the canonical module order (comparable across reports);
   // severity-first reading lives in the At-a-glance verdict layer.
   const attentionModules = paid
-    ? modules.filter((m) => m.hasConsideration || isFailed(m))
+    ? modules.filter((m) => isFlagged(m.riskLevel, m.hasConsideration) || isFailed(m))
     : modules.filter((m) => m.module === PREVIEW_MODULE);
+  const infoModules = paid
+    ? modules.filter(
+        (m) => isInformational(m.riskLevel, m.hasConsideration) && !isFailed(m),
+      )
+    : [];
   const clearModules = paid
     ? modules.filter((m) => !m.hasConsideration && !isFailed(m))
     : [];
   const flaggedBySeverity = modules
-    .filter((m) => m.hasConsideration && !isFailed(m))
+    .filter((m) => isFlagged(m.riskLevel, m.hasConsideration) && !isFailed(m))
     .sort(
       (a, b) =>
         RISK_RANK[riskOf(b.riskLevel, b.hasConsideration)] -
@@ -134,6 +143,32 @@ export default async function ReportPage({
             <NextSteps rows={flaggedBySeverity} narrative={report.narrative} />
           )}
 
+          {paid && infoModules.length > 0 && (
+            <>
+              <div className="flex flex-col gap-1.5 px-1 pt-2">
+                <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+                  Good to know
+                </h2>
+                <p className="max-w-xl text-pretty text-[13.5px] leading-relaxed text-muted-foreground sm:text-[14px]">
+                  Facts about the address rather than warnings — what the land
+                  is zoned for, which schools it&apos;s in catchment for, what
+                  transport is nearby. Nothing here needs action.
+                </p>
+              </div>
+              {infoModules.map((row) => (
+                <ModuleSection
+                  key={row.module}
+                  row={row}
+                  narrative={report.narrative[row.module as Module]}
+                  lat={address.lat}
+                  lng={address.lng}
+                  propertyPolygon={propertyPolygon}
+                  lotLines={parcelLines}
+                />
+              ))}
+            </>
+          )}
+
           {paid && (
             <ClearModules rows={clearModules} narrative={report.narrative} />
           )}
@@ -191,7 +226,10 @@ export default async function ReportPage({
           full sections to make scrolling a chore. */}
       {paid && (
         <ModuleNav
-          items={attentionModules.map((m) => ({
+          // Every module that rendered a section, in body order — the nav
+          // has to reach the informational ones too or "jump to Zoning"
+          // silently does nothing.
+          items={[...attentionModules, ...infoModules].map((m) => ({
             module: m.module,
             riskLevel: m.riskLevel,
             hasConsideration: m.hasConsideration,

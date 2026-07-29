@@ -37,6 +37,9 @@ import { fetchSteepLandData } from "../lib/modules/steep-land";
 import { fetchStormTideData } from "../lib/modules/storm-tide";
 import { fetchVegetationData } from "../lib/modules/vegetation";
 import { fetchZoningData } from "../lib/modules/zoning";
+import { fetchLocalPlansData } from "../lib/modules/local-plans";
+import { fetchStormwaterData } from "../lib/modules/stormwater";
+import { fetchTransportData } from "../lib/modules/transport";
 
 const SNAPSHOT_PATH = join(process.cwd(), "scripts", "golden-snapshot.json");
 
@@ -58,7 +61,9 @@ type FixtureGolden = {
   label: string;
   lotPlan: string | null;
   lga: string | null;
-  modules: Record<Module, ModuleGolden>;
+  /** Partial: a module gated off by a feature flag (water_sewer) isn't
+   * fetched, so it isn't snapshotted either. */
+  modules: Partial<Record<Module, ModuleGolden>>;
 };
 type Snapshot = Record<string, FixtureGolden>;
 
@@ -70,6 +75,7 @@ async function classify(lat: number, lng: number): Promise<Omit<FixtureGolden, "
   const [
     flood, floodPlan, overland, stormTide, fire, veg, env, herit,
     ease, noise, steep, acid, mine, schools, zone,
+    stormwater, localPlans, transport,
   ] = await Promise.all([
     fetchFloodingData(lat, lng, region, lot),
     fetchFloodPlanningData(lat, lng, region, lot),
@@ -86,6 +92,9 @@ async function classify(lat: number, lng: number): Promise<Omit<FixtureGolden, "
     fetchMiningData(lat, lng, lot),
     fetchSchoolsData(lat, lng),
     fetchZoningData(lat, lng, region),
+    fetchStormwaterData(lat, lng, region, lot),
+    fetchLocalPlansData(lat, lng, region, lot),
+    fetchTransportData(lat, lng),
   ]);
 
   const g = (r: {
@@ -117,6 +126,9 @@ async function classify(lat: number, lng: number): Promise<Omit<FixtureGolden, "
       mining: g(mine),
       schools: g(schools),
       zoning: g(zone),
+      stormwater: g(stormwater),
+      local_plans: g(localPlans),
+      transport: g(transport),
     },
   };
 }
@@ -127,7 +139,23 @@ async function main() {
   const current: Snapshot = {};
   for (const f of FIXTURES) {
     console.log(`fetching ${f.label} …`);
-    current[f.key] = { label: f.label, ...(await classify(f.lat, f.lng)) };
+    // Government layers 5xx intermittently — MSES was measured failing
+    // roughly 1 run in 3 with no other load. classify() calls the fetchers
+    // directly (no `settle` wrapper, unlike the pipeline), so a single
+    // flaky layer would abort the whole snapshot. Retry before believing it.
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        current[f.key] = { label: f.label, ...(await classify(f.lat, f.lng)) };
+        lastErr = undefined;
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.warn(`  ! attempt ${attempt} failed: ${(err as Error).message.slice(0, 90)}`);
+        if (attempt < 3) await new Promise((r) => setTimeout(r, 4000 * attempt));
+      }
+    }
+    if (lastErr) throw lastErr;
   }
 
   if (update) {
@@ -160,6 +188,7 @@ async function main() {
     for (const m of Object.keys(want.modules) as Module[]) {
       const w = want.modules[m];
       const c = got.modules[m];
+      if (!w) continue;
       if (!c) {
         diffs.push(`${f.key}/${m}: missing from current run`);
         continue;

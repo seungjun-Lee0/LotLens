@@ -17,10 +17,22 @@ import {
 import type { ModuleNarrative } from "@/lib/anthropic";
 import { formatAuAddress } from "@/lib/format-address";
 import { MODULE_META, APPLE_HEX } from "@/lib/module-meta";
-import { extractOverlays, type OverlayFeature } from "@/lib/overlays";
+import {
+  contourColorAt,
+  CONTOUR_LEGEND_LABEL,
+  CONTOUR_RAMP,
+  extractOverlays,
+  type OverlayFeature,
+} from "@/lib/overlays";
 import type { ReportPayload } from "@/lib/pipeline";
 import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
-import { RISK_RANK, RISK_STYLE, riskOf } from "@/lib/risk-style";
+import {
+  isFlagged,
+  isInformational,
+  RISK_RANK,
+  RISK_STYLE,
+  riskOf,
+} from "@/lib/risk-style";
 import type { Module, RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
@@ -531,6 +543,29 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
     case "steep_land": {
       const rows: { key: string; val: string }[] = [];
       if (raw.category) rows.push({ key: "Overlay", val: String(raw.category) });
+      const elev = raw.elevation as RawAttrs | null;
+      if (elev) {
+        // Develo's "Property High / Low / Est. Fall", measured from LiDAR
+        // contours. Fall leads — it's the number that changes build cost.
+        rows.push({
+          key: "Est. fall",
+          val:
+            elev.fallM === null
+              ? `Flat to within ${String(elev.interval).split(" ")[0]} m`
+              : `${elev.fallM} m`,
+        });
+        rows.push({
+          key: "Elevation",
+          val:
+            elev.fallM === null
+              ? `~${elev.highM} m AHD`
+              : `${elev.lowM} m – ${elev.highM} m AHD`,
+        });
+        rows.push({
+          key: "Measured from",
+          val: `${elev.interval} contours${elev.scope === "nearby" ? " (surrounding area — no contour crosses the lot)" : ""}`,
+        });
+      }
       return rows;
     }
     case "acid_sulfate": {
@@ -563,6 +598,91 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       if (raw.lvl2Zone) rows.push({ key: "Specific", val: String(raw.lvl2Zone) });
       if (raw.lvl1Zone) rows.push({ key: "Family", val: String(raw.lvl1Zone) });
       return rows;
+    }
+    case "stormwater": {
+      const rows: { key: string; val: string }[] = [];
+      const assets = asArr<RawAttrs>(raw.assets);
+      const publicAssets = assets.filter((a) => a.public === true);
+      rows.push({
+        key: "On the lot",
+        val:
+          assets.length === 0
+            ? "Nothing mapped"
+            : `${assets.length} asset${assets.length > 1 ? "s" : ""} (${publicAssets.length} Council-owned)`,
+      });
+      // Only the public assets get itemised — the private roof-water runs
+      // are numerous and carry no obligation.
+      for (const a of publicAssets.slice(0, 3)) {
+        rows.push({
+          key: String(a.kind ?? "Asset"),
+          val: [a.diameter, a.pipeType, a.material]
+            .filter(Boolean)
+            .map(String)
+            .join(" · ") || "Council-owned",
+        });
+      }
+      rows.push({
+        key: "Build over/near",
+        val: raw.hasPublicAssetOnLot === true
+          ? "Council approval required"
+          : "Not triggered by mapped assets",
+      });
+      return rows;
+    }
+    case "water_sewer": {
+      const rows: { key: string; val: string }[] = [];
+      const assets = asArr<RawAttrs>(raw.assets);
+      const mains = assets.filter((a) => a.isMain === true);
+      rows.push({
+        key: "On the lot",
+        val:
+          mains.length === 0
+            ? "No main crosses the lot"
+            : `${mains.length} main${mains.length > 1 ? "s" : ""} / structure${mains.length > 1 ? "s" : ""}`,
+      });
+      for (const a of mains.slice(0, 3)) {
+        rows.push({
+          key: String(a.kind ?? "Main"),
+          val:
+            [
+              a.diameterMm ? `${String(a.diameterMm)} mm` : null,
+              a.material,
+              a.depthM ? `${String(a.depthM)} m deep` : null,
+            ]
+              .filter(Boolean)
+              .map(String)
+              .join(" · ") || "Urban Utilities asset",
+        });
+      }
+      rows.push({
+        key: "Build over/near",
+        val:
+          raw.hasTrunkOrPressureMainOnLot === true
+            ? "Generally not permitted — trunk or pressure main"
+            : raw.hasMainOnLot === true
+              ? "Urban Utilities approval required"
+              : "Not triggered by mapped assets",
+      });
+      return rows;
+    }
+    case "local_plans": {
+      const rows: { key: string; val: string }[] = [];
+      if (raw.planName) rows.push({ key: "Plan", val: String(raw.planName) });
+      for (const p of asArr<RawAttrs>(raw.precincts).slice(0, 3)) {
+        rows.push({
+          key: p.code ? `Precinct ${String(p.code)}` : "Precinct",
+          val: [p.name, p.subPrecinct].filter(Boolean).map(String).join(" — "),
+        });
+      }
+      return rows;
+    }
+    case "transport": {
+      return asArr<RawAttrs>(raw.stops)
+        .slice(0, 4)
+        .map((s) => ({
+          key: String(s.kind ?? "Stop"),
+          val: `${s.name ? `${String(s.name)} · ` : ""}${String(s.distanceM)} m`,
+        }));
     }
   }
 }
@@ -601,22 +721,40 @@ function ModulePage({
   // same red/orange/gold everywhere, never the module tint, so relative
   // seriousness is readable at a flip-through.
   const level = riskOf(riskLevel, hasConsideration);
+  const info = !failed && isInformational(riskLevel, hasConsideration);
   const statusColor = failed ? APPLE_HEX.orange : RISK_STYLE[level].hex;
   const statusLabel = failed
     ? "Not checked · source unavailable"
-    : hasConsideration
-      ? `Considerations · ${RISK_STYLE[level].label}`
-      : "No considerations identified";
+    : info
+      ? "For information"
+      : hasConsideration
+        ? `Considerations · ${RISK_STYLE[level].label}`
+        : "No considerations identified";
+  // Steep Land gets Develo's elevation legend instead of a swatch list —
+  // contours are samples of one continuous variable, not categories.
+  const elevationLegend = (raw?.elevation ?? null) as {
+    highM: number;
+    lowM: number;
+    fallM: number | null;
+    interval: string;
+    contextLowM: number | null;
+    contextHighM: number | null;
+  } | null;
   const legendAll = splitLegendItems(
     extractOverlays(module, raw),
     extractOverlays(module, raw, { scope: "property" }),
   );
+  // The single "Contour line" row is replaced by the gradient below.
+  const dropContourRow = (items: { color: string; label: string }[]) =>
+    elevationLegend ? items.filter((i) => i.label !== CONTOUR_LEGEND_LABEL) : items;
+  const appliesAll = dropContourRow(legendAll.applies);
+  const nearbyAll = dropContourRow(legendAll.nearby);
   const legendItems = {
-    applies: legendAll.applies.slice(0, 7),
-    nearby: legendAll.nearby.slice(0, Math.max(0, 9 - Math.min(7, legendAll.applies.length))),
+    applies: appliesAll.slice(0, 7),
+    nearby: nearbyAll.slice(0, Math.max(0, 9 - Math.min(7, appliesAll.length))),
   };
   const legendMore =
-    legendAll.applies.length + legendAll.nearby.length -
+    appliesAll.length + nearbyAll.length -
     (legendItems.applies.length + legendItems.nearby.length);
 
   return (
@@ -717,6 +855,56 @@ function ModulePage({
             />
             <Text style={styles.legendLabel}>{SELECTED_PROPERTY_STYLE.label}</Text>
           </View>
+          {elevationLegend &&
+            (() => {
+              const lo = elevationLegend.contextLowM ?? elevationLegend.lowM;
+              const hi = elevationLegend.contextHighM ?? elevationLegend.highM;
+              const span = hi - lo;
+              const at = (m: number) => (span > 0 ? (m - lo) / span : 0.5);
+              return (
+                <>
+                  <View style={styles.legendRow}>
+                    <View style={[styles.legendSwatch, { backgroundColor: "transparent" }]} />
+                    <Text style={styles.legendLabel}>
+                      {elevationLegend.fallM === null
+                        ? `Property est. fall: flat to within ${elevationLegend.interval.split(" ")[0]} m`
+                        : `Property est. fall: ~${elevationLegend.fallM} m`}
+                    </Text>
+                  </View>
+                  {/* Flat lot: high === low, so one row rather than the
+                      same number printed twice. */}
+                  <View style={styles.legendRow}>
+                    <View style={[styles.legendSwatch, { backgroundColor: contourColorAt(at(elevationLegend.highM)) }]} />
+                    <Text style={styles.legendLabel}>
+                      {elevationLegend.fallM === null
+                        ? `Property elevation: ~${Math.round(elevationLegend.highM)} m`
+                        : `Property high: ~${Math.round(elevationLegend.highM)} m`}
+                    </Text>
+                  </View>
+                  {elevationLegend.fallM !== null && (
+                    <View style={styles.legendRow}>
+                      <View style={[styles.legendSwatch, { backgroundColor: contourColorAt(at(elevationLegend.lowM)) }]} />
+                      <Text style={styles.legendLabel}>
+                        Property low: ~{Math.round(elevationLegend.lowM)} m
+                      </Text>
+                    </View>
+                  )}
+                  {/* React-PDF has no CSS gradient, so stack the ramp stops
+                      as thin bands — visually identical at this size. */}
+                  <View style={{ flexDirection: "row", marginTop: 4, alignItems: "stretch" }}>
+                    <View style={{ width: 7, flexDirection: "column" }}>
+                      {[...CONTOUR_RAMP].reverse().map((c, i) => (
+                        <View key={i} style={{ backgroundColor: c, height: 7 }} />
+                      ))}
+                    </View>
+                    <View style={{ justifyContent: "space-between", paddingLeft: 4, paddingVertical: 1 }}>
+                      <Text style={styles.legendLabel}>{Math.round(hi)} m</Text>
+                      <Text style={styles.legendLabel}>{Math.round(lo)} m</Text>
+                    </View>
+                  </View>
+                </>
+              );
+            })()}
           {legendItems.applies.map((item) => (
             <View key={`applies-${item.color}-${item.label}`} style={styles.legendRow}>
               <View style={[styles.legendSwatch, { backgroundColor: item.color }]} />
@@ -789,10 +977,13 @@ function pdfIsFailed(m: ReportPayload["modules"][number]): boolean {
 
 /** Flagged/failed modules in reading order: most severe first, failed
  * checks last. Shared by the cover, the page-number references and the
- * document's module-page order so "p. N" on the cover stays truthful. */
+ * document's module-page order so "p. N" on the cover stays truthful.
+ *
+ * Informational modules are deliberately absent — they get their own pages
+ * AFTER these, which is what keeps the "p. N" arithmetic below valid. */
 function attentionOrder(modules: ReportPayload["modules"]) {
   return modules
-    .filter((m) => m.hasConsideration || pdfIsFailed(m))
+    .filter((m) => isFlagged(m.riskLevel, m.hasConsideration) || pdfIsFailed(m))
     .sort((a, b) => {
       const fa = pdfIsFailed(a) ? 1 : 0;
       const fb = pdfIsFailed(b) ? 1 : 0;
@@ -804,6 +995,15 @@ function attentionOrder(modules: ReportPayload["modules"]) {
     });
 }
 
+/** Facts, not warnings. Keeps a full page (map + narrative) like a flagged
+ * module, but is excluded from the count, the verdict list and Next steps.
+ * Canonical order, not severity — there is no severity to sort by. */
+function informationalOrder(modules: ReportPayload["modules"]) {
+  return modules.filter(
+    (m) => isInformational(m.riskLevel, m.hasConsideration) && !pdfIsFailed(m),
+  );
+}
+
 function AtAGlancePage({
   payload,
   branding,
@@ -813,7 +1013,11 @@ function AtAGlancePage({
 }) {
   const { report, address, modules, considerationCount } = payload;
   const attention = attentionOrder(modules);
+  const informational = informationalOrder(modules);
   const clear = modules.filter((m) => !m.hasConsideration && !pdfIsFailed(m));
+  // "N modules" must exclude the informational ones, or the headline count
+  // never reaches zero and the all-clear sentence is unreachable.
+  const riskCheckCount = modules.length - informational.length;
   const distanceKm = haversineKm(BRISBANE_CBD, { lat: address.lat, lng: address.lng });
   const zoningRow = modules.find((m) => m.module === "zoning");
   const zRaw =
@@ -833,10 +1037,13 @@ function AtAGlancePage({
       <Text style={styles.eyebrow}>At a glance</Text>
       <Text style={styles.title}>{formatAuAddress(address.address_text, payload.postcode)}</Text>
       <Text style={styles.question}>
-        {modules.length} public-data modules.{" "}
+        {riskCheckCount} public-data risk checks.{" "}
         {considerationCount === 0
           ? "Nothing of concern across the address."
           : `${considerationCount} module${considerationCount > 1 ? "s have" : " has"} something worth reading.`}
+        {informational.length > 0
+          ? ` Plus ${informational.length} for information.`
+          : ""}
       </Text>
 
       <View style={styles.divider} />
@@ -913,6 +1120,29 @@ function AtAGlancePage({
                   );
                 })}
               </View>
+            </>
+          )}
+
+          {/* Facts, not findings. Named with their page refs so the reader
+              can jump straight to the zone code or catchment without
+              reading them as a fourth tier of warning. Page arithmetic:
+              cover(1) + at-a-glance(2) + every attention page. */}
+          {informational.length > 0 && (
+            <>
+              <Text style={[styles.sectionLabel, { marginTop: 12, marginBottom: 3 }]}>
+                Good to know ({informational.length})
+              </Text>
+              <Text style={{ fontSize: 8, color: TEXT_BODY, lineHeight: 1.6 }}>
+                {informational
+                  .map(
+                    (m, i) =>
+                      `${MODULE_META[m.module].name} (p. ${attention.length + 3 + i})`,
+                  )
+                  .join("  ·  ")}
+              </Text>
+              <Text style={{ fontSize: 7, color: TEXT_MUTED, marginTop: 3 }}>
+                Facts about the address, not warnings. Nothing here needs action.
+              </Text>
             </>
           )}
 
@@ -1397,10 +1627,13 @@ export function ReportPDF({
     ? `${branding.name} Fact Pack · ${displayAddress}`
     : `LotLens Fact Pack · ${displayAddress}`;
 
-  // Clear-module diet: full pages only for flagged/failed checks, in the
-  // same severity order the cover lists them (so its "p. N" references
-  // hold). Clear checks collapse to the one-page evidence summary.
+  // Clear-module diet: full pages for flagged/failed checks in the same
+  // severity order the cover lists them (so its "p. N" references hold),
+  // then the informational pages, then the one-page evidence summary for
+  // checks that found nothing. Informational modules keep a full page —
+  // the zone code and the school catchment are content, not filler.
   const attention = attentionOrder(modules);
+  const informational = informationalOrder(modules);
   const clear = modules.filter((m) => !m.hasConsideration && !pdfIsFailed(m));
 
   return (
@@ -1408,6 +1641,23 @@ export function ReportPDF({
       <CoverPage payload={payload} branding={branding} coverPng={coverPng} />
       <AtAGlancePage payload={payload} branding={branding} />
       {attention.map((m) => {
+        const raw =
+          m.raw && typeof m.raw === "object" ? (m.raw as RawAttrs) : undefined;
+        return (
+          <ModulePage
+            key={m.module}
+            module={m.module}
+            hasConsideration={m.hasConsideration}
+            riskLevel={m.riskLevel}
+            narrative={report.narrative[m.module]}
+            raw={raw}
+            mapPng={mapByModule.get(m.module) ?? null}
+            address={displayAddress}
+            branding={branding}
+          />
+        );
+      })}
+      {informational.map((m) => {
         const raw =
           m.raw && typeof m.raw === "object" ? (m.raw as RawAttrs) : undefined;
         return (

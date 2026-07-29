@@ -5,7 +5,7 @@
 //
 // Run weekly (or before a release). Exit code 1 when anything fails, so
 // it drops straight into cron / GitHub Actions:
-//   - runs all 15 module fetchers at a Brisbane test point (covers every
+//   - runs every module fetcher at a Brisbane test point (covers every
 //     BCC + statewide layer exactly the way the pipeline calls them)
 //   - point-queries every per-council adapter at a test point inside that
 //     council (covers the Gold Coast / Moreton Bay / Sunshine Coast /
@@ -40,6 +40,9 @@ import { fetchSteepLandData } from "../lib/modules/steep-land";
 import { fetchStormTideData } from "../lib/modules/storm-tide";
 import { fetchVegetationData } from "../lib/modules/vegetation";
 import { fetchZoningData } from "../lib/modules/zoning";
+import { fetchLocalPlansData } from "../lib/modules/local-plans";
+import { fetchStormwaterData } from "../lib/modules/stormwater";
+import { fetchTransportData } from "../lib/modules/transport";
 
 // Brisbane test point — the Graceville hero/demo lot (115RP73818).
 const BNE = { lat: -27.519, lng: 152.9727 };
@@ -92,7 +95,7 @@ async function main() {
   const region = regionFromParcel(parcel.lga, BNE.lat, BNE.lng);
   const lot = parcel.polygon;
 
-  // All 15 module fetchers, exactly as the pipeline calls them.
+  // Every module fetcher, exactly as the pipeline calls them.
   const moduleChecks: Array<[string, () => Promise<unknown>]> = [
     ["module:flooding",       () => fetchFloodingData(BNE.lat, BNE.lng, region, lot)],
     ["module:flood_planning", () => fetchFloodPlanningData(BNE.lat, BNE.lng, region, lot)],
@@ -109,6 +112,9 @@ async function main() {
     ["module:mining",         () => fetchMiningData(BNE.lat, BNE.lng, lot)],
     ["module:schools",        () => fetchSchoolsData(BNE.lat, BNE.lng)],
     ["module:zoning",         () => fetchZoningData(BNE.lat, BNE.lng, region)],
+    ["module:stormwater",     () => fetchStormwaterData(BNE.lat, BNE.lng, region, lot)],
+    ["module:local_plans",    () => fetchLocalPlansData(BNE.lat, BNE.lng, region, lot)],
+    ["module:transport",      () => fetchTransportData(BNE.lat, BNE.lng)],
   ];
   results.push(
     ...(await Promise.all(moduleChecks.map(([name, run]) => check(name, run)))),

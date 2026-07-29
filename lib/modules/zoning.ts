@@ -23,8 +23,9 @@
 //
 // Every Brisbane parcel sits inside exactly one zone polygon — so the
 // query effectively never returns 0 features for a valid Brisbane LGA
-// point. We surface 'low' riskLevel when there *is* a zone (informational
-// only — not a real risk axis) and 'none' as a "couldn't resolve" fallback.
+// point. We surface the 'informational' riskLevel when there *is* a zone
+// (it's a fact about the land, not a risk axis — a severity here would fire
+// on every report) and 'none' as a "couldn't resolve" fallback.
 //
 // Verified: CBD → PC1; Rocklea Markets → OS Open space; Chermside → MU2
 // Mixed use (Centre frame).
@@ -134,7 +135,7 @@ export async function fetchZoningData(
   const resolved = Boolean(zoneCode ?? lvl1Zone);
 
   return {
-    riskLevel: resolved ? "low" : "none",
+    riskLevel: resolved ? "informational" : "none",
     zoneCode,
     zonePrecinct,
     lvl1Zone,
@@ -185,7 +186,7 @@ async function fetchCouncilZoning(
   const resolved = Boolean(parsed.zonePrecinct ?? parsed.lvl1Zone ?? parsed.zoneCode);
 
   return {
-    riskLevel: resolved ? "low" : "none",
+    riskLevel: resolved ? "informational" : "none",
     ...parsed,
     hasConsideration: resolved,
     sources: [{ name: adapter.sourceName, url: adapter.docUrl, layer: adapter.url }],
@@ -228,7 +229,7 @@ async function fetchSeqRegionalZoning(
   const council = region ? councilDisplayName(region) : "the local council";
 
   return {
-    riskLevel: rluc ? "low" : "none",
+    riskLevel: rluc ? "informational" : "none",
     zoneCode: null,
     zonePrecinct: rluc ? `${rluc} (SEQ Regional Plan)` : null,
     lvl1Zone: rluc,

@@ -350,9 +350,10 @@
 
 /* ── Landing hero: loupe, cycling module chips, layer washes ──────────────
    The hero shows a blurred aerial with a sharp circular "loupe". Around it,
-   module chips pop in/out in three groups (4+4+3 = all 11 modules) on a
-   shared 14 s cycle; inside the loupe a matching overlay wash fades in sync.
-   Groups: g1 water/flood · g2 hazard/heritage · g3 planning/lifestyle. */
+   module chips pop in/out in five groups (4+4+4+2+4 = all 18 modules) on a
+   shared 24 s cycle; inside the loupe a matching overlay wash fades in sync.
+   Groups: g1 water/flood · g2 hazard/vegetation · g3 underground/resources
+   · g4 heritage/noise · g5 planning/lifestyle. */
 @layer utilities {
   /* Solid frosted look WITHOUT backdrop-filter — cheap to composite while
      animating (the loupe chips pop on a loop, so per-frame filter recompute
@@ -362,29 +363,43 @@
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
   }
-  .cycle-g1, .cycle-g2, .cycle-g3 { opacity: 0; visibility: hidden; }
+  .cycle-g1, .cycle-g2, .cycle-g3, .cycle-g4, .cycle-g5 { opacity: 0; visibility: hidden; }
   .cycle-g1 { animation: lens-cyc1 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
   .cycle-g2 { animation: lens-cyc2 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
   .cycle-g3 { animation: lens-cyc3 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
+  .cycle-g4 { animation: lens-cyc4 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
+  .cycle-g5 { animation: lens-cyc5 24s infinite; animation-delay: calc(var(--i, 0) * 0.18s); }
 
   /* Loupe overlay layers fade in sync with each chip group (opacity only —
      the transform-based chip pop doesn't suit SVG <g> elements). */
-  .lens-fade1, .lens-fade2, .lens-fade3 { opacity: 0; }
+  .lens-fade1, .lens-fade2, .lens-fade3, .lens-fade4, .lens-fade5 { opacity: 0; }
   .lens-fade1 { animation: lens-fade1 24s infinite; }
   .lens-fade2 { animation: lens-fade2 24s infinite; }
   .lens-fade3 { animation: lens-fade3 24s infinite; }
-  /* Wide 4-5% ramps (≈1s at 24s) so layers dissolve instead of popping. */
+  .lens-fade4 { animation: lens-fade4 24s infinite; }
+  .lens-fade5 { animation: lens-fade5 24s infinite; }
+  /* 3% ramps (≈0.7s at 24s) so layers dissolve instead of popping.
+     Five 20% phases now, not three 33% ones — same 24s loop, so the
+     whole module set still shows in the time one visit lasts. */
   @keyframes lens-fade1 {
-    0% { opacity: 0; } 4% { opacity: 1; } 27% { opacity: 1; }
-    32% { opacity: 0; } 100% { opacity: 0; }
+    0% { opacity: 0; } 3% { opacity: 1; } 16% { opacity: 1; }
+    19% { opacity: 0; } 100% { opacity: 0; }
   }
   @keyframes lens-fade2 {
-    0%, 33% { opacity: 0; } 37% { opacity: 1; } 60% { opacity: 1; }
-    65% { opacity: 0; } 100% { opacity: 0; }
+    0%, 20% { opacity: 0; } 23% { opacity: 1; } 36% { opacity: 1; }
+    39% { opacity: 0; } 100% { opacity: 0; }
   }
   @keyframes lens-fade3 {
-    0%, 66% { opacity: 0; } 70% { opacity: 1; } 93% { opacity: 1; }
-    98% { opacity: 0; } 100% { opacity: 0; }
+    0%, 40% { opacity: 0; } 43% { opacity: 1; } 56% { opacity: 1; }
+    59% { opacity: 0; } 100% { opacity: 0; }
+  }
+  @keyframes lens-fade4 {
+    0%, 60% { opacity: 0; } 63% { opacity: 1; } 76% { opacity: 1; }
+    79% { opacity: 0; } 100% { opacity: 0; }
+  }
+  @keyframes lens-fade5 {
+    0%, 80% { opacity: 0; } 83% { opacity: 1; } 96% { opacity: 1; }
+    99% { opacity: 0; } 100% { opacity: 0; }
   }
 
   /* Enter-once reveals (module tiles + pricing). Triggered by the <Reveal>
@@ -553,33 +568,53 @@
      clicks meant for the visible group (all groups share anchor slots). */
   @keyframes lens-cyc1 {
     0% { opacity: 0; transform: scale(0.85) translateY(6px); visibility: visible; }
-    4% { opacity: 1; transform: scale(1.02) translateY(0); }
-    6% { transform: scale(1); }
-    27% { opacity: 1; transform: scale(1); visibility: visible; }
-    32% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
+    3% { opacity: 1; transform: scale(1.02) translateY(0); visibility: visible; }
+    5% { transform: scale(1); }
+    15% { opacity: 1; transform: scale(1); visibility: visible; }
+    19% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
     100% { opacity: 0; transform: scale(0.9); visibility: hidden; }
   }
   @keyframes lens-cyc2 {
-    0%, 33% { opacity: 0; transform: scale(0.85) translateY(6px); visibility: hidden; }
-    37% { opacity: 1; transform: scale(1.02) translateY(0); visibility: visible; }
-    39% { transform: scale(1); }
-    60% { opacity: 1; transform: scale(1); visibility: visible; }
-    65% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
+    0%, 20% { opacity: 0; transform: scale(0.85) translateY(6px); visibility: hidden; }
+    23% { opacity: 1; transform: scale(1.02) translateY(0); visibility: visible; }
+    25% { transform: scale(1); }
+    35% { opacity: 1; transform: scale(1); visibility: visible; }
+    39% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
     100% { opacity: 0; transform: scale(0.9); visibility: hidden; }
   }
   @keyframes lens-cyc3 {
-    0%, 66% { opacity: 0; transform: scale(0.85) translateY(6px); visibility: hidden; }
-    70% { opacity: 1; transform: scale(1.02) translateY(0); visibility: visible; }
-    72% { transform: scale(1); }
-    93% { opacity: 1; transform: scale(1); visibility: visible; }
-    98% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
+    0%, 40% { opacity: 0; transform: scale(0.85) translateY(6px); visibility: hidden; }
+    43% { opacity: 1; transform: scale(1.02) translateY(0); visibility: visible; }
+    45% { transform: scale(1); }
+    55% { opacity: 1; transform: scale(1); visibility: visible; }
+    59% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
     100% { opacity: 0; transform: scale(0.9); visibility: hidden; }
   }
+  @keyframes lens-cyc4 {
+    0%, 60% { opacity: 0; transform: scale(0.85) translateY(6px); visibility: hidden; }
+    63% { opacity: 1; transform: scale(1.02) translateY(0); visibility: visible; }
+    65% { transform: scale(1); }
+    75% { opacity: 1; transform: scale(1); visibility: visible; }
+    79% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
+    100% { opacity: 0; transform: scale(0.9); visibility: hidden; }
+  }
+  @keyframes lens-cyc5 {
+    0%, 80% { opacity: 0; transform: scale(0.85) translateY(6px); visibility: hidden; }
+    83% { opacity: 1; transform: scale(1.02) translateY(0); visibility: visible; }
+    85% { transform: scale(1); }
+    95% { opacity: 1; transform: scale(1); visibility: visible; }
+    99% { opacity: 0; transform: scale(0.9) translateY(-4px); visibility: hidden; }
+    100% { opacity: 0; transform: scale(0.9); visibility: hidden; }
+  }
+  /* Reduced motion: freeze on group 1 and hide the rest. Every group after
+     the first MUST be listed — they all stack in the same absolute slot, so
+     one missing selector renders its chips and caption on top of group 1's.
+     Keep this in step with the .cycle-gN / .lens-fadeN sets above. */
   @media (prefers-reduced-motion: reduce) {
     .cycle-g1 { animation: none; opacity: 1; visibility: visible; }
-    .cycle-g2, .cycle-g3 { animation: none; display: none; }
+    .cycle-g2, .cycle-g3, .cycle-g4, .cycle-g5 { animation: none; display: none; }
     .lens-fade1 { animation: none; opacity: 1; }
-    .lens-fade2, .lens-fade3 { animation: none; opacity: 0; }
+    .lens-fade2, .lens-fade3, .lens-fade4, .lens-fade5 { animation: none; opacity: 0; }
     .mod-card { transition: none; }
   }
 }

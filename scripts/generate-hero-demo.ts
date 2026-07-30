@@ -103,6 +103,15 @@ const SVC = {
   kraResource: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/GeoscientificInformation/MiningResources/MapServer/9/query",
   kraSeparation: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/GeoscientificInformation/MiningResources/MapServer/10/query",
   bccLandslide: "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Landslide_overlay/FeatureServer/0/query",
+  swPipe: "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Stormwater_Pipe_Existing/FeatureServer/0/query",
+  swManhole: "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Stormwater_Manhole_Existing/FeatureServer/0/query",
+  swGully: "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Stormwater_Gully_Existing/FeatureServer/0/query",
+  npBoundary: "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Neighbourhood_Plan_boundaries/FeatureServer/0/query",
+  npPrecinct: "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Neighbourhood_Plan_precints/FeatureServer/0/query",
+  stopTrain: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Transportation/OtherTransport/MapServer/101/query",
+  stopBus: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Transportation/OtherTransport/MapServer/102/query",
+  stopFerry: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Transportation/OtherTransport/MapServer/103/query",
+  stopTram: "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Transportation/OtherTransport/MapServer/104/query",
 } as const;
 
 const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
@@ -193,11 +202,84 @@ function rdp(pts: [number, number][], tol: number): [number, number][] {
   return pts.filter((_, i) => keep[i]);
 }
 
+// The hero paints FILLED paths only — it has no stroke or circle renderer.
+// Stormwater pipes are polylines and transport stops are points, so give
+// them area here rather than teaching the client a second drawing mode:
+// a pipe becomes a thin ribbon, a stop becomes a small square. Widths are
+// real metres, converted through the hero bbox.
+const M_TO_U = 1 / HW;
+const ASPECT = HH / HW; // v-units → u-units, so offsets stay isotropic
+const LINE_HALF_M = 2; // 4 m ribbon ≈ 2 px background, 6 px in the loupe
+const POINT_HALF_M = 4; // 8 m marker — a stop has to survive the loupe zoom
+
+/** One convex quad per segment, not a single ribbon polygon: a sharp bend
+ * would make a ribbon self-intersect, and Sutherland–Hodgman clipping is
+ * only well-behaved on simple polygons. Overlapping quads fill seamlessly. */
+function lineToQuads(coords: number[][], halfMetres: number): [number, number][][] {
+  const h = halfMetres * M_TO_U;
+  const pts = coords.map(toUV);
+  const out: [number, number][][] = [];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const [x1, v1] = pts[i];
+    const [x2, v2] = pts[i + 1];
+    const y1 = v1 * ASPECT;
+    const y2 = v2 * ASPECT;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) continue;
+    const nx = (-dy / len) * h;
+    const ny = (dx / len) * h;
+    out.push([
+      [x1 + nx, (y1 + ny) / ASPECT],
+      [x2 + nx, (y2 + ny) / ASPECT],
+      [x2 - nx, (y2 - ny) / ASPECT],
+      [x1 - nx, (y1 - ny) / ASPECT],
+    ]);
+  }
+  return out;
+}
+
+function pointToSquare(coord: number[], halfMetres: number): [number, number][] {
+  const [u, v] = toUV(coord);
+  const hu = halfMetres * M_TO_U;
+  const hv = halfMetres / HH;
+  return [
+    [u - hu, v - hv],
+    [u + hu, v - hv],
+    [u + hu, v + hv],
+    [u - hu, v + hv],
+  ];
+}
+
 function geometryToRings(geom: Geometry, tol = 0): Ring[] {
   const polys: number[][][][] =
     geom.type === "Polygon" ? [geom.coordinates] :
     geom.type === "MultiPolygon" ? geom.coordinates : [];
+  const lines: number[][][] =
+    geom.type === "LineString" ? [geom.coordinates] :
+    geom.type === "MultiLineString" ? geom.coordinates : [];
+  const points: number[][] =
+    geom.type === "Point" ? [geom.coordinates] :
+    geom.type === "MultiPoint" ? geom.coordinates : [];
+  // Already in uv space and already minimal (4 vertices), so these skip the
+  // toUV/RDP steps below — but still get clipped and rounded like any ring.
+  const synthetic: [number, number][][] = [
+    ...lines.flatMap((l) => lineToQuads(l, LINE_HALF_M)),
+    ...points.map((p) => pointToSquare(p, POINT_HALF_M)),
+  ];
   const rings: Ring[] = [];
+  for (const pts of synthetic) {
+    const clipped = clipRing(pts);
+    if (clipped.length < 3) continue;
+    const rounded: Ring = [];
+    for (const [u, v] of clipped) {
+      const q = [Math.round(u * 1e4) / 1e4, Math.round(v * 1e4) / 1e4];
+      const last = rounded[rounded.length - 1];
+      if (!last || last[0] !== q[0] || last[1] !== q[1]) rounded.push(q);
+    }
+    if (rounded.length >= 3) rings.push(rounded);
+  }
   for (const poly of polys) {
     for (const raw of poly) {
       let pts = raw.map(toUV);
@@ -414,6 +496,13 @@ function note(
       ? { note: `${hits.length} catchment${hits.length > 1 ? "s" : ""}`, hit: true }
       : { note: "none mapped", hit: false };
   }
+  // A point layer can never "contain" the lot, so the generic hit test would
+  // always report it off-lot. Count is the meaningful figure for stops.
+  if (moduleKey === "transport") {
+    return inFrameCount > 0
+      ? { note: `${inFrameCount} stop${inFrameCount > 1 ? "s" : ""}`, hit: false }
+      : { note: "none nearby", hit: false };
+  }
   if (hits.length > 0) return { note: shortLabel(hits[0].properties.legendLabel), hit: true };
   return inFrameCount > 0
     ? { note: `${Math.min(inFrameCount, 99)} nearby`, hit: false }
@@ -452,6 +541,9 @@ async function main() {
     ass25, ass100,
     tenements, kraRes, kraSep,
     landslide,
+    swPipe, swManhole, swGully,
+    npBoundary, npPrecinct,
+    stopTrain, stopBus, stopFerry, stopTram,
   ] = await Promise.all([
     context(SVC.floodOverall, "FLOOD_RISK", 0.00014),
     context(SVC.flood2022, "OBJECTID", 0.00014),
@@ -481,11 +573,25 @@ async function main() {
     context(SVC.kraResource, "objectid"),
     context(SVC.kraSeparation, "objectid"),
     context(SVC.bccLandslide, "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT"),
+    // OWNER + PIPETYPE drive the public/private split in stormwaterColor.
+    context(SVC.swPipe, "OWNER,PIPETYPE", 0.00003),
+    context(SVC.swManhole, "OWNER", 0.00003),
+    context(SVC.swGully, "OWNER", 0.00003),
+    context(SVC.npBoundary, "LP"),
+    context(SVC.npPrecinct, "LP,LP_PREC,LP_PREC_CODE"),
+    context(SVC.stopTrain, "stop_name"),
+    context(SVC.stopBus, "stop_name"),
+    context(SVC.stopFerry, "stop_name"),
+    context(SVC.stopTram, "stop_name"),
   ]);
 
   // Assemble raw shapes exactly as extractOverlays() expects them.
-  // (Partial: the hero demo shows the original 11 modules — the newer
-  // statewide modules can be added here when the loupe needs them.)
+  //
+  // water_sewer is deliberately ABSENT. This fixture is committed and served
+  // from the landing page, so putting Urban Utilities geometry in it would
+  // publish their data — the exact thing the WATER_SEWER_ENABLED flag exists
+  // to hold back until they confirm reuse terms. Add it here only when the
+  // flag goes on.
   const rawByModule: Partial<Record<Module, unknown>> = {
     flooding: { context: { overall: floodOverall, historic2022: flood2022, historic2011: flood2011 } },
     flood_planning: { context: { river: fpRiver, creek: fpCreek } },
@@ -506,6 +612,19 @@ async function main() {
       context: { tenements, kraResource: kraRes, kraSeparation: kraSep },
     },
     steep_land: { context: landslide },
+    stormwater: {
+      context: { pipe: swPipe, manhole: swManhole, gully: swGully, endStructure: EMPTY_FC },
+    },
+    local_plans: { context: { boundary: npBoundary, precinct: npPrecinct } },
+    // Keyed by the mode names extractOverlays() looks up, not layer ids.
+    transport: {
+      context: {
+        "Train station": stopTrain,
+        "Ferry terminal": stopFerry,
+        "Bus stop": stopBus,
+        "Tram stop": stopTram,
+      },
+    },
   };
 
   const modules: Record<string, HeroModule> = {};

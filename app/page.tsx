@@ -1,21 +1,4 @@
-﻿import {
-  CloudRain,
-  Droplets,
-  Flame,
-  GraduationCap,
-  Landmark,
-  LayoutGrid,
-  Leaf,
-  Mountain,
-  PawPrint,
-  ScrollText,
-  TrendingUp,
-  Volume2,
-  Waves,
-  Wind,
-} from "lucide-react";
-
-import { SiteHeader } from "@/components/site/site-header";
+﻿import { SiteHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { AddressForm } from "@/components/site/address-form";
 import { CtaStage } from "@/components/site/cta-stage";
@@ -23,6 +6,8 @@ import { FaqScroller } from "@/components/site/faq-scroller";
 import { Reveal } from "@/components/site/reveal";
 import { SubscribeButton } from "@/components/site/billing-buttons";
 import { HeroShowcase, type HeroDemoData } from "@/components/site/hero-showcase";
+import { MODULE_ORDER, type Module } from "@/lib/db";
+import { MODULE_META } from "@/lib/module-meta";
 
 // Real report data for the hero's demo lot (Stafford, 10SP348436) — actual
 // cadastre parcel + per-module council overlays, snapshotted by
@@ -33,127 +18,138 @@ import heroDemoJson from "@/lib/hero-demo-data.json";
 const heroDemo = heroDemoJson as unknown as HeroDemoData;
 
 // ── Landing module registry ──────────────────────────────────────────────────────────────────────────────────────────────
-// `hex` mirrors the overlay colour the report map paints for that module.
-type LandingModule = {
-  icon: typeof Waves;
-  name: string;
-  blurb: string;
-  hex: string;
-};
-
-const MODULES: LandingModule[] = [
-  {
-    icon: Waves,
-    name: "Flooding",
+// The cards are DERIVED from MODULE_ORDER, not hand-listed. Name and icon
+// come from lib/module-meta.ts so the landing page can't drift out of sync
+// with what the report actually checks — which is exactly what happened
+// when this was a parallel copy: the report grew to 18 modules while the
+// landing page sat at 15 with no compiler complaint.
+//
+// Two consequences worth knowing:
+//   - A new module won't compile until it has a blurb below. That's the
+//     point: the type is the reminder.
+//   - A flag-gated module (water_sewer, pending Urban Utilities licence
+//     terms) is absent from MODULE_ORDER, so it never renders here either.
+//     Its card copy is written and waiting; flipping WATER_SEWER_ENABLED in
+//     lib/db.ts reveals it on the landing page and in the report together.
+//
+// `hex` is the OVERLAY colour the report map paints for that module, not
+// the Apple-palette icon tint — the cards are meant to read as map tiles.
+const MODULE_CARDS: Record<Module, { blurb: string; hex: string }> = {
+  flooding: {
     blurb: "River, creek & storm-tide risk, plus 2011 & 2022 historic events.",
     hex: "#3b82f6",
   },
-  {
-    icon: Waves,
-    name: "Flood Planning",
+  flood_planning: {
     blurb: "Which statutory flood planning area the lot sits in, and what it restricts.",
     hex: "#2563eb",
   },
-  {
-    icon: CloudRain,
-    name: "Overland Flow",
+  overland_flow: {
     blurb: "Stormwater run-off paths crossing the property.",
     hex: "#f97316",
   },
-  {
-    icon: Wind,
-    name: "Coastal Hazards",
+  storm_tide: {
     blurb: "Storm-tide inundation & erosion prone areas, QLD-wide.",
     hex: "#06b6d4",
   },
-  {
-    icon: Flame,
-    name: "Bushfire",
+  bushfire: {
     blurb: "Queensland bushfire hazard rating for the site.",
     hex: "#dc2626",
   },
-  {
-    icon: Leaf,
-    name: "Vegetation",
+  vegetation: {
     blurb: "Regulated vegetation (VMA), waterway & biodiversity overlays.",
     hex: "#16a34a",
   },
-  {
-    icon: PawPrint,
-    name: "Environment & Koala",
+  environment: {
     blurb: "Core koala habitat & state wildlife habitat mapping.",
     hex: "#10b981",
   },
-  {
-    icon: Landmark,
-    name: "Heritage & Character",
+  heritage: {
     blurb: "State/local heritage & pre-1947 character controls.",
     hex: "#7e22ce",
   },
-  {
-    icon: ScrollText,
-    name: "Easements",
+  easements: {
     blurb: "High-voltage & registered cadastral easements on the lot.",
     hex: "#db2777",
   },
-  {
-    icon: Volume2,
-    name: "Noise",
+  stormwater: {
+    blurb: "Council stormwater pipes on the lot, and whether you can build over them.",
+    hex: "#0284c7",
+  },
+  water_sewer: {
+    blurb: "Sewer and water mains crossing the lot, and the building restrictions they carry.",
+    hex: "#a21caf",
+  },
+  noise: {
     blurb: "Transport-corridor & aircraft (ANEF) noise bands.",
     hex: "#f59e0b",
   },
-  {
-    icon: TrendingUp,
-    name: "Steep Land",
-    blurb: "Landslide hazard & steep-land overlays from your council.",
+  steep_land: {
+    blurb: "Landslide overlays, plus the measured fall across the lot from statewide LiDAR.",
     hex: "#f59e0b",
   },
-  {
-    icon: Droplets,
-    name: "Acid Sulfate Soils",
+  acid_sulfate: {
     blurb: "Coastal-lowland soils that turn acidic when excavated.",
     hex: "#eab308",
   },
-  {
-    icon: Mountain,
-    name: "Mining & Resources",
+  mining: {
     blurb: "Resource tenures & quarry buffer areas over the lot.",
     hex: "#a855f7",
   },
-  {
-    icon: GraduationCap,
-    name: "School Catchments",
-    blurb: "State primary & secondary catchment zones.",
-    hex: "#14b8a6",
-  },
-  {
-    icon: LayoutGrid,
-    name: "Zoning",
+  zoning: {
     blurb: "City Plan zone, precinct & what you're allowed to build.",
     hex: "#6366f1",
   },
+  local_plans: {
+    blurb: "The neighbourhood plan that overrides your zone's height and density rules.",
+    hex: "#4f46e5",
+  },
+  schools: {
+    blurb: "State primary & secondary catchment zones.",
+    hex: "#14b8a6",
+  },
+  transport: {
+    blurb: "Walking distance to the nearest train, ferry, tram and bus stops.",
+    hex: "#84cc16",
+  },
+};
+
+const MODULES = MODULE_ORDER.map((module) => ({
+  module,
+  icon: MODULE_META[module].icon,
+  name: MODULE_META[module].name,
+  ...MODULE_CARDS[module],
+}));
+
+// Spelled-out counts read better than numerals in a headline. Falls back to
+// the numeral past the range, so a growing module list can't print a blank.
+const NUMBER_WORDS = [
+  "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight",
+  "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen",
+  "Sixteen", "Seventeen", "Eighteen", "Nineteen", "Twenty", "Twenty-one",
+  "Twenty-two", "Twenty-three", "Twenty-four", "Twenty-five",
 ];
+const moduleCountWord = NUMBER_WORDS[MODULES.length] ?? String(MODULES.length);
 
 const FAQS = [
   {
     q: "Is this legal or planning advice?",
-    a: "No. LotLens aggregates public council & state data into plain English for your own research. It's not legal, financial or planning advice — always confirm details with a qualified professional, conveyancer or the relevant Council before you act.",
+    a: "No. LotLens aggregates public council and state data into plain English for your own research. It is not legal, financial or planning advice. Always confirm details with a qualified professional, conveyancer or the relevant council before you act.",
   },
   {
     q: "How accurate is the data?",
-    a: "Every layer is queried live, straight from local council and Queensland Government sources at the moment you run the report — not a stale cached copy. Each finding cites its exact source layer.",
+    a: "Every layer is queried live from local council and Queensland Government sources at the moment you run the report, rather than from a cached copy. Each finding cites its exact source layer.",
   },
   {
     q: "Which areas are covered?",
-    a: "Any Queensland address. Statewide layers (cadastre, bushfire, coastal hazards, heritage register, vegetation, koala habitat, acid sulfate soils, mining, school catchments) run everywhere. Detailed council overlays (flood risk bands, zoning, transport noise, landslide) are live for Brisbane, Gold Coast, Moreton Bay, Sunshine Coast and Redland — and the report tells you honestly when a council layer isn't integrated yet for other LGAs.",
+    a: "Any Queensland address. Statewide layers (cadastre, bushfire, coastal hazards, heritage register, vegetation, koala habitat, acid sulfate soils, mining, school catchments, public transport, land contours) run everywhere. Detailed council overlays (flood risk bands, zoning, transport noise, landslide) are live for Brisbane, Gold Coast, Moreton Bay, Sunshine Coast and Redland, while stormwater assets and neighbourhood plans are Brisbane only for now. Where a council layer is not yet integrated for your local government area, the report states so explicitly rather than reporting the layer as clear.",
   },
   {
     q: "Do I get a PDF I can share?",
-    a: "Yes — the full report includes a branded A4 fact pack with the maps, narrative and sources, ready to forward to your conveyancer or partner.",
+    a: "Yes. The full report includes a branded A4 fact pack with the maps, narrative and sources, ready to forward to your conveyancer or partner.",
   },
   {
     q: "How long does it take?",
-    a: "Seconds. Enter an address and the report generates on the spot — no waiting on an email.",
+    a: "Seconds. Enter an address and the report generates on the spot, with no waiting on an email.",
   },
 ];
 
@@ -163,7 +159,7 @@ const DISCLAIMER =
 export default function Home() {
   return (
     <>
-      <SiteHeader />
+      <SiteHeader sectionNav />
 
       {/* ── HERO — blurred aerial full-bleed, sharp loupe on the right ── */}
       {/* overflow-CLIP, not hidden: hidden boxes are still programmatically
@@ -208,9 +204,9 @@ export default function Home() {
                 against the pale aerial behind the stacked phone hero.
                 Dark mode keeps the original muted tone. */}
             <p className="max-w-lg text-pretty text-[15px] leading-relaxed text-foreground/80 dark:text-muted-foreground sm:text-[16.5px]">
-              Flood, bushfire, heritage, easements, zoning and more — every
-              council &amp; state layer for an address, on one map and explained
-              in plain English. Before you sign.
+              Flood, bushfire, heritage, easements and zoning. Every council and
+              state layer for an address, on one map and explained in plain
+              English before you sign.
             </p>
 
             <AddressForm
@@ -232,7 +228,7 @@ export default function Home() {
               <b className="font-medium text-foreground">
                 Flooding preview free
               </b>{" "}
-              · full report $19 during beta · no signup to preview
+              · full report $19 · no account needed to preview
             </p>
           </div>
 
@@ -247,18 +243,19 @@ export default function Home() {
               What&rsquo;s checked
             </div>
             <h2 className="mt-2 text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
-              Fifteen layers, one report.
+              {moduleCountWord} layers, one report.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-pretty text-[14px] leading-relaxed text-muted-foreground">
               Every tile is that overlay exactly as it renders on your
-              report&rsquo;s map — same colours, same amber lot outline.
+              report&rsquo;s map, in the same colours and against the same amber
+              lot outline.
             </p>
           </div>
 
-          {/* 2-up on phones — a single column of 16 cards scrolls forever */}
+          {/* 2-up on phones — one tall column of cards scrolls forever */}
           <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
             {MODULES.map((m, i) => (
-              <Reveal key={m.name} className="card-reveal" delay={(i % 4) * 90}>
+              <Reveal key={m.module} className="card-reveal" delay={(i % 4) * 90}>
                 <div
                   className="mod-card group relative h-full rounded-2xl border border-border/60 bg-card/70 p-4 sm:p-5"
                   style={{ ["--c" as string]: m.hex }}
@@ -281,7 +278,7 @@ export default function Home() {
             {/* filler card — rounds out the grid */}
             <Reveal className="card-reveal" delay={(MODULES.length % 4) * 90}>
               <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-border/70 p-4 text-center text-[12.5px] leading-snug text-muted-foreground">
-                + more layers added each sprint
+                Further layers added regularly
               </div>
             </Reveal>
           </div>
@@ -303,36 +300,26 @@ export default function Home() {
           </div>
 
           <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 md:grid-cols-3">
-            {/* Single report — beta price */}
+            {/* Single report */}
             <Reveal className="rise-reveal">
             <div className="flex h-full flex-col gap-4 rounded-3xl border border-border/60 bg-card/60 p-5 sm:p-7">
               <div className="flex items-baseline justify-between">
                 <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground/70">
                   Single report
                 </div>
-                <span
-                  className="rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider"
-                  style={{
-                    background:
-                      "color-mix(in oklab, var(--apple-green) 14%, transparent)",
-                    color: "var(--apple-green)",
-                  }}
-                >
-                  Beta
-                </span>
+                <div className="text-[12px] text-muted-foreground">
+                  Pay as you go
+                </div>
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-semibold tracking-tight sm:text-5xl">$19</span>
-                <span className="text-[14px] text-muted-foreground line-through">
-                  $29
-                </span>
                 <span className="text-[13px] text-muted-foreground">AUD</span>
               </div>
               <p className="text-[12px] text-muted-foreground">
-                One-off · per address · $29 after beta
+                One payment, one address
               </p>
               <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-muted-foreground">
-                <li>· All 15 modules for one address</li>
+                <li>· All {MODULES.length} modules for one address</li>
                 <li>· A4 PDF export, branded cover</li>
                 <li>· No subscription, no auto-renewal</li>
                 <li>· Flooding preview always free first</li>
@@ -364,12 +351,12 @@ export default function Home() {
                 </span>
               </div>
               <p className="text-[12px] text-muted-foreground">
-                For serious house-hunting weeks
+                For an active property search
               </p>
               <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-muted-foreground">
                 <li>· 10 full reports per month</li>
                 <li>· Single user</li>
-                <li>· Renews monthly — no automatic top-ups</li>
+                <li>· Renews monthly, with no automatic top-ups</li>
                 <li>· Manage or cancel in one click</li>
               </ul>
               <div className="mt-auto">
@@ -402,21 +389,18 @@ export default function Home() {
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-4xl font-semibold tracking-tight sm:text-5xl">$79</span>
-                <span className="text-[14px] text-muted-foreground line-through">
-                  $99
-                </span>
                 <span className="text-[13px] text-muted-foreground">
                   AUD / month
                 </span>
               </div>
               <p className="text-[12px] text-muted-foreground">
-                Beta price · $99/month after beta
+                For teams reviewing properties every week
               </p>
               <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-foreground/80">
                 <li>· 50 full reports per month</li>
                 <li>· Branded PDF reports</li>
-                <li>· Buyer&rsquo;s agents &amp; conveyancers</li>
-                <li>· Renews monthly — no automatic top-ups</li>
+                <li>· Buyer&rsquo;s agents and conveyancers</li>
+                <li>· Renews monthly, with no automatic top-ups</li>
               </ul>
               <div className="mt-auto">
                 <SubscribeButton plan="pro" label="Start Pro" />
@@ -426,8 +410,8 @@ export default function Home() {
           </div>
 
           <p className="text-center text-[12px] text-muted-foreground">
-            Monthly plans renew monthly and never top up without confirmation ·
-            Secure checkout via Stripe · Apple Pay &amp; cards accepted ·{" "}
+            Subscriptions renew monthly and never top up without confirmation ·
+            Secure checkout via Stripe · Apple Pay and cards accepted ·{" "}
             <a
               href="mailto:hello@lotlens.au"
               className="underline underline-offset-2 hover:text-foreground"
@@ -445,7 +429,7 @@ export default function Home() {
               FAQ
             </div>
             <h2 className="mt-2 text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
-              Good questions.
+              Common questions.
             </h2>
           </div>
           <FaqScroller items={FAQS} />
@@ -471,7 +455,7 @@ export default function Home() {
             See what&rsquo;s really on the lot.
           </h2>
           <p className="mx-auto mt-3 max-w-md text-pretty text-[14.5px] leading-relaxed text-muted-foreground">
-            Flooding preview is free. Ninety seconds now can save a very
+            The flooding preview is free. Ninety seconds now can prevent an
             expensive surprise later.
           </p>
           {/* the search itself — no detour back to the top */}

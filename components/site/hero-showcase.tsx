@@ -43,11 +43,14 @@ const HERO_AERIAL_MOBILE_SRC = "/hero-aerial-m.jpg";
 const LOUPE_AERIAL_SRC = "/hero-loupe.jpg";
 
 // ── Module registry (icon tints mirror the report overlay palette) ──────
+// Order mirrors MODULE_ORDER in lib/db.ts so the rail reads in the same
+// sequence as the report body. water_sewer is absent on purpose: its data
+// isn't in the fixture (see the note in scripts/generate-hero-demo.ts).
 type ModuleKey =
   | "flooding" | "flood_planning" | "overland_flow" | "storm_tide"
   | "bushfire" | "vegetation" | "environment" | "heritage" | "easements"
-  | "noise" | "steep_land" | "acid_sulfate" | "mining"
-  | "schools" | "zoning";
+  | "stormwater" | "noise" | "steep_land" | "acid_sulfate" | "mining"
+  | "zoning" | "local_plans" | "schools" | "transport";
 
 const RAIL: { key: ModuleKey; label: string; hex: string }[] = [
   { key: "flooding", label: "Flooding", hex: "#3b82f6" },
@@ -59,12 +62,15 @@ const RAIL: { key: ModuleKey; label: string; hex: string }[] = [
   { key: "environment", label: "Environment & Koala", hex: "#10b981" },
   { key: "heritage", label: "Heritage", hex: "#7e22ce" },
   { key: "easements", label: "Easements", hex: "#db2777" },
+  { key: "stormwater", label: "Stormwater", hex: "#0284c7" },
   { key: "noise", label: "Noise", hex: "#f59e0b" },
   { key: "steep_land", label: "Steep Land", hex: "#d97706" },
   { key: "acid_sulfate", label: "Acid Sulfate Soils", hex: "#eab308" },
   { key: "mining", label: "Mining & Resources", hex: "#a855f7" },
-  { key: "schools", label: "Schools", hex: "#14b8a6" },
   { key: "zoning", label: "Zoning", hex: "#6366f1" },
+  { key: "local_plans", label: "Local Plans", hex: "#4f46e5" },
+  { key: "schools", label: "Schools", hex: "#14b8a6" },
+  { key: "transport", label: "Public Transport", hex: "#84cc16" },
 ];
 const META = Object.fromEntries(RAIL.map((m) => [m.key, m])) as Record<
   ModuleKey,
@@ -82,6 +88,14 @@ const SLOT_POS = [
   "right-[2%] bottom-[24%] sm:right-[-2%] sm:bottom-[26%]",
   "left-[11%] bottom-[10%] sm:left-[5%] sm:bottom-[11%]",
 ];
+// Every module in RAIL gets a chip, so the cycle shows the whole set rather
+// than a sample of it. Four anchor slots means ceil(18 / 4) = FIVE groups —
+// four wouldn't fit (16 < 18). Adding a sixth slot isn't an option: the
+// positions are already at the phone-safe limit, and anything past the
+// container edge widens the hero grid track and clips the page.
+//
+// Keep this in sync with the .cycle-gN / .lens-fadeN keyframes in
+// globals.css — the group count lives in both places.
 const CHIPS: { key: ModuleKey; group: string; i: number }[] = [
   { key: "flooding", group: "cycle-g1", i: 0 },
   { key: "flood_planning", group: "cycle-g1", i: 1 },
@@ -89,23 +103,36 @@ const CHIPS: { key: ModuleKey; group: string; i: number }[] = [
   { key: "storm_tide", group: "cycle-g1", i: 3 },
   { key: "bushfire", group: "cycle-g2", i: 0 },
   { key: "vegetation", group: "cycle-g2", i: 1 },
-  { key: "heritage", group: "cycle-g2", i: 2 },
-  { key: "easements", group: "cycle-g2", i: 3 },
-  { key: "noise", group: "cycle-g3", i: 0 },
-  { key: "schools", group: "cycle-g3", i: 1 },
-  { key: "zoning", group: "cycle-g3", i: 3 },
+  { key: "environment", group: "cycle-g2", i: 2 },
+  { key: "steep_land", group: "cycle-g2", i: 3 },
+  { key: "easements", group: "cycle-g3", i: 0 },
+  { key: "stormwater", group: "cycle-g3", i: 1 },
+  { key: "acid_sulfate", group: "cycle-g3", i: 2 },
+  { key: "mining", group: "cycle-g3", i: 3 },
+  // Two chips on opposite slots — a sparse beat between the dense groups.
+  { key: "heritage", group: "cycle-g4", i: 0 },
+  { key: "noise", group: "cycle-g4", i: 2 },
+  { key: "zoning", group: "cycle-g5", i: 0 },
+  { key: "local_plans", group: "cycle-g5", i: 1 },
+  { key: "schools", group: "cycle-g5", i: 2 },
+  { key: "transport", group: "cycle-g5", i: 3 },
 ];
 
 // Auto-cycle groups — derived from CHIPS so the chips on screen and the
-// layers painting the map are always the SAME set of modules.
-const GROUPS: ModuleKey[][] = [1, 2, 3].map((g) =>
-  CHIPS.filter((c) => c.group === `cycle-g${g}`).map((c) => c.key),
+// layers painting the map are always the SAME set of modules. The group
+// COUNT is derived too, so adding a cycle-g6 needs no edit here.
+const GROUP_COUNT = new Set(CHIPS.map((c) => c.group)).size;
+const GROUPS: ModuleKey[][] = Array.from({ length: GROUP_COUNT }, (_, i) =>
+  CHIPS.filter((c) => c.group === `cycle-g${i + 1}`).map((c) => c.key),
 );
 
+// One caption per group, in order.
 const CAPTIONS = [
-  "Water & flood layers · 1/3",
-  "Hazard & heritage layers · 2/3",
-  "Planning & lifestyle layers · 3/3",
+  "Water & flood layers · 1/5",
+  "Hazard & vegetation layers · 2/5",
+  "Underground & resource layers · 3/5",
+  "Heritage & noise layers · 4/5",
+  "Planning & lifestyle layers · 5/5",
 ];
 
 // ── Geometry → SVG paths ─────────────────────────────────────────────────
@@ -571,7 +598,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                   type="button"
                   onClick={() => toggle(m.key)}
                   aria-pressed={active}
-                  title={`${m.label} — ${note(m.key)}`}
+                  title={`${m.label}: ${note(m.key)}`}
                   className={`glass-solid flex h-8 shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-3 transition-transform hover:scale-110 sm:size-7 sm:justify-center sm:gap-0 sm:px-0 ${empty && !active ? "opacity-45" : ""}`}
                   style={active ? { boxShadow: `0 0 0 2px ${m.hex}, var(--glass-shadow)` } : undefined}
                 >

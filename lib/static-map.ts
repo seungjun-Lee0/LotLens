@@ -3,14 +3,14 @@
 // Two-stage design, built for the PDF route's "render 16 module maps of
 // the SAME frame" workload:
 //
-//   1. BASE — the SAME Queensland Government aerial the web report map
+//   1. BASE: the SAME Queensland Government aerial the web report map
 //      uses (LatestStateProgram ImageServer), fetched as ONE exportImage
 //      request for the whole frame and promise-memoised, so 16 concurrent
 //      module renders share a single upstream call. No tile compositing
-//      at all — the previous tile pipeline both hammered the tile server
+//      at all: the previous tile pipeline both hammered the tile server
 //      (~380 duplicate fetches, two at a time) and scrambled the image
 //      when the Mapbox @2x URL returned 512px tiles into 256px slots.
-//   2. OVERLAYS — module polygons, cadastre hairlines, the yellow
+//   2. OVERLAYS: module polygons, cadastre hairlines, the yellow
 //      property outline and the pin are projected to pixels with plain
 //      web-mercator math and composited onto the base as an SVG layer by
 //      sharp. Pure CPU, no network, runs happily in parallel.
@@ -19,8 +19,9 @@ import sharp from "sharp";
 
 import type { OverlayFeature } from "@/lib/overlays";
 import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
+import { stopBadgeFragment } from "@/lib/stop-icons";
 
-// Same imagery service as components/report/module-map.tsx — the PDF and
+// Same imagery service as components/report/module-map.tsx: the PDF and
 // the on-screen report must show the identical basemap.
 const QLD_IMAGERY_EXPORT =
   "https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/exportImage";
@@ -51,6 +52,7 @@ function frameFor(
   width: number,
   height: number,
   propertyPolygon?: unknown | null,
+  extraPoints: number[][] = [],
 ): Frame {
   const cx = merX(lng);
   const cy = merY(lat);
@@ -68,16 +70,23 @@ function frameFor(
       }
     }
   }
+  // Point markers that must be in frame (transport stops): a tighter
+  // margin than the parcel's: a badge clipped at the very edge is fine,
+  // a sliced lot outline is not.
+  for (const [lon, la] of extraPoints) {
+    needX = Math.max(needX, Math.abs(merX(lon) - cx) * 1.15);
+    needY = Math.max(needY, Math.abs(merY(la) - cy) * 1.15);
+  }
   const scale = Math.min(10, Math.max(1, needX / hw, needY / hh));
   hw *= scale;
   hh *= scale;
   return { xmin: cx - hw, ymin: cy - hh, xmax: cx + hw, ymax: cy + hh };
 }
 
-// ── Base imagery — one exportImage call per frame ───────────────────────
+// ── Base imagery: one exportImage call per frame ───────────────────────
 
 // Promise-memo so concurrent module renders share ONE in-flight fetch.
-// Entries expire shortly after settling — a per-request dedupe, not a
+// Entries expire shortly after settling: a per-request dedupe, not a
 // long-lived cache.
 const basePromises = new Map<string, Promise<Buffer>>();
 
@@ -122,7 +131,24 @@ function polygonRings(geometry: { type?: string; coordinates?: unknown } | null 
   return [];
 }
 
-/** "Selected property" SVG fragments — white halo + amber outline (real
+function lineStrings(geometry: { type?: string; coordinates?: unknown } | null | undefined): number[][][] {
+  if (!geometry) return [];
+  if (geometry.type === "LineString") return [geometry.coordinates as number[][]];
+  if (geometry.type === "MultiLineString") return geometry.coordinates as number[][][];
+  return [];
+}
+
+/** Open path (no Z): closing a contour or pipe run would invent an edge. */
+function lineToPath(line: number[][], px: Px): string {
+  let d = "";
+  line.forEach(([lon, lat], i) => {
+    const [x, y] = px(lon, lat);
+    d += `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+  });
+  return d;
+}
+
+/** "Selected property" SVG fragments: white halo + amber outline (real
  * cadastre lot when present, ~60×60 m fallback box). No centre pin: the
  * lot outline alone marks the property. */
 function propertyParts(
@@ -173,6 +199,7 @@ export async function renderModuleMapPNG({
   overlays,
   propertyPolygon = null,
   lotLines = null,
+  fitPoints = false,
   width = 1200,
   height = 720,
 }: {
@@ -187,13 +214,23 @@ export async function renderModuleMapPNG({
   /** GeoJSON FeatureCollection of nearby cadastre lots, drawn as faint
    * white boundary lines so zone fills read per-lot. null = skip. */
   lotLines?: unknown | null;
+  /** Widen the frame so overlay POINT features (transport stops) are in
+   * view. Off by default: every other module frames the lot. */
+  fitPoints?: boolean;
   width?: number;
   height?: number;
 }): Promise<Buffer> {
-  const frame = frameFor(lat, lng, width, height, propertyPolygon);
+  const stopPoints: number[][] = [];
+  for (const f of overlays) {
+    if (f.geometry?.type === "Point") stopPoints.push(f.geometry.coordinates);
+  }
+  const frame = frameFor(
+    lat, lng, width, height, propertyPolygon,
+    fitPoints ? stopPoints : [],
+  );
   const basePromise = getBasePNG(frame, width, height);
 
-  // Linear mercator→pixel mapping over the exportImage frame — exact,
+  // Linear mercator→pixel mapping over the exportImage frame: exact,
   // because the imagery was requested in the same 3857 bbox.
   const spanX = frame.xmax - frame.xmin;
   const spanY = frame.ymax - frame.ymin;
@@ -204,7 +241,7 @@ export async function renderModuleMapPNG({
 
   const parts: string[] = [];
 
-  // Module overlays — evenodd so polygon holes render correctly (an
+  // Module overlays: evenodd so polygon holes render correctly (an
   // upgrade over the old outer-ring-only drawing).
   //
   // Fills go down in one pass, outlines in a second pass on top: painted
@@ -214,7 +251,8 @@ export async function renderModuleMapPNG({
   // ~0.44× downscale from this 1200 px render to the PDF page.
   const outlines: string[] = [];
   for (const f of overlays) {
-    for (const poly of polygonRings(f.geometry as { type?: string; coordinates?: unknown } | null)) {
+    const geom = f.geometry as { type?: string; coordinates?: unknown } | null;
+    for (const poly of polygonRings(geom)) {
       const d = ringsToPath(poly, px);
       if (!d) continue;
       const c = f.properties.fillColor;
@@ -225,10 +263,21 @@ export async function renderModuleMapPNG({
         `<path d="${d}" fill="none" stroke="${f.properties.strokeColor ?? c}" stroke-width="3.2" stroke-linejoin="round"/>`,
       );
     }
+    // LineString features (stormwater pipes, sewer/water mains, contour
+    // lines) stroke in their OWN colour, not the darkened outline tint -
+    // for contours the colour IS the elevation. Pushed with the outlines
+    // so they paint above every polygon fill.
+    for (const line of lineStrings(geom)) {
+      const d = lineToPath(line, px);
+      if (!d) continue;
+      outlines.push(
+        `<path d="${d}" fill="none" stroke="${f.properties.fillColor}" stroke-width="3" stroke-opacity="0.95" stroke-linecap="round" stroke-linejoin="round"/>`,
+      );
+    }
   }
   parts.push(...outlines);
 
-  // Cadastre lot boundaries — faint white hairlines so zone fills read
+  // Cadastre lot boundaries: faint white hairlines so zone fills read
   // per-lot (Develo-style) instead of as one flat colour wash.
   if (
     lotLines &&
@@ -252,10 +301,26 @@ export async function renderModuleMapPNG({
     ...propertyParts(px, propertyPolygon, lat, lng),
   );
 
+  // Point features, on top of everything. Fill/line drawing ignores Point
+  // geometry, so without these the stops never appeared on the PDF map at
+  // all. Modes with a badge (train/bus/ferry/tram) get the shared
+  // stop-icons marker; any other point falls back to a plain dot. The SVG
+  // viewBox clips whatever lands outside the frame.
+  for (const f of overlays) {
+    if (f.geometry?.type !== "Point") continue;
+    const [lon, la] = f.geometry.coordinates;
+    const [x, y] = px(lon, la);
+    const badge = stopBadgeFragment(f.properties.legendLabel, x, y, 38);
+    parts.push(
+      badge ??
+        `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${f.properties.fillColor}" stroke="#ffffff" stroke-width="1.5"/>`,
+    );
+  }
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join("")}</svg>`;
 
   const base = await basePromise;
-  // JPEG out, not PNG: aerial imagery is photographic — PNG made each map
+  // JPEG out, not PNG: aerial imagery is photographic: PNG made each map
   // ~2 MB and the 16-map fact pack a 30 MB download; JPEG q82 reads
   // identically at print size for ~a tenth of that.
   return sharp(base)
@@ -268,8 +333,8 @@ export async function renderModuleMapPNG({
  * Full-page portrait cover aerial in the landing-hero (light) style: the
  * near-grayscale washed aerial the homepage hero uses, with the white
  * veil gradient BAKED into the jpeg (react-pdf can't paint CSS
- * gradients) — heavy at the top and bottom where the cover type sits,
- * clear over the lot — plus the amber lot outline and pin.
+ * gradients): heavy at the top and bottom where the cover type sits,
+ * clear over the lot: plus the amber lot outline and pin.
  */
 export async function renderCoverAerial({
   lat,

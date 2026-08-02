@@ -20,7 +20,7 @@ import { loadReportPayload } from "@/lib/pipeline";
 import { renderCoverAerial, renderModuleMapPNG } from "@/lib/static-map";
 
 // Branding of the report's owner (subscriber feature). The logo is
-// fetched here — React-PDF can't fetch mid-render — with a size cap so a
+// fetched here: React-PDF can't fetch mid-render: with a size cap so a
 // hostile URL can't balloon the render. Any failure degrades to the
 // unbranded fact pack.
 async function loadBranding(reportId: string): Promise<ReportBranding | null> {
@@ -84,7 +84,7 @@ export async function GET(
   if (!payload) {
     return NextResponse.json({ error: "report not found" }, { status: 404 });
   }
-  // The report page only hides the download button for unpaid reports —
+  // The report page only hides the download button for unpaid reports -
   // enforce the paywall here too so the URL can't be hit directly.
   // Admins (ADMIN_EMAILS) always pass.
   if (!payload.paid && !isAdmin(await getSessionUser())) {
@@ -94,7 +94,7 @@ export async function GET(
     );
   }
 
-  // Render map PNGs in parallel — but only for modules that get a full
+  // Render map PNGs in parallel: but only for modules that get a full
   // page (flagged or failed); clear modules collapse to the summary page
   // and never show a map.
   const needsMap = payload.modules.filter(
@@ -104,7 +104,7 @@ export async function GET(
         typeof row.raw === "object" &&
         (row.raw as Record<string, unknown>).fetchFailed === true),
   );
-  // Cover aerial: full-page portrait in the landing-hero light style —
+  // Cover aerial: full-page portrait in the landing-hero light style -
   // washed imagery, white veil baked in, lot outline + pin.
   const coverPromise = renderCoverAerial({
     lat: payload.address.lat,
@@ -123,6 +123,9 @@ export async function GET(
           // Lot lines only benefit the zoning map (per-lot read of the
           // dissolved zone fill). Skip them on every other module.
           lotLines: row.module === "zoning" ? payload.parcelLines : null,
+          // Transport stops are points spread up to ~2 km out: widen the
+          // frame to include them (mirrors the web map's fitPoints).
+          fitPoints: row.module === "transport",
         });
         return { module: row.module, png };
       } catch (err) {

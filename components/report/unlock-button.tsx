@@ -57,8 +57,12 @@ export function UnlockButton({
         )}
         Unlock the full report for {priceLabel}
       </button>
+      {/* No module count here: MODULE_ORDER lives in lib/db, which pulls the
+          Neon driver into the client bundle, and the hardcoded copy this
+          replaced still said "15 modules" long after the report grew past it. */}
       <p className="text-[11.5px] text-muted-foreground">
-        Beta price ($29 after launch) · Stripe Checkout · all 15 modules instantly
+        One-off payment · Secure checkout via Stripe · Every module unlocked
+        instantly
       </p>
       {error && (
         <p className="text-[12px] text-[var(--apple-red)]">{error}</p>

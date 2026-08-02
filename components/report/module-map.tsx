@@ -4,8 +4,9 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import type { OverlayFeature } from "@/lib/overlays";
+import { CONTOUR_LEGEND_LABEL, type OverlayFeature } from "@/lib/overlays";
 import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
+import { hasStopIcon, stopBadgeSVG } from "@/lib/stop-icons";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -93,6 +94,7 @@ export function ModuleMap({
   applicableOverlays = [],
   propertyPolygon = null,
   lotLines = null,
+  fitPoints = false,
 }: {
   lat: number;
   lng: number;
@@ -110,6 +112,9 @@ export function ModuleMap({
    * sits on. When present we use this as the yellow "selected property"
    * highlight; falls back to a ~30 m square otherwise. */
   propertyPolygon?: unknown | null;
+  /** Widen the initial frame so overlay POINT features (transport stops)
+   * are in view. Off by default: every other module frames the lot. */
+  fitPoints?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -120,13 +125,16 @@ export function ModuleMap({
       container: containerRef.current,
       center: [lng, lat],
       zoom,
-      attributionControl: { compact: true },
+      // The compact control adds an info-button beside the attribution.
+      // At report-map scale that glyph reads like a broken logo; keep the
+      // required source credit permanently visible without the toggle.
+      attributionControl: { compact: false },
       cooperativeGestures: true,
       style: buildBasemapStyle(),
     });
     mapRef.current = map;
 
-    map.on("load", () => {
+    map.on("load", async () => {
       if (overlays.length > 0) {
         map.addSource("overlays", {
           type: "geojson",
@@ -147,20 +155,40 @@ export function ModuleMap({
             "fill-antialias": true,
           },
         });
+        // Polygon OUTLINES only. The darkened strokeColor is right for a
+        // border over that polygon's own 35% fill, but LineString features
+        // (stormwater pipes, contours) ARE their colour: darkening a
+        // contour breaks the elevation ramp, so they get their own layer.
         map.addLayer({
           id: "overlay-line",
           type: "line",
           source: "overlays",
+          filter: ["==", ["geometry-type"], "Polygon"],
           layout: {
             "line-join": "round",
             "line-cap": "round",
           },
           paint: {
-            // Darkened fill colour (see lib/overlays.ts) at full opacity —
+            // Darkened fill colour (see lib/overlays.ts) at full opacity -
             // a same-hue outline over a 35% fill blurs into it.
             "line-color": ["coalesce", ["get", "strokeColor"], ["get", "fillColor"]],
             "line-width": 2.4,
             "line-opacity": 1,
+          },
+        });
+        map.addLayer({
+          id: "overlay-linestrings",
+          type: "line",
+          source: "overlays",
+          filter: ["==", ["geometry-type"], "LineString"],
+          layout: {
+            "line-join": "round",
+            "line-cap": "round",
+          },
+          paint: {
+            "line-color": ["get", "fillColor"],
+            "line-width": 2,
+            "line-opacity": 0.95,
           },
         });
       }
@@ -231,7 +259,7 @@ export function ModuleMap({
         },
       });
       // Frame the property, not the overlay polygons (MapLibre clips those
-      // for free). Baseline is the tight Develo-style ~115 m half-width —
+      // for free). Baseline is the tight Develo-style ~115 m half-width -
       // but the bounds EXTEND to contain the whole selected parcel, so a
       // shopping-centre-sized lot (Westfield Chermside spans ~470 m)
       // doesn't get its outline sliced off at the viewport edges.
@@ -251,6 +279,13 @@ export function ModuleMap({
         }
       };
       if (propertyGeom !== fallbackBox) extendRings(propertyGeom);
+      const pointFeats = overlays.filter((f) => f.geometry?.type === "Point");
+      if (fitPoints) {
+        for (const f of pointFeats) {
+          const [x, y] = (f.geometry as GeoJSON.Point).coordinates;
+          bounds.extend([x, y]);
+        }
+      }
       map.fitBounds(
         bounds,
         // padding gives the parcel breathing room when it drives the
@@ -258,6 +293,73 @@ export function ModuleMap({
         // imagery's native resolution.
         { padding: 28, maxZoom: 18, duration: 0 },
       );
+
+      // Point features. Fill/line layers ignore Point geometry entirely,
+      // so without these the stops never appeared on the map at all.
+      // Modes with a badge (train/bus/ferry/tram) get the shared
+      // stop-icons marker; any other point falls back to a plain dot.
+      if (pointFeats.length > 0) {
+        const iconLabels = [
+          ...new Set(
+            pointFeats
+              .map((f) => f.properties.legendLabel)
+              .filter((l) => hasStopIcon(l)),
+          ),
+        ];
+        map.addLayer({
+          id: "overlay-points",
+          type: "circle",
+          source: "overlays",
+          filter: [
+            "all",
+            ["==", ["geometry-type"], "Point"],
+            ["!", ["in", ["get", "legendLabel"], ["literal", iconLabels]]],
+          ],
+          paint: {
+            "circle-radius": 4,
+            "circle-color": ["get", "fillColor"],
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 1.2,
+          },
+        });
+        // Badge images decode async from data URIs; the map can unmount
+        // mid-await (mapRef nulled in cleanup), so bail before touching it.
+        await Promise.all(
+          iconLabels.map(
+            (label) =>
+              new Promise<void>((resolve) => {
+                const svg = stopBadgeSVG(label, 48);
+                if (!svg) return resolve();
+                const img = new Image(48, 48);
+                img.onload = () => {
+                  if (mapRef.current === map && !map.hasImage(`stop:${label}`)) {
+                    map.addImage(`stop:${label}`, img, { pixelRatio: 2 });
+                  }
+                  resolve();
+                };
+                img.onerror = () => resolve();
+                img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+              }),
+          ),
+        );
+        if (mapRef.current !== map) return;
+        if (iconLabels.length > 0) {
+          map.addLayer({
+            id: "overlay-stop-icons",
+            type: "symbol",
+            source: "overlays",
+            filter: [
+              "all",
+              ["==", ["geometry-type"], "Point"],
+              ["in", ["get", "legendLabel"], ["literal", iconLabels]],
+            ],
+            layout: {
+              "icon-image": ["concat", "stop:", ["get", "legendLabel"]],
+              "icon-allow-overlap": true,
+            },
+          });
+        }
+      }
     });
 
     return () => {
@@ -285,8 +387,15 @@ export function ModuleMap({
       applies: applicableKeys.has(key),
     });
   }
-  const appliesItems = visibleLegendItems.filter((item) => item.applies);
-  const nearbyItems = visibleLegendItems.filter((item) => !item.applies);
+  // Show both property and surrounding context in the canvas legend without
+  // an extra scope suffix. Contours use the elevation legend
+  // below the map, so the generic line label is never shown here.
+  const appliesItems = visibleLegendItems.filter(
+    (item) => item.applies && item.label !== CONTOUR_LEGEND_LABEL,
+  );
+  const nearbyItems = visibleLegendItems.filter(
+    (item) => !item.applies && item.label !== CONTOUR_LEGEND_LABEL,
+  );
 
   return (
     <div className="relative">
@@ -341,7 +450,7 @@ export function ModuleMap({
                     outline: `1px solid color-mix(in oklab, ${item.color} 65%, transparent)`,
                   }}
                 />
-                <span className="truncate font-medium">{item.label} (nearby only)</span>
+                <span className="truncate font-medium">{item.label}</span>
               </li>
             ))}
           </ul>

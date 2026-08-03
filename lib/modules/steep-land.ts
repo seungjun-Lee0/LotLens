@@ -1,7 +1,7 @@
-// Steep land / landslide module — council landslide & steep-land overlays.
+// Steep land / landslide module: council landslide & steep-land overlays.
 //
 // Develo's "Steep Land" page. Landslide hazard is a council planning-scheme
-// matter (there is NO statewide landslide REST layer — verified 2026-07),
+// matter (there is NO statewide landslide REST layer: verified 2026-07),
 // so this module runs through per-council adapters:
 //   Brisbane        City Plan 2014 Landslide overlay (OVL2_DESC)
 //   Moreton Bay     Landslide Hazard Overlay
@@ -65,14 +65,14 @@ export async function fetchSteepLandData(
   region?: Region,
   lot?: Geometry | null,
 ): Promise<SteepLandResult> {
-  // No `?? "brisbane"` fallback here — unlike the other adapter tables this
+  // No `?? "brisbane"` fallback here: unlike the other adapter tables this
   // one HAS a brisbane entry, so an unknown LGA must not silently query
   // Brisbane's overlay and report a false "clear".
   const councilId = councilOf(region);
   const adapter = councilId ? STEEP_ADAPTERS[councilId] : undefined;
 
   // Contours are statewide and independent of the overlay, so fetch them
-  // for every address — including the ones with no council adapter. A
+  // for every address: including the ones with no council adapter. A
   // contour miss is "not measurable here", not a module failure, so this
   // never rejects the whole module.
   const elevationPromise = fetchElevationProfile(lat, lng, lot).catch(() => null);
@@ -80,7 +80,7 @@ export async function fetchSteepLandData(
   if (!adapter) {
     const elevation = await elevationPromise;
     // With elevation in hand the page is no longer empty, so don't mark it
-    // unavailable — say plainly that the hazard overlay is the missing
+    // unavailable: say plainly that the hazard overlay is the missing
     // half. Without it, fall back to the old "not integrated" page.
     if (!elevation) {
       return {
@@ -90,7 +90,7 @@ export async function fetchSteepLandData(
         hasConsideration: false,
         sources: [
           {
-            name: "Council planning scheme — landslide/steep land overlay",
+            name: "Council planning scheme: landslide/steep land overlay",
             url: "https://planning.statedevelopment.qld.gov.au/planning-framework/mapping",
             layer: "",
           },
@@ -114,7 +114,7 @@ export async function fetchSteepLandData(
       hasConsideration: true,
       sources: [
         {
-          name: "Queensland Government — LiDAR contours",
+          name: "Queensland Government: LiDAR contours",
           url: QLD_CONTOUR_DOC,
           layer: "",
         },
@@ -122,7 +122,7 @@ export async function fetchSteepLandData(
       raw: { overlay: EMPTY_FC, contours: elevation.contours },
       context: { overlay: EMPTY_FC, contours: elevation.contextContours },
       available: true,
-      availabilityNote: `Elevation is measured from statewide ${elevation.interval} contours. The council landslide / steep land overlay has not been integrated for this local government area yet — treat the hazard question as an open item.`,
+      availabilityNote: `Elevation is measured from statewide ${elevation.interval} contours. Council landslide and steep-land mapping varies by local government area, so confirm the hazard classification through the council's planning scheme mapping.`,
     };
   }
 
@@ -131,7 +131,7 @@ export async function fetchSteepLandData(
     elevationPromise,
   ]);
   const hit = point.features.length > 0;
-  // Worst band across all returned features — feature order isn't stable.
+  // Worst band across all returned features: feature order isn't stable.
   // (classifySteep(null, true) grades "medium", so rank the null seed -1.)
   const RANK = RISK_RANK;
   const label = overlayLabels(point, adapter.labelFields).reduce<string | null>(
@@ -143,7 +143,7 @@ export async function fetchSteepLandData(
   );
   const overlayRisk = classifySteep(label, hit);
   // The overlay drives severity when it fires. When it doesn't, a measured
-  // elevation range still keeps the page worth reading — as a fact.
+  // elevation range still keeps the page worth reading: as a fact.
   const riskLevel: RiskLevel =
     overlayRisk !== "none" ? overlayRisk : elevation ? "informational" : "none";
 
@@ -157,7 +157,7 @@ export async function fetchSteepLandData(
       ...(elevation
         ? [
             {
-              name: `Queensland Government — ${elevation.interval} contours`,
+              name: `Queensland Government: ${elevation.interval} contours`,
               url: QLD_CONTOUR_DOC,
               layer: "",
             },

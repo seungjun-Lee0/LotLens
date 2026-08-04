@@ -36,18 +36,18 @@ import {
 import type { Module, RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
-// ── Print tokens — corporate property-report palette (CoreLogic /
+// ── Print tokens: corporate property-report palette (CoreLogic /
 // valuation-firm register: white pages, slate ink, one navy accent that
 // customer branding may override, hairline rules everywhere) ────────────
 
 const TEXT_PRIMARY = "#0f172a"; // slate-900
 const TEXT_BODY = "#334155";    // slate-700
 const TEXT_MUTED = "#64748b";   // slate-500
-const PAGE_BG = "#ffffff";      // white — print-first
+const PAGE_BG = "#ffffff";      // white: print-first
 const SURFACE = "#ffffff";
 const HAIRLINE = "#e2e8f0";     // slate-200 rule
 const PANEL_BG = "#f8fafc";     // slate-50 callout fill
-const ACCENT_DEFAULT = "#1e3a8a"; // navy — overridden by brand colour
+const ACCENT_DEFAULT = "#1e3a8a"; // navy: overridden by brand colour
 
 /** Every page reserves this band at the bottom; the fixed footer paints
  * an opaque strip over it, so body content can NEVER visually collide
@@ -58,10 +58,10 @@ const HEADER_BAND = 46;
 const DISCLAIMER =
   "This report aggregates public data for informational purposes only. It is not legal, financial, or planning advice. Confirm all details with a qualified professional, conveyancer, or the relevant Council before making decisions.";
 
-/** One per module — null when the map render fails on that module. */
+/** One per module: null when the map render fails on that module. */
 export type ModuleMapPng = { module: Module; png: Buffer | null };
 
-/** Customer branding (subscriber feature) — replaces the plain LotLens
+/** Customer branding (subscriber feature): replaces the plain LotLens
  * identity on the cover/footers and adds an accent rule to every page.
  * `logo` is pre-fetched to a Buffer by the route (React-PDF must not
  * fetch mid-render). */
@@ -107,7 +107,7 @@ function asArr<T>(v: unknown): T[] {
 
 /** Cover one-liner from a module summary: the AI lead restates the full
  * address ("Westfield Chermside, Gympie Rd, … carries high flood risk…"),
- * which wastes the whole line on the cover — strip it, uppercase the
+ * which wastes the whole line on the cover: strip it, uppercase the
  * first letter, and truncate at a WORD boundary (mid-word "registered
  * c…" reads broken). */
 function coverLine(
@@ -118,14 +118,14 @@ function coverLine(
   let s = summary.trim();
   const addr = address.trim();
   if (addr && s.toLowerCase().startsWith(addr.toLowerCase())) {
-    s = s.slice(addr.length).replace(/^[\s,—–-]+/, "");
+    s = s.slice(addr.length).replace(/^[\s,-–-]+/, "");
   }
   if (s.length > 0) s = s[0].toUpperCase() + s.slice(1);
   const MAX = 95;
   if (s.length > MAX) {
     const cut = s.slice(0, MAX);
     const atWord = cut.slice(0, Math.max(40, cut.lastIndexOf(" ")));
-    s = `${atWord.replace(/[\s,;:—–-]+$/, "")}…`;
+    s = `${atWord.replace(/[\s,;:-–-]+$/, "")}…`;
   }
   return s || null;
 }
@@ -134,7 +134,12 @@ function legendItemsFromOverlays(overlays: OverlayFeature[]): { color: string; l
   const seen = new Set<string>();
   const items: { color: string; label: string }[] = [];
   for (const f of overlays) {
-    const key = `${f.properties.fillColor}|${f.properties.legendLabel}`;
+    // Contours share one label across the whole colour ramp, so keying on
+    // colour would list "Contour line" once per shade.
+    const key =
+      f.properties.legendLabel === CONTOUR_LEGEND_LABEL
+        ? CONTOUR_LEGEND_LABEL
+        : `${f.properties.fillColor}|${f.properties.legendLabel}`;
     if (seen.has(key)) continue;
     seen.add(key);
     items.push({
@@ -173,7 +178,7 @@ const styles = StyleSheet.create({
     lineHeight: 1.5,
     backgroundColor: PAGE_BG,
     // @react-pdf/layout 4.6 shrinks a page to its content height, which
-    // floats the fixed footer band up the page — pin every page to true
+    // floats the fixed footer band up the page: pin every page to true
     // A4 height.
     minHeight: 841.89,
   },
@@ -447,26 +452,26 @@ const styles = StyleSheet.create({
 
 function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; val: string }[] {
   if (!raw) return [];
-  // The source didn't respond when the report ran — one explanatory row,
+  // The source didn't respond when the report ran: one explanatory row,
   // distinct from "not integrated for this LGA" below.
   if (raw.fetchFailed === true) {
     return [
       {
-        key: "Not checked",
-        val: "This source didn't respond when the report ran. No finding here means \"not checked\", not \"clear\". Re-run the checks to retry.",
+        key: "Verification pending",
+        val: "The source mapping was unavailable when this report was prepared. Run the check again or confirm the property directly with the relevant authority.",
       },
     ];
   }
   // Council-overlay modules outside adapted LGAs mark themselves
-  // unavailable — one explanatory row instead of module facts.
+  // unavailable: one explanatory row instead of module facts.
   if (raw.available === false) {
     return [
       {
-        key: "Not available",
+        key: "Council confirmation",
         val:
           typeof raw.availabilityNote === "string"
             ? raw.availabilityNote
-            : "This overlay has not been integrated for this council area yet.",
+            : "LotLens does not provide this council overlay for the property location. Confirm it through the council's planning mapping.",
       },
     ];
   }
@@ -510,10 +515,12 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       return rows;
     }
     case "schools": {
-      const schools = asArr<{ name: string; type: string; yearLevels: string[] }>(raw.schools);
-      return schools.map((s, i) => ({
-        key: `Catchment ${i + 1}`,
-        val: `${s.name} · ${s.type} (years ${s.yearLevels.join(", ")})`,
+      const schools = asArr<{ name: string; type: string; yearRange?: string }>(raw.schools);
+      // Catchment type is the row key, so it doesn't need repeating in the
+      // value alongside the school name and its year range.
+      return schools.map((s) => ({
+        key: s.type || "Catchment",
+        val: s.yearRange ? `${s.name} · ${s.yearRange}` : s.name,
       }));
     }
     case "heritage": {
@@ -546,7 +553,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       const elev = raw.elevation as RawAttrs | null;
       if (elev) {
         // Develo's "Property High / Low / Est. Fall", measured from LiDAR
-        // contours. Fall leads — it's the number that changes build cost.
+        // contours. Fall leads: it's the number that changes build cost.
         rows.push({
           key: "Est. fall",
           val:
@@ -563,7 +570,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
         });
         rows.push({
           key: "Measured from",
-          val: `${elev.interval} contours${elev.scope === "nearby" ? " (surrounding area — no contour crosses the lot)" : ""}`,
+          val: `${elev.interval} contours${elev.scope === "nearby" ? " (surrounding area: no contour crosses the lot)" : ""}`,
         });
       }
       return rows;
@@ -610,7 +617,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
             ? "Nothing mapped"
             : `${assets.length} asset${assets.length > 1 ? "s" : ""} (${publicAssets.length} Council-owned)`,
       });
-      // Only the public assets get itemised — the private roof-water runs
+      // Only the public assets get itemised: the private roof-water runs
       // are numerous and carry no obligation.
       for (const a of publicAssets.slice(0, 3)) {
         rows.push({
@@ -658,7 +665,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
         key: "Build over/near",
         val:
           raw.hasTrunkOrPressureMainOnLot === true
-            ? "Generally not permitted — trunk or pressure main"
+            ? "Generally not permitted: trunk or pressure main"
             : raw.hasMainOnLot === true
               ? "Urban Utilities approval required"
               : "Not triggered by mapped assets",
@@ -671,7 +678,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       for (const p of asArr<RawAttrs>(raw.precincts).slice(0, 3)) {
         rows.push({
           key: p.code ? `Precinct ${String(p.code)}` : "Precinct",
-          val: [p.name, p.subPrecinct].filter(Boolean).map(String).join(" — "),
+          val: [p.name, p.subPrecinct].filter(Boolean).map(String).join(": "),
         });
       }
       return rows;
@@ -717,20 +724,20 @@ function ModulePage({
   const questions = (narrative?.questions_to_ask ?? []).slice(0, 4);
   const sources = Array.from(new Set(narrative?.sources ?? [])).slice(0, 4);
   const failed = raw?.fetchFailed === true;
-  // Severity colour rides the SHARED risk scale (lib/risk-style.ts) — the
+  // Severity colour rides the SHARED risk scale (lib/risk-style.ts): the
   // same red/orange/gold everywhere, never the module tint, so relative
   // seriousness is readable at a flip-through.
   const level = riskOf(riskLevel, hasConsideration);
   const info = !failed && isInformational(riskLevel, hasConsideration);
   const statusColor = failed ? APPLE_HEX.orange : RISK_STYLE[level].hex;
   const statusLabel = failed
-    ? "Not checked · source unavailable"
+    ? "Verification pending"
     : info
       ? "For information"
       : hasConsideration
         ? `Considerations · ${RISK_STYLE[level].label}`
         : "No considerations identified";
-  // Steep Land gets Develo's elevation legend instead of a swatch list —
+  // Steep Land gets Develo's elevation legend instead of a swatch list -
   // contours are samples of one continuous variable, not categories.
   const elevationLegend = (raw?.elevation ?? null) as {
     highM: number;
@@ -744,9 +751,10 @@ function ModulePage({
     extractOverlays(module, raw),
     extractOverlays(module, raw, { scope: "property" }),
   );
-  // The single "Contour line" row is replaced by the gradient below.
+  // A contour is a sample of elevation, not a legend category. Never show
+  // the generic "Contour line" swatch; the gradient below carries meaning.
   const dropContourRow = (items: { color: string; label: string }[]) =>
-    elevationLegend ? items.filter((i) => i.label !== CONTOUR_LEGEND_LABEL) : items;
+    items.filter((i) => i.label !== CONTOUR_LEGEND_LABEL);
   const appliesAll = dropContourRow(legendAll.applies);
   const nearbyAll = dropContourRow(legendAll.nearby);
   const legendItems = {
@@ -805,7 +813,19 @@ function ModulePage({
               <Text style={[styles.forPropertyLabel, { color: meta.tintHex }]}>
                 For this property
               </Text>
-              <Text style={styles.forPropertyText}>{narrative.detail}</Text>
+              {/* Blank lines = paragraph breaks (see the web renderer). */}
+              {narrative.detail.split(/\n{2,}/).map((para, i) => (
+                <Text
+                  key={i}
+                  style={
+                    i > 0
+                      ? [styles.forPropertyText, { marginTop: 5 }]
+                      : styles.forPropertyText
+                  }
+                >
+                  {para}
+                </Text>
+              ))}
             </View>
           )}
 
@@ -890,7 +910,7 @@ function ModulePage({
                     </View>
                   )}
                   {/* React-PDF has no CSS gradient, so stack the ramp stops
-                      as thin bands — visually identical at this size. */}
+                      as thin bands: visually identical at this size. */}
                   <View style={{ flexDirection: "row", marginTop: 4, alignItems: "stretch" }}>
                     <View style={{ width: 7, flexDirection: "column" }}>
                       {[...CONTOUR_RAMP].reverse().map((c, i) => (
@@ -915,7 +935,7 @@ function ModulePage({
             <View key={`nearby-${item.color}-${item.label}`} style={styles.legendRow}>
               <View style={[styles.legendSwatch, { backgroundColor: item.color, opacity: 0.55 }]} />
               <Text style={[styles.legendLabel, { color: TEXT_MUTED }]}>
-                {item.label} (nearby only)
+                {item.label}
               </Text>
             </View>
           ))}
@@ -979,7 +999,7 @@ function pdfIsFailed(m: ReportPayload["modules"][number]): boolean {
  * checks last. Shared by the cover, the page-number references and the
  * document's module-page order so "p. N" on the cover stays truthful.
  *
- * Informational modules are deliberately absent — they get their own pages
+ * Informational modules are deliberately absent: they get their own pages
  * AFTER these, which is what keeps the "p. N" arithmetic below valid. */
 function attentionOrder(modules: ReportPayload["modules"]) {
   return modules
@@ -997,7 +1017,7 @@ function attentionOrder(modules: ReportPayload["modules"]) {
 
 /** Facts, not warnings. Keeps a full page (map + narrative) like a flagged
  * module, but is excluded from the count, the verdict list and Next steps.
- * Canonical order, not severity — there is no severity to sort by. */
+ * Canonical order, not severity: there is no severity to sort by. */
 function informationalOrder(modules: ReportPayload["modules"]) {
   return modules.filter(
     (m) => isInformational(m.riskLevel, m.hasConsideration) && !pdfIsFailed(m),
@@ -1029,7 +1049,7 @@ function AtAGlancePage({
   const zoneFamily = (zRaw?.lvl1Zone as string | null) ?? null;
 
   return (
-    // wrap={false}: the summary must stay ONE page — the attention rows'
+    // wrap={false}: the summary must stay ONE page: the attention rows'
     // "p. N" references count from it. Rows are compacted above so even a
     // 10-flag report fits.
     <Page size="A4" style={styles.page} wrap={false}>
@@ -1050,7 +1070,7 @@ function AtAGlancePage({
 
       <View style={styles.body}>
         <View style={styles.leftCol}>
-          {/* Verdict layer — editorial hairline list, not boxes: severity
+          {/* Verdict layer: editorial hairline list, not boxes: severity
               dot + name + one address-stripped summary line, severity
               label and page ref on the right. Compact enough that a
               10-flag report plus the full clear list fits one page. */}
@@ -1065,9 +1085,9 @@ function AtAGlancePage({
                   const failed = pdfIsFailed(m);
                   const level = riskOf(m.riskLevel, m.hasConsideration);
                   const statusColor = failed ? APPLE_HEX.orange : RISK_STYLE[level].hex;
-                  const statusLabel = failed ? "Not checked" : RISK_STYLE[level].label;
+                  const statusLabel = failed ? "Pending" : RISK_STYLE[level].label;
                   const line = failed
-                    ? "Source unreachable this run. Re-run the checks."
+                    ? "Source mapping unavailable at report time. Verification required."
                     : coverLine(
                         report.narrative[m.module]?.summary,
                         address.address_text,
@@ -1146,7 +1166,7 @@ function AtAGlancePage({
             </>
           )}
 
-          {/* Every clear check is NAMED on the cover — "safe" must be
+          {/* Every clear check is NAMED on the cover: "safe" must be
               visible without flipping to the evidence page. Inline names
               stay compact at any count. */}
           {clear.length > 0 && (
@@ -1346,7 +1366,7 @@ function ClearPage({
 }) {
   if (modules.length === 0) return null;
   return (
-    // Wrapping allowed — the fixed chrome repeats on any spill page.
+    // Wrapping allowed: the fixed chrome repeats on any spill page.
     <Page size="A4" style={styles.page}>
       <ChromeTop branding={branding} address={address} />
       <Text style={styles.eyebrow}>Evidence of checks run</Text>
@@ -1439,7 +1459,7 @@ function DisclaimerPage({
   );
 }
 
-// ── Cover page — full-bleed aerial in the landing-hero (light) style:
+// ── Cover page: full-bleed aerial in the landing-hero (light) style:
 // the washed near-grayscale aerial with the white veil baked into the
 // jpeg (see renderCoverAerial) IS the page background, slate ink over
 // the veiled zones, brand identity up top, prepared-by strip along the
@@ -1471,7 +1491,7 @@ function CoverPage({
     <Page size="A4" style={{ backgroundColor: PAGE_BG, fontFamily: "Helvetica" }} wrap={false}>
       {/* Full-A4 flow canvas: a wrap={false} page shrinks to its content
         * height and drops top-anchored absolutes when everything is
-        * absolute — this View pins the page to true A4 and anchors the
+        * absolute: this View pins the page to true A4 and anchors the
         * absolute children below. */}
       <View style={{ width: "100%", height: 841.89 }}>
       {/* Full-bleed washed aerial (veil gradient baked into the jpeg) */}
@@ -1506,7 +1526,7 @@ function CoverPage({
 
         <View style={{ width: 34, height: 3, backgroundColor: accent, marginTop: 24, marginBottom: 24 }} />
 
-        <Text style={styles.eyebrow}>Property fact pack</Text>
+        <Text style={styles.eyebrow}>Property due diligence report</Text>
         <Text style={{ fontSize: 26, fontFamily: "Helvetica-Bold", lineHeight: 1.12, color: TEXT_PRIMARY, letterSpacing: -0.4 }}>
           {formatAuAddress(address.address_text, payload.postcode)}
         </Text>
@@ -1585,7 +1605,7 @@ function ChromeTop({
   );
 }
 
-/** Fixed footer band with an OPAQUE background — rendered LAST inside a
+/** Fixed footer band with an OPAQUE background: rendered LAST inside a
  * Page so it paints over any body overflow; the pagination line can
  * never be collided with. */
 function ChromeBottom({ branding }: { branding: ReportBranding | null }) {
@@ -1611,7 +1631,7 @@ export function ReportPDF({
   payload: ReportPayload;
   /** Pre-rendered module map PNGs, one per module (Buffer or null). */
   maps?: ModuleMapPng[];
-  /** Customer branding (subscriber feature) — null renders plain LotLens. */
+  /** Customer branding (subscriber feature): null renders plain LotLens. */
   branding?: ReportBranding | null;
   /** Overlay-free aerial with the lot outline, for the cover page. */
   coverPng?: Buffer | null;
@@ -1630,7 +1650,7 @@ export function ReportPDF({
   // Clear-module diet: full pages for flagged/failed checks in the same
   // severity order the cover lists them (so its "p. N" references hold),
   // then the informational pages, then the one-page evidence summary for
-  // checks that found nothing. Informational modules keep a full page —
+  // checks that found nothing. Informational modules keep a full page -
   // the zone code and the school catchment are content, not filler.
   const attention = attentionOrder(modules);
   const informational = informationalOrder(modules);

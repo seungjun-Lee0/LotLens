@@ -27,7 +27,7 @@ function ModuleFacts({
   raw: Record<string, unknown> | undefined;
 }) {
   if (!raw) return null;
-  // The source didn't respond when the report ran — error-toned banner,
+  // The source didn't respond when the report ran: error-toned banner,
   // distinct from "not integrated for this LGA" below.
   if (raw.fetchFailed === true) {
     return (
@@ -39,20 +39,20 @@ function ModuleFacts({
           color: "color-mix(in oklab, var(--apple-orange) 65%, var(--foreground))",
         }}
       >
-        This source didn&apos;t respond when the report ran, so this module was
-        not checked. Re-run the checks to retry. No finding here does not
-        mean &quot;clear&quot;.
+        Verification is pending because the source mapping was unavailable
+        when this report was prepared. Run the check again or confirm the
+        property directly with the relevant authority.
       </p>
     );
   }
   // Council-overlay modules outside adapted LGAs mark themselves
-  // unavailable — surface the note instead of module facts.
+  // unavailable: surface the note instead of module facts.
   if (raw.available === false) {
     return (
       <p className="rounded-xl border border-dashed border-border/70 bg-muted/40 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
         {typeof raw.availabilityNote === "string"
           ? raw.availabilityNote
-          : "This overlay has not been integrated for this council area yet."}
+          : "LotLens does not provide this council overlay for the property location. Confirm it through the council's planning mapping."}
       </p>
     );
   }
@@ -165,7 +165,12 @@ function ModuleFacts({
     }
     case "schools": {
       const schools = Array.isArray(raw.schools)
-        ? (raw.schools as { name: string; type: string; yearLevels: string[] }[])
+        ? (raw.schools as {
+            name: string;
+            type: string;
+            yearLevels: string[];
+            yearRange?: string;
+          }[])
         : [];
       if (schools.length === 0) return null;
       return (
@@ -184,8 +189,8 @@ function ModuleFacts({
               </span>
               <span className="text-foreground/85">
                 <span className="font-medium">{s.name}</span>
-                {s.yearLevels.length > 0 && (
-                  <span className="text-muted-foreground"> · years {s.yearLevels.join(", ")}</span>
+                {s.yearRange && (
+                  <span className="text-muted-foreground"> · {s.yearRange}</span>
                 )}
               </span>
             </li>
@@ -279,7 +284,7 @@ function ModuleFacts({
           )}
           {elev && (
             <>
-              {/* Develo's "Property High / Low / Est. Fall". Fall leads —
+              {/* Develo's "Property High / Low / Est. Fall". Fall leads -
                   it's the figure that moves build cost. */}
               <dt className="text-muted-foreground">Est. fall</dt>
               <dd className="font-medium">
@@ -392,7 +397,7 @@ function ModuleFacts({
               ? "No main crosses the lot"
               : `${mains.length} main${mains.length > 1 ? "s" : ""} / structure${mains.length > 1 ? "s" : ""}`}
           </dd>
-          {/* Service lines are the property's own connection — listing them
+          {/* Service lines are the property's own connection: listing them
               beside the mains would blur the one distinction that matters. */}
           {mains.slice(0, 3).map((a, i) => (
             <Fragment key={i}>
@@ -411,7 +416,7 @@ function ModuleFacts({
           <dt className="text-muted-foreground">Build over</dt>
           <dd className="font-medium">
             {severe
-              ? "Generally not permitted — trunk or pressure main"
+              ? "Generally not permitted: trunk or pressure main"
               : raw.hasMainOnLot === true
                 ? "Urban Utilities approval required"
                 : "Not triggered by mapped assets"}
@@ -441,7 +446,7 @@ function ModuleFacts({
               <dd className="font-medium">
                 {p.name}
                 {p.subPrecinct && (
-                  <span className="text-muted-foreground"> — {p.subPrecinct}</span>
+                  <span className="text-muted-foreground">: {p.subPrecinct}</span>
                 )}
               </dd>
             </Fragment>
@@ -530,7 +535,7 @@ function ModuleFacts({
   }
 }
 
-// ── Status pill — one chip carrying both the finding AND its severity
+// ── Status pill: one chip carrying both the finding AND its severity
 // (previously a separate risk badge duplicated this and both read
 // "clear/none" together on empty modules). ──────────────────────────────
 
@@ -541,10 +546,10 @@ function StatusPill({
 }: {
   hasConsideration: boolean;
   risk: RiskLevel;
-  /** Source unreachable this run — neutral "couldn't check", not green. */
+  /** Source unreachable this run: neutral "couldn't check", not green. */
   failed?: boolean;
 }) {
-  // Severity is colour-coded on ONE shared scale (lib/risk-style.ts) —
+  // Severity is colour-coded on ONE shared scale (lib/risk-style.ts) -
   // never the module tint, or a heritage "high" and a flooding "low"
   // would both just read as their module colour.
   //
@@ -573,7 +578,7 @@ function StatusPill({
         <Icon className="size-2.5" strokeWidth={3.5} />
       </span>
       {failed
-        ? "Couldn't check · source unavailable"
+        ? "Verification pending"
         : info
           ? "For information"
           : hasConsideration
@@ -589,7 +594,12 @@ function legendItemsFromOverlays(overlays: OverlayFeature[]): { color: string; l
   const seen = new Set<string>();
   const items: { color: string; label: string }[] = [];
   for (const f of overlays) {
-    const key = `${f.properties.fillColor}|${f.properties.legendLabel}`;
+    // Contours share one label across the whole colour ramp, so keying on
+    // colour would list "Contour line" once per shade.
+    const key =
+      f.properties.legendLabel === CONTOUR_LEGEND_LABEL
+        ? CONTOUR_LEGEND_LABEL
+        : `${f.properties.fillColor}|${f.properties.legendLabel}`;
     if (seen.has(key)) continue;
     seen.add(key);
     items.push({
@@ -627,7 +637,7 @@ type ElevationLegendData = {
  * Steep Land's legend, Develo-style: a continuous elevation ramp with the
  * property's own high/low called out against it.
  *
- * A swatch list can't express this. Contours aren't categories — they're
+ * A swatch list can't express this. Contours aren't categories: they're
  * samples of one continuous variable, so ~20 rows of "Contour line" says
  * nothing while a labelled gradient says all of it at a glance.
  */
@@ -635,7 +645,7 @@ function ElevationLegend({ elevation }: { elevation: ElevationLegendData }) {
   const lo = elevation.contextLowM ?? elevation.lowM;
   const hi = elevation.contextHighM ?? elevation.highM;
   const span = hi - lo;
-  // Where the property sits on the map's range — that's what makes the
+  // Where the property sits on the map's range: that's what makes the
   // swatches match the lines actually drawn over the lot.
   const at = (m: number) => (span > 0 ? (m - lo) / span : 0.5);
   const intervalMetres = elevation.interval.split(" ")[0];
@@ -722,16 +732,17 @@ export function ModuleSection({
   const mapOverlays = extractOverlays(row.module, row.raw);
   const applicableOverlays = extractOverlays(row.module, row.raw, { scope: "property" });
   const legendItemsAll = splitLegendItems(mapOverlays, applicableOverlays);
-  // Contours collapse to one "Contour line" row; the gradient bar below
-  // replaces it, so drop it from the swatch list rather than showing both.
+  // A contour is a sample of elevation, not a legend category. Never show
+  // the generic "Contour line" swatch; when elevation metadata is present,
+  // the labelled gradient below explains the colours instead.
   const elevationLegend = (raw?.elevation ?? null) as ElevationLegendData | null;
   const dropContourRow = (items: { color: string; label: string }[]) =>
-    elevationLegend ? items.filter((i) => i.label !== CONTOUR_LEGEND_LABEL) : items;
+    items.filter((i) => i.label !== CONTOUR_LEGEND_LABEL);
   const legendItems = {
     applies: dropContourRow(legendItemsAll.applies),
     nearby: dropContourRow(legendItemsAll.nearby),
   };
-  // ModuleFacts returns null for modules with nothing to tabulate — resolve
+  // ModuleFacts returns null for modules with nothing to tabulate: resolve
   // it first so we don't render an empty facts box around nothing.
   const factsContent = raw ? ModuleFacts({ module: row.module, raw }) : null;
 
@@ -774,6 +785,9 @@ export function ModuleSection({
           // Lot boundary lines only add value on the zoning map (they make the
           // dissolved zone fill read per-lot). Other modules don't need them.
           lotLines={row.module === "zoning" ? lotLines : null}
+          // Transport is the one module whose features are POINTS spread up
+          // to ~2 km out: frame them, or the map shows an empty lot.
+          fitPoints={row.module === "transport"}
         />
       </div>
 
@@ -825,9 +839,19 @@ export function ModuleSection({
                 <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.16em]" style={{ color: meta.tint }}>
                   For this property
                 </div>
-                <p className="text-[13.5px] leading-relaxed text-foreground/85 text-pretty">
-                  {narrative.detail}
-                </p>
+                {/* Blank lines in the narrative are paragraph breaks — the
+                    stubs use them to separate "what the data says" from
+                    "what it means for you". */}
+                <div className="flex flex-col gap-2.5">
+                  {narrative.detail.split(/\n{2,}/).map((para, i) => (
+                    <p
+                      key={i}
+                      className="text-[13.5px] leading-relaxed text-foreground/85 text-pretty"
+                    >
+                      {para}
+                    </p>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -903,7 +927,7 @@ export function ModuleSection({
                       outline: `1px solid color-mix(in oklab, ${item.color} 55%, transparent)`,
                     }}
                   />
-                  <span className="text-foreground/70">{item.label} (nearby only)</span>
+                  <span className="text-foreground/70">{item.label}</span>
                 </li>
               ))}
             </ul>

@@ -646,28 +646,34 @@
   background-color: color-mix(in oklab, var(--foreground) 38%, transparent);
 }
 
-/* MapLibre attribution — the default control is oversized on our small
-   report maps, especially on phones. Shrink the text, the compact toggle
-   and its padding. Scoped under .maplibregl-map so these win over the
-   library's own stylesheet regardless of import order. */
+/* MapLibre attribution — keep the required source credit small and clean on
+   report maps. The map uses the non-compact control, so there is no toggle
+   icon that can be mistaken for a broken logo. */
 .maplibregl-map .maplibregl-ctrl-attrib-inner {
+  color: #111827 !important;
   font-size: 9px;
+  font-weight: 500;
   line-height: 1.3;
 }
-.maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact {
-  min-height: 20px;
-  border-radius: 10px;
+.maplibregl-map .maplibregl-ctrl-attrib:not(.maplibregl-compact) {
+  color: #111827 !important;
+  margin: 0 6px 6px 0;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 28%);
 }
-.maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner {
-  padding: 2px 24px 2px 8px;
-}
-.maplibregl-map .maplibregl-ctrl-attrib-button {
-  width: 20px;
-  height: 20px;
-  background-size: 12px 12px;
+.maplibregl-map .maplibregl-ctrl-attrib a,
+.maplibregl-map .maplibregl-ctrl-attrib span {
+  color: #111827 !important;
+  opacity: 1;
 }
 @media (min-width: 640px) {
   .maplibregl-map .maplibregl-ctrl-attrib-inner {
     font-size: 10px;
+  }
+  .maplibregl-map .maplibregl-ctrl-attrib:not(.maplibregl-compact) {
+    margin: 0 8px 8px 0;
+    padding: 4px 9px;
   }
 }

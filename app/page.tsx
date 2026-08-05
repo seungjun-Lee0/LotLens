@@ -9,7 +9,7 @@ import { HeroShowcase, type HeroDemoData } from "@/components/site/hero-showcase
 import { MODULE_ORDER, type Module } from "@/lib/db";
 import { MODULE_META } from "@/lib/module-meta";
 
-// Real report data for the hero's demo lot (Stafford, 10SP348436) — actual
+// Real report data for the hero's demo lot (Stafford, 10SP348436): actual
 // cadastre parcel + per-module council overlays, snapshotted by
 // `npx tsx scripts/generate-hero-demo.ts`. The aerial crops are derived from
 // the bboxes stored in the fixture so imagery and geometry always align.
@@ -20,7 +20,7 @@ const heroDemo = heroDemoJson as unknown as HeroDemoData;
 // ── Landing module registry ──────────────────────────────────────────────────────────────────────────────────────────────
 // The cards are DERIVED from MODULE_ORDER, not hand-listed. Name and icon
 // come from lib/module-meta.ts so the landing page can't drift out of sync
-// with what the report actually checks — which is exactly what happened
+// with what the report actually checks: which is exactly what happened
 // when this was a parallel copy: the report grew to 18 modules while the
 // landing page sat at 15 with no compiler complaint.
 //
@@ -33,10 +33,10 @@ const heroDemo = heroDemoJson as unknown as HeroDemoData;
 //     lib/db.ts reveals it on the landing page and in the report together.
 //
 // `hex` is the OVERLAY colour the report map paints for that module, not
-// the Apple-palette icon tint — the cards are meant to read as map tiles.
+// the Apple-palette icon tint: the cards are meant to read as map tiles.
 const MODULE_CARDS: Record<Module, { blurb: string; hex: string }> = {
   flooding: {
-    blurb: "River, creek & storm-tide risk, plus 2011 & 2022 historic events.",
+    blurb: "River, creek and storm-tide exposure, including mapped historic events.",
     hex: "#3b82f6",
   },
   flood_planning: {
@@ -48,7 +48,7 @@ const MODULE_CARDS: Record<Module, { blurb: string; hex: string }> = {
     hex: "#f97316",
   },
   storm_tide: {
-    blurb: "Storm-tide inundation & erosion prone areas, QLD-wide.",
+    blurb: "Storm-tide inundation and erosion-prone areas across Queensland.",
     hex: "#06b6d4",
   },
   bushfire: {
@@ -56,19 +56,19 @@ const MODULE_CARDS: Record<Module, { blurb: string; hex: string }> = {
     hex: "#dc2626",
   },
   vegetation: {
-    blurb: "Regulated vegetation (VMA), waterway & biodiversity overlays.",
+    blurb: "Regulated vegetation, waterways and biodiversity overlays.",
     hex: "#16a34a",
   },
   environment: {
-    blurb: "Core koala habitat & state wildlife habitat mapping.",
+    blurb: "Core koala habitat and state wildlife habitat mapping.",
     hex: "#10b981",
   },
   heritage: {
-    blurb: "State/local heritage & pre-1947 character controls.",
+    blurb: "State and local heritage listings, plus character controls.",
     hex: "#7e22ce",
   },
   easements: {
-    blurb: "High-voltage & registered cadastral easements on the lot.",
+    blurb: "High-voltage and registered cadastral easements affecting the lot.",
     hex: "#db2777",
   },
   stormwater: {
@@ -80,7 +80,7 @@ const MODULE_CARDS: Record<Module, { blurb: string; hex: string }> = {
     hex: "#a21caf",
   },
   noise: {
-    blurb: "Transport-corridor & aircraft (ANEF) noise bands.",
+    blurb: "Transport corridor and aircraft noise overlays.",
     hex: "#f59e0b",
   },
   steep_land: {
@@ -92,11 +92,11 @@ const MODULE_CARDS: Record<Module, { blurb: string; hex: string }> = {
     hex: "#eab308",
   },
   mining: {
-    blurb: "Resource tenures & quarry buffer areas over the lot.",
+    blurb: "Resource tenures and quarry protection areas affecting the lot.",
     hex: "#a855f7",
   },
   zoning: {
-    blurb: "City Plan zone, precinct & what you're allowed to build.",
+    blurb: "Planning scheme zone, precinct and key development controls.",
     hex: "#6366f1",
   },
   local_plans: {
@@ -104,7 +104,7 @@ const MODULE_CARDS: Record<Module, { blurb: string; hex: string }> = {
     hex: "#4f46e5",
   },
   schools: {
-    blurb: "State primary & secondary catchment zones.",
+    blurb: "State primary and secondary school catchment zones.",
     hex: "#14b8a6",
   },
   transport: {
@@ -137,15 +137,15 @@ const FAQS = [
   },
   {
     q: "How accurate is the data?",
-    a: "Every layer is queried live from local council and Queensland Government sources at the moment you run the report, rather than from a cached copy. Each finding cites its exact source layer.",
+    a: "LotLens queries current council and Queensland Government mapping when the report is generated. Every finding identifies its source, and important decisions should still be confirmed with the relevant authority or a qualified professional.",
   },
   {
     q: "Which areas are covered?",
-    a: "Any Queensland address. Statewide layers (cadastre, bushfire, coastal hazards, heritage register, vegetation, koala habitat, acid sulfate soils, mining, school catchments, public transport, land contours) run everywhere. Detailed council overlays (flood risk bands, zoning, transport noise, landslide) are live for Brisbane, Gold Coast, Moreton Bay, Sunshine Coast and Redland, while stormwater assets and neighbourhood plans are Brisbane only for now. Where a council layer is not yet integrated for your local government area, the report states so explicitly rather than reporting the layer as clear.",
+    a: "LotLens accepts Queensland addresses. Statewide checks include cadastre, bushfire, coastal hazards, heritage, vegetation, koala habitat, acid sulfate soils, resources, school catchments, public transport and land contours. Detailed council coverage varies by local government area, and each report clearly identifies any check that requires confirmation through the council's own mapping.",
   },
   {
     q: "Do I get a PDF I can share?",
-    a: "Yes. The full report includes a branded A4 fact pack with the maps, narrative and sources, ready to forward to your conveyancer or partner.",
+    a: "Yes. The full report includes a professionally formatted A4 PDF with property maps, findings and source references, ready to share with your conveyancer, adviser or client.",
   },
   {
     q: "How long does it take?",
@@ -161,7 +161,7 @@ export default function Home() {
     <>
       <SiteHeader sectionNav />
 
-      {/* ── HERO — blurred aerial full-bleed, sharp loupe on the right ── */}
+      {/* ── HERO: blurred aerial full-bleed, sharp loupe on the right ── */}
       {/* overflow-CLIP, not hidden: hidden boxes are still programmatically
           scrollable, and anything calling scrollIntoView/focus inside (rail
           pins, keyboard tabbing) could shift the whole hero sideways over
@@ -200,24 +200,24 @@ export default function Home() {
               </span>
             </h1>
 
-            {/* Light mode: near-foreground copy — muted gray washed out
+            {/* Light mode: near-foreground copy: muted gray washed out
                 against the pale aerial behind the stacked phone hero.
                 Dark mode keeps the original muted tone. */}
             <p className="max-w-lg text-pretty text-[15px] leading-relaxed text-foreground/80 dark:text-muted-foreground sm:text-[16.5px]">
-              Flood, bushfire, heritage, easements and zoning. Every council and
-              state layer for an address, on one map and explained in plain
-              English before you sign.
+              Understand the planning, hazard and infrastructure factors that
+              shape a Queensland property. Clear maps, practical findings and
+              cited public sources, prepared before you commit.
             </p>
 
             <AddressForm
               presets={[
                 {
-                  label: "Property A · Chermside (clean)",
+                  label: "Explore Chermside",
                   address: "Westfield Chermside, Chermside QLD 4032",
                   tint: "var(--apple-teal)",
                 },
                 {
-                  label: "Property B · Rocklea (flood)",
+                  label: "Explore Rocklea",
                   address: "250 Sherwood Road, Rocklea QLD 4106",
                   tint: "var(--apple-orange)",
                 },
@@ -226,9 +226,9 @@ export default function Home() {
 
             <p className="text-[12.5px] text-foreground/75 dark:text-muted-foreground">
               <b className="font-medium text-foreground">
-                Flooding preview free
+                Flood preview included
               </b>{" "}
-              · full report $19 · no account needed to preview
+              · full report $19 · no account required to preview
             </p>
           </div>
 
@@ -236,23 +236,23 @@ export default function Home() {
       </section>
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-12 px-4 pb-14 pt-10 sm:gap-24 sm:px-6 sm:pb-24 sm:pt-20">
-        {/* ── MODULES — map-tile cards: the layer IS the card ── */}
+        {/* ── MODULES: map-tile cards: the layer IS the card ── */}
         <section id="modules" className="cv-auto flex flex-col gap-8">
           <div className="mx-auto max-w-xl text-center">
             <div className="text-[10.5px] font-medium uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
               What&rsquo;s checked
             </div>
             <h2 className="mt-2 text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
-              {moduleCountWord} layers, one report.
+              {moduleCountWord} checks, one clear report.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-pretty text-[14px] leading-relaxed text-muted-foreground">
-              Every tile is that overlay exactly as it renders on your
-              report&rsquo;s map, in the same colours and against the same amber
-              lot outline.
+              Each check combines official mapping with a property-specific
+              explanation, so you can see both the location and the practical
+              consequence.
             </p>
           </div>
 
-          {/* 2-up on phones — one tall column of cards scrolls forever */}
+          {/* 2-up on phones: one tall column of cards scrolls forever */}
           <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
             {MODULES.map((m, i) => (
               <Reveal key={m.module} className="card-reveal" delay={(i % 4) * 90}>
@@ -275,10 +275,10 @@ export default function Home() {
                 </div>
               </Reveal>
             ))}
-            {/* filler card — rounds out the grid */}
+            {/* filler card: rounds out the grid */}
             <Reveal className="card-reveal" delay={(MODULES.length % 4) * 90}>
               <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-border/70 p-4 text-center text-[12.5px] leading-snug text-muted-foreground">
-                Further layers added regularly
+                Queensland-wide property intelligence
               </div>
             </Reveal>
           </div>
@@ -294,8 +294,8 @@ export default function Home() {
               One property. One flat price.
             </h2>
             <p className="mx-auto mt-3 max-w-md text-pretty text-[14px] leading-relaxed text-muted-foreground">
-              No subscription. Preview the flood layer free, unlock the full
-              fact pack when you&rsquo;re serious.
+              Preview the flood check at no cost, then unlock the complete
+              property report when you are ready.
             </p>
           </div>
 
@@ -322,7 +322,7 @@ export default function Home() {
                 <li>· All {MODULES.length} modules for one address</li>
                 <li>· A4 PDF export, branded cover</li>
                 <li>· No subscription, no auto-renewal</li>
-                <li>· Flooding preview always free first</li>
+                <li>· Flood preview included before purchase</li>
               </ul>
               <a
                 href="#top"
@@ -365,7 +365,7 @@ export default function Home() {
             </div>
             </Reveal>
 
-            {/* Pro — featured */}
+            {/* Pro: featured */}
             <Reveal className="rise-reveal" delay={240}>
             <div
               className="relative flex h-full flex-col gap-4 rounded-3xl p-5 text-foreground sm:p-7"
@@ -435,7 +435,7 @@ export default function Home() {
           <FaqScroller items={FAQS} />
         </section>
 
-        {/* ── FINAL CTA — pinned focus stage: scrolling into the middle
+        {/* ── FINAL CTA: pinned focus stage: scrolling into the middle
             triggers a smooth grow + page dim that spotlights the card ── */}
         <CtaStage>
         <section className="cta-card glass overflow-hidden rounded-3xl px-5 py-10 text-center sm:px-10 sm:py-16">
@@ -458,7 +458,7 @@ export default function Home() {
             The flooding preview is free. Ninety seconds now can prevent an
             expensive surprise later.
           </p>
-          {/* the search itself — no detour back to the top */}
+          {/* the search itself: no detour back to the top */}
           <div className="mx-auto mt-7 w-full max-w-xl text-left">
             <AddressForm />
           </div>

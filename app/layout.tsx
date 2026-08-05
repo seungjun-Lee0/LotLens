@@ -17,9 +17,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LotLens — Queensland Property Due Diligence",
+  title: "LotLens | Queensland Property Due Diligence",
   description:
-    "AI-generated due diligence reports for Queensland properties. Plain-English summaries of flood, bushfire, coastal, koala habitat, heritage, easements, mining, and zoning overlays.",
+    "Property due diligence reports for Queensland. Plain-English summaries of flood, bushfire, coastal, koala habitat, heritage, easements, mining, and zoning overlays, straight from council and state government data.",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Inline no-flash script, applied before paint. DARK is the default —
+  // Inline no-flash script, applied before paint. DARK is the default -
   // light only when the user explicitly picked it via the toggle.
   const noFlashTheme = `(function(){try{var s=localStorage.getItem('theme');if(s!=='light'){document.documentElement.classList.add('dark');}}catch(e){}})();`;
 

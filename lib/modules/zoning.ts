@@ -2,9 +2,9 @@
 //
 // Brisbane LGA: BCC City Plan 2014 Zoning (detailed zone + precinct).
 // Rest of SEQ: ShapingSEQ 2023 regional land use category (QSpatial
-//   StatePlanning layer 140, field `rluc2023` — Urban Footprint / Rural
+//   StatePlanning layer 140, field `rluc2023`: Urban Footprint / Rural
 //   Living Area / Regional Landscape and Rural Production Area). There is
-//   NO public statewide merged council-zoning service — each LGA publishes
+//   NO public statewide merged council-zoning service: each LGA publishes
 //   its own scheme, so detailed zoning for other councils arrives with
 //   their per-council adapters. The regional category is the honest
 //   statewide baseline until then.
@@ -21,10 +21,10 @@
 //   LVL2_ZONE        e.g. "Principal centre (City centre)"
 //   LGA_CODE         1000 = Brisbane
 //
-// Every Brisbane parcel sits inside exactly one zone polygon — so the
+// Every Brisbane parcel sits inside exactly one zone polygon: so the
 // query effectively never returns 0 features for a valid Brisbane LGA
 // point. We surface the 'informational' riskLevel when there *is* a zone
-// (it's a fact about the land, not a risk axis — a severity here would fire
+// (it's a fact about the land, not a risk axis: a severity here would fire
 // on every report) and 'none' as a "couldn't resolve" fallback.
 //
 // Verified: CBD → PC1; Rocklea Markets → OS Open space; Chermside → MU2
@@ -61,7 +61,7 @@ export type ZoningResult = {
   lvl2Zone: string | null;
   hasConsideration: boolean;
   sources: ZoningSource[];
-  /** Point-query GeoJSON — drives classification. */
+  /** Point-query GeoJSON: drives classification. */
   raw: unknown;
   /** Envelope-query GeoJSON (~280 m around property) for map context. */
   context: unknown;
@@ -95,7 +95,7 @@ export async function fetchZoningData(
     if (adapter) {
       const result = await fetchCouncilZoning(lat, lng, adapter);
       // Council layers occasionally miss (unzoned strategic land, layer
-      // gaps) — fall back to the regional-plan category rather than
+      // gaps): fall back to the regional-plan category rather than
       // reporting nothing.
       if (result.hasConsideration) return result;
     }
@@ -109,11 +109,11 @@ export async function fetchZoningData(
       geometryType: "esriGeometryPoint",
       inSR: 4326,
       outFields: fields,
-      // Zoning polygons follow cadastre lot boundaries 1:1 in BCC's data —
+      // Zoning polygons follow cadastre lot boundaries 1:1 in BCC's data -
       // so the point-query polygon IS the property's lot outline. We use
       // this as the Develo-style yellow "selected property" highlight.
       returnGeometry: true,
-      maxAllowableOffset: 0.00002, // ~2m — sharp parcel edges
+      maxAllowableOffset: 0.00002, // ~2m: sharp parcel edges
     }),
     queryArcGIS(ZONING, {
       geometry: point,
@@ -122,7 +122,7 @@ export async function fetchZoningData(
       outFields: fields,
       returnGeometry: true,
       bufferDegrees: 0.0025,
-      // Zone polygons follow cadastre lots — smaller than flood/heritage
+      // Zone polygons follow cadastre lots: smaller than flood/heritage
       // polygons and want sharper boundaries. ~3 m simplification.
       maxAllowableOffset: 0.00003,
     }),
@@ -143,7 +143,7 @@ export async function fetchZoningData(
     hasConsideration: resolved,
     sources: [
       {
-        name: "BCC City Plan 2014 — Zoning",
+        name: "BCC City Plan 2014: Zoning",
         url: BCC_ZONING_DOC,
         layer: ZONING,
       },
@@ -156,7 +156,7 @@ export async function fetchZoningData(
 }
 
 // Detailed planning-scheme zoning via a per-council adapter (Gold Coast,
-// Moreton Bay, Sunshine Coast, Redland — see lib/councils.ts).
+// Moreton Bay, Sunshine Coast, Redland: see lib/councils.ts).
 async function fetchCouncilZoning(
   lat: number,
   lng: number,
@@ -197,7 +197,7 @@ async function fetchCouncilZoning(
   };
 }
 
-// SEQ regional land use category — the statewide baseline outside the
+// SEQ regional land use category: the statewide baseline outside the
 // council adapters. One dissolved polygon per category, so no lot-scale
 // context map value; we still fetch a context envelope for the overlay wash.
 async function fetchSeqRegionalZoning(
@@ -237,7 +237,7 @@ async function fetchSeqRegionalZoning(
     hasConsideration: Boolean(rluc),
     sources: [
       {
-        name: "ShapingSEQ 2023 — Regional land use category",
+        name: "ShapingSEQ 2023: Regional land use category",
         url: SEQ_PLAN_DOC,
         layer: SEQ_RLUC,
       },
@@ -247,7 +247,7 @@ async function fetchSeqRegionalZoning(
     scheme: "seq_rluc",
     available: Boolean(rluc),
     availabilityNote: rluc
-      ? `Detailed ${council} planning-scheme zoning is not integrated yet — the SEQ Regional Plan land use category is shown instead. Check the council's planning scheme for the statutory zone.`
-      : `Neither a council zoning adapter nor the SEQ Regional Plan covers this location yet. Check ${council}'s planning scheme mapping directly.`,
+      ? `The SEQ Regional Plan land use category is shown for this property. Confirm the statutory zone through ${council}'s planning scheme mapping.`
+      : `A statutory zoning result is not available from the connected sources for this location. Confirm the property through ${council}'s planning scheme mapping.`,
   };
 }

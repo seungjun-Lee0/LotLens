@@ -11,7 +11,7 @@ import type { Suggestion } from "@/app/api/geocode/suggest/route";
 
 // ── Address completeness heuristic ──────────────────────────────────────
 //
-// A partial address still geocodes — to the wrong lot. "12 Oxley Rd" with
+// A partial address still geocodes: to the wrong lot. "12 Oxley Rd" with
 // no suburb resolves to whichever Oxley Rd the provider likes best, and
 // the buyer gets a confident-looking report on someone else's property.
 // So anything hand-typed (as opposed to picked from the suggestion list)
@@ -22,7 +22,7 @@ const STREET_TYPE =
   /\b(st|street|rd|road|ave?|avenue|dr|drive|ct|court|cres|crescent|pde|parade|tce|terrace|ln|lane|way|cl|close|pl|place|blvd|bvd|boulevard|hwy|highway|esp|esplanade|gr|grove|cct|circuit|cir|circle|mews|rise|ridge|loop|link|walk|row|quay|qy|glen|heights|hts|pkwy|parkway|sq|square|track|trk|outlook|vista|view|vw|entrance|approach|arcade|crest|downs|gdns|gardens|key|nook|retreat|bend|bay|chase|corso|dale|edge|end|fairway|grange|green|haven|island|junction|mall|meander|pocket|point|promenade|reach|reserve|ring|run|strand|waters)\b\.?/i;
 
 /** Human labels for the address parts that look absent. Empty = looks
- * complete. Deliberately lenient — this gates a confirm dialog, not the
+ * complete. Deliberately lenient: this gates a confirm dialog, not the
  * submit itself, so a false positive costs one extra click. */
 function addressGaps(raw: string): string[] {
   const s = raw.trim();
@@ -60,7 +60,10 @@ function addressGaps(raw: string): string[] {
 const STEPS = [
   { key: "geocode",  label: "Locating address",            tint: "var(--apple-blue)" },
   { key: "overlays", label: "Pulling council overlay data", tint: "var(--apple-orange)" },
-  { key: "narrative", label: "Generating narrative",        tint: "var(--apple-purple)" },
+  // "Generating" implied a model was writing this. Nothing is generated:
+  // lib/anthropic.ts is still a deterministic stub that assembles the
+  // summaries from the council_data attributes (see P1-137).
+  { key: "narrative", label: "Writing up the findings",     tint: "var(--apple-purple)" },
   { key: "render",   label: "Preparing your report",       tint: "var(--apple-green)" },
 ] as const;
 type StepKey = typeof STEPS[number]["key"];
@@ -92,7 +95,7 @@ export function AddressForm({
   // the parts addressGaps() thinks are missing.
   const [confirmGaps, setConfirmGaps] = useState<string[] | null>(null);
 
-  // Suggestions state — debounced fetch on input change.
+  // Suggestions state: debounced fetch on input change.
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
@@ -103,7 +106,7 @@ export function AddressForm({
   // Session cache: repeat queries (backspacing, re-typing) render instantly
   // without a network round-trip.
   const suggestCacheRef = useRef(new Map<string, Suggestion[]>());
-  // The dropdown renders through a portal with fixed positioning — both
+  // The dropdown renders through a portal with fixed positioning: both
   // hosts of this form (hero, CTA card) sit inside overflow-clipped
   // containers that would otherwise cut it off.
   const dropRef = useRef<HTMLDivElement | null>(null);
@@ -183,7 +186,7 @@ export function AddressForm({
   }, [suggestOpen]);
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    // Enter NEVER starts a run — "Run report" is the only trigger. Typing
+    // Enter NEVER starts a run: "Run report" is the only trigger. Typing
     // an address and hitting Enter used to fire a full geocode → overlays
     // → narrative pass off a half-finished string. Here it only commits a
     // highlighted suggestion, or dismisses the list.
@@ -261,7 +264,7 @@ export function AddressForm({
       const gnBody = await gn.json();
       if (!gn.ok) throw new Error(gnBody.error ?? "narrative generation failed");
 
-      // Stay in "running" on the final step — the spinner keeps going while
+      // Stay in "running" on the final step: the spinner keeps going while
       // Next.js loads the report route (the loading.tsx skeleton takes over
       // once navigation commits, and this component unmounts).
       setStep("render");
@@ -293,7 +296,7 @@ export function AddressForm({
   }, [confirmGaps]);
 
   // Anchor the portal dropdown under the search pill. Positioned in
-  // DOCUMENT coordinates (absolute on <body>), not position:fixed — with
+  // DOCUMENT coordinates (absolute on <body>), not position:fixed: with
   // the mobile keyboard open, iOS offsets the visual viewport and fixed
   // boxes drift from getBoundingClientRect coords, which parked the
   // dropdown ON TOP of the search pill. Absolute page coords stay glued
@@ -313,7 +316,7 @@ export function AddressForm({
     };
     update();
     window.addEventListener("resize", update);
-    // Layout shifts that don't scroll (keyboard show/hide) — re-anchor.
+    // Layout shifts that don't scroll (keyboard show/hide): re-anchor.
     window.visualViewport?.addEventListener("resize", update);
     // Real scrolling closes the dropdown (standard combobox behaviour),
     // but ignore the micro-scrolls browsers fire while auto-scrolling the
@@ -392,7 +395,7 @@ export function AddressForm({
         </Button>
       </form>
 
-      {/* Suggestions dropdown — portalled to <body> so the hero's
+      {/* Suggestions dropdown: portalled to <body> so the hero's
           overflow-clip / the CTA card's overflow-hidden can't cut it off. */}
       {showDropdown && createPortal(
         <div
@@ -454,7 +457,7 @@ export function AddressForm({
         document.body,
       )}
 
-      {/* "This address looks incomplete" confirm — portalled to <body> for
+      {/* "This address looks incomplete" confirm: portalled to <body> for
           the same overflow reasons as the dropdown. */}
       {confirmGaps !== null && createPortal(
         <div

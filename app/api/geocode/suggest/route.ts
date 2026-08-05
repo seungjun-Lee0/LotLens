@@ -25,7 +25,7 @@ const CACHE_MAX = 300;
 const cache = new Map<string, { at: number; suggestions: Suggestion[] }>();
 
 export async function POST(req: Request) {
-  // Fires per keystroke, so the ceiling is high — 300 per 10 min per IP
+  // Fires per keystroke, so the ceiling is high: 300 per 10 min per IP
   // covers heavy typing while capping scripted autocomplete scraping
   // (which burns paid Google Places quota when that provider is active).
   const limited = enforceRateLimit("suggest", req, { limit: 300, windowSec: 600 });
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   const suggestions = await suggestAddresses(parsed.query);
   cache.set(key, { at: Date.now(), suggestions });
   if (cache.size > CACHE_MAX) {
-    // Map iterates in insertion order — drop the oldest entry.
+    // Map iterates in insertion order: drop the oldest entry.
     const oldest = cache.keys().next().value;
     if (oldest !== undefined) cache.delete(oldest);
   }

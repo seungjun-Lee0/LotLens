@@ -1,14 +1,14 @@
 // Heritage / Character module.
 //
 // Statewide backbone: the Queensland Heritage Register boundaries
-// (QSpatial AdminBoundariesFramework layer 78 — verified live 2026-07,
+// (QSpatial AdminBoundariesFramework layer 78: verified live 2026-07,
 // fields: placename, place_id, entrydate, status). Works for any QLD
 // address.
 //
 // Brisbane enhancement: when the lot is inside Brisbane LGA we ALSO query
 // the BCC City Plan 2014 Local heritage area + Traditional building
 // character overlays (local heritage listings and pre-1947 character
-// controls are council instruments — other LGAs' equivalents land with
+// controls are council instruments: other LGAs' equivalents land with
 // their council adapters).
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
@@ -18,7 +18,7 @@ import type { Region } from "@/lib/region";
 
 const QHR_LAYER =
   "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Boundaries/AdminBoundariesFramework/MapServer/78/query";
-// BCC's published URL contains the typo "Hertiage" — keep verbatim.
+// BCC's published URL contains the typo "Hertiage": keep verbatim.
 const LOCAL_HERITAGE =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Hertiage_overlay_Local_heritage_area/FeatureServer/0/query";
 const CHARACTER =
@@ -144,12 +144,12 @@ export async function fetchHeritageData(
   if (isBrisbane) {
     sources.push(
       {
-        name: "BCC City Plan 2014 — Local heritage area",
+        name: "BCC City Plan 2014: Local heritage area",
         url: BCC_HERITAGE_DOC,
         layer: LOCAL_HERITAGE,
       },
       {
-        name: "BCC City Plan 2014 — Traditional building character overlay",
+        name: "BCC City Plan 2014: Traditional building character overlay",
         url: BCC_HERITAGE_DOC,
         layer: CHARACTER,
       },

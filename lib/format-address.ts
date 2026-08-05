@@ -8,7 +8,7 @@
 // renders the stored label in the everyday form
 //   "91 Middleton Street, Mount Gravatt QLD"
 // grouping "Suburb STATE [postcode]" with spaces the way Australians write
-// it. It runs at DISPLAY time only — the stored address_text is untouched,
+// it. It runs at DISPLAY time only: the stored address_text is untouched,
 // so existing reports get the tidy format too.
 
 const STATE_TOKENS: Record<string, string> = {
@@ -36,8 +36,8 @@ function stateCode(part: string): string | null {
 }
 
 /**
- * If `part` is a trailing state group — "QLD", "QLD 4122" or "Queensland
- * 4122" — return its normalised state and any postcode. Else null. Lets
+ * If `part` is a trailing state group: "QLD", "QLD 4122" or "Queensland
+ * 4122": return its normalised state and any postcode. Else null. Lets
  * the LGA strip fire whether or not the stored label already carries a
  * postcode after the state.
  */
@@ -55,7 +55,7 @@ function stateTail(part: string): { state: string; postcode: string } | null {
  * dropped, and the suburb/state/postcode are grouped with spaces.
  *
  * `postcode` (from the ABS POA lookup) is injected when the stored label
- * has none — QLD's locator omits it. Idempotent and safe on labels that
+ * has none: QLD's locator omits it. Idempotent and safe on labels that
  * are already conventional (Google's "…, Mount Gravatt QLD 4122,
  * Australia", test fixtures): the state group already carries the
  * postcode, so nothing is duplicated.
@@ -90,7 +90,7 @@ export function formatAuAddress(
   if (parts.length >= 3) parts.splice(parts.length - 2, 1);
 
   // Regroup "suburb STATE postcode" with spaces.
-  parts.pop(); // the raw state part — rebuilt from `tail` below
+  parts.pop(); // the raw state part: rebuilt from `tail` below
   const suburb = parts.length >= 1 ? (parts.pop() as string) : "";
   const grouped = [suburb, tail.state, tail.postcode || pc]
     .filter(Boolean)
@@ -102,8 +102,8 @@ export function formatAuAddress(
 
 /**
  * Strip a leading address restatement from a narrative summary. The stub
- * (and the LLM) prefix each summary with the full address — "250 Sherwood
- * Road, Rocklea, Brisbane City, QLD carries high flood risk…" — which is
+ * (and the LLM) prefix each summary with the full address: "250 Sherwood
+ * Road, Rocklea, Brisbane City, QLD carries high flood risk…": which is
  * pure redundancy in a report that is already about that one address. Drop
  * the leading address clause and re-capitalise, so cards read
  * "Carries high flood risk…". Leaves summaries that don't start with the
@@ -134,7 +134,7 @@ export function stripAddressPrefix(
     const rest = summary
       .slice(head.length)
       // one or two comma-separated locality tokens, then an optional state +
-      // postcode — but NOT the verb that follows.
+      // postcode: but NOT the verb that follows.
       .replace(
         /^(?:\s*,\s*[A-Za-z][A-Za-z .'-]*){0,2}\s*,?\s*(?:QLD|NSW|VIC|SA|WA|TAS|NT|ACT)?\s*\d{0,4}\s*/i,
         "",

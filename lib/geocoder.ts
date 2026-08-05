@@ -2,10 +2,10 @@
 //
 // Three providers, picked by env at runtime:
 //   - Google Maps (Geocoding + Places Autocomplete) when
-//     GOOGLE_GEOCODING_API_KEY is set. Best AU data — handles
+//     GOOGLE_GEOCODING_API_KEY is set. Best AU data: handles
 //     unit / apartment numbers, full street addresses, points of
 //     interest.
-//   - Queensland Government composite address locator (QSpatial) —
+//   - Queensland Government composite address locator (QSpatial) -
 //     free, no key, authoritative for QLD addresses, and QLD-only by
 //     construction. Primary when Google isn't keyed.
 //   - OSM Nominatim as the last resort.
@@ -52,11 +52,11 @@ function splitDisplayName(s: string): { primary: string; secondary: string } {
 //
 // Quirks worth knowing (verified against the live service):
 //   - Candidates come back grouped PER SOURCE LOCATOR, not globally ranked
-//     — with a small maxLocations the best match can be cut off entirely.
+//    : with a small maxLocations the best match can be cut off entirely.
 //     Always over-fetch and sort by score ourselves.
 //   - Gazetteer sources (PLACE_NAME_Gaz, TERRAINPOINTS) contribute
 //     mountains, capes and duplicate place points that are useless for a
-//     property search — drop them, except gazetteer SUBURB entries which
+//     property search: drop them, except gazetteer SUBURB entries which
 //     make good locality suggestions.
 //   - `attributes.LongLabel` carries the human context ("Hastings Street,
 //     Annerley, Brisbane City") that the bare `address` field lacks.
@@ -75,7 +75,7 @@ function qldAttr(c: QldCandidate, key: string): string {
   return typeof v === "string" ? v : "";
 }
 
-/** Human label with context — suburb + LGA where the service provides it. */
+/** Human label with context: suburb + LGA where the service provides it. */
 function qldLabel(c: QldCandidate): string {
   const long = qldAttr(c, "LongLabel");
   const locName = qldAttr(c, "Loc_name");
@@ -159,7 +159,7 @@ function cleanSuggestText(t: string): string {
 
 /** The rural-property-name source embeds the parcel size in the label
  * ("Westfield, Property area: 10,554,361.23 m², Rural Property, Drillham
- * South…") — and the thousands separators then confuse every comma-based
+ * South…"): and the thousands separators then confuse every comma-based
  * split downstream. Strip the area segment; keep the place itself. */
 function stripPropertyArea(label: string): string {
   return label.replace(/,\s*Property area:.*?m²/i, "");
@@ -184,7 +184,7 @@ async function suggestQld(query: string): Promise<Suggestion[]> {
     const { primary, secondary } = splitDisplayName(label);
     out.push({
       // Labels are de-duplicated above, so they make a safe unique id
-      // (magicKey prefixes collide — they encode the source locator).
+      // (magicKey prefixes collide: they encode the source locator).
       id: `qld:${key}`,
       displayName: label,
       // Coords resolve at geocode time (same contract as Google
@@ -201,7 +201,7 @@ async function suggestQld(query: string): Promise<Suggestion[]> {
 
 /** The locator's /suggest treats a trailing postcode as a literal prefix
  * token and matches lot-plan ids ("4005SP297533") and survey benchmarks
- * ("40058") instead of addresses — and "QLD"/"Australia" suffixes only
+ * ("40058") instead of addresses: and "QLD"/"Australia" suffixes only
  * dilute the match. Strip them before asking the locator. */
 function locatorQuery(query: string): string {
   return query
@@ -216,13 +216,13 @@ function locatorQuery(query: string): string {
 async function geocodeQld(query: string): Promise<GeocodeHit | null> {
   const q = locatorQuery(query);
   const tokens = queryTokens(query);
-  // Resolve through /suggest + magicKey first — it handles partial and
+  // Resolve through /suggest + magicKey first: it handles partial and
   // suburb-fuzzy input far better than a raw candidate search. Never
   // trust the single top suggestion blindly: /suggest ranks per source
   // locator, and for "50 Macquarie Street, Teneriffe" its first row can
   // be a Macquarie Street 300 km away. Prefer the first suggestion that
   // mentions every word the user typed (street AND suburb); when none
-  // does (legit at suburb boundaries — typed Graceville, official
+  // does (legit at suburb boundaries: typed Graceville, official
   // address says Chelmer) keep the locator's own order.
   try {
     const sugs = await qldSuggest(q, 8);
@@ -336,7 +336,7 @@ async function suggestGoogle(
   query: string,
   key: string,
 ): Promise<Suggestion[]> {
-  // Places API (New) autocomplete — the legacy
+  // Places API (New) autocomplete: the legacy
   // maps/api/place/autocomplete endpoint returns REQUEST_DENIED for
   // projects created after the deprecation cutoff, so this must use the
   // v1 places:autocomplete surface. Covers addresses AND establishments
@@ -383,7 +383,7 @@ async function suggestGoogle(
   return out;
 }
 
-// Places API (New) text search — the LANDMARK resolver only. Addresses are
+// Places API (New) text search: the LANDMARK resolver only. Addresses are
 // deliberately geocoded by the QLD locator (state address register, points
 // sit on the parcel); this exists because the locator cannot resolve POI
 // names at all ("Westfield Chermside, Gympie Road…" prefix-matches a
@@ -425,7 +425,7 @@ async function searchTextGoogle(
       displayName?: { text?: string };
     }>;
   };
-  // locationBias is a bias, not a filter — enforce the QLD bbox ourselves.
+  // locationBias is a bias, not a filter: enforce the QLD bbox ourselves.
   const hit = (body.places ?? []).find((p) => {
     const lat = p.location?.latitude;
     const lng = p.location?.longitude;
@@ -460,7 +460,7 @@ const GOOGLE_KEY = () => process.env.GOOGLE_GEOCODING_API_KEY ?? "";
 //
 // The QLD locator's /suggest happily prefix-matches on the FIRST word and
 // ignores the rest: "westfield chermside" returns Westfield (Longreach) and
-// Westfield Station (Kumbarilla) — nothing in Chermside. A suggestion that
+// Westfield Station (Kumbarilla): nothing in Chermside. A suggestion that
 // doesn't mention every meaningful word the user typed is a weak match, and
 // when NONE of them do we let OSM (which indexes POIs) take the top slots.
 
@@ -479,7 +479,7 @@ function coversTokens(label: string, tokens: string[]): boolean {
 
 /** Street-address-shaped input ("12 Oxley Rd …"). For these the QLD
  * locator is authoritative and token mismatches are usually just suburb
- * boundary naming (typed Graceville, official address says Chelmer) — do
+ * boundary naming (typed Graceville, official address says Chelmer): do
  * NOT let an OSM street centroid outrank an exact lot address. */
 function looksLikeStreetAddress(query: string): boolean {
   return /^\s*\d/.test(query);
@@ -507,11 +507,11 @@ export async function suggestAddresses(query: string): Promise<Suggestion[]> {
   if (looksLikeStreetAddress(query) && qld.length > 0) return qld;
   const covering = qld.filter((s) => coversTokens(s.displayName, tokens));
   if (covering.length > 0) {
-    // Good matches exist — surface them first, weak prefix-matches after.
+    // Good matches exist: surface them first, weak prefix-matches after.
     const rest = qld.filter((s) => !coversTokens(s.displayName, tokens));
     return [...covering, ...rest].slice(0, 6);
   }
-  // No QLD suggestion mentions every word — landmark/POI-style query.
+  // No QLD suggestion mentions every word: landmark/POI-style query.
   // Merge OSM results (QLD-bounded) ahead of the weak prefix matches.
   try {
     const nom = await suggestNominatim(query);
@@ -534,19 +534,19 @@ export async function suggestAddresses(query: string): Promise<Suggestion[]> {
 export async function geocodeAddress(query: string): Promise<GeocodeHit | null> {
   const key = GOOGLE_KEY();
 
-  // Provider order is deliberate — the QLD locator owns ADDRESSES, Google
+  // Provider order is deliberate: the QLD locator owns ADDRESSES, Google
   // Places owns LANDMARKS, and the Geocoding API is not used at all:
   //
   //   1. QLD locator for anything address-shaped. Its address points come
   //      from the state address register and sit on the parcel itself, so
   //      for parcel-based due diligence it beats Google's geometric
-  //      rooftop — which can land on the neighbour (33 Heath St pinned
+  //      rooftop: which can land on the neighbour (33 Heath St pinned
   //      66 m off, flipping the resolved lot from 240/RP11234 to
   //      248/RP11234 and the character verdict with it).
   //   2. Places (New) text search ONLY when a landmark-style query
   //      resolves to something that doesn't mention the words typed (the
   //      locator prefix-matches the first word and can land hundreds of
-  //      km away — "Westfield Chermside" → Westfield homestead,
+  //      km away: "Westfield Chermside" → Westfield homestead,
   //      Longreach). Same key/API as the autocomplete.
   //   3. Nominatim as the last resort.
   const streetNum = query.match(/^\s*(\d+)[a-z]?\b(?!\s*\/)/i)?.[1] ?? null;
@@ -576,7 +576,7 @@ export async function geocodeAddress(query: string): Promise<GeocodeHit | null> 
         tokens.length > 0 &&
         !coversTokens(hit.displayName, tokens)
       ) {
-        // Landmark mismatch — let Places text search resolve the POI,
+        // Landmark mismatch: let Places text search resolve the POI,
         // then OSM; keep the locator hit only if both fail.
         if (key) {
           try {

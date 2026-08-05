@@ -1,6 +1,6 @@
-// Stripe Checkout integration — MVP beta pricing (Option 2).
+// Stripe Checkout integration: MVP beta pricing (Option 2).
 //
-//   Single report  $19 one-time  (standard $29 after beta — REPORT_PRICE_CENTS)
+//   Single report  $19 one-time  (standard $29 after beta: REPORT_PRICE_CENTS)
 //   Basic          $49 / month   10 reports/month, single user
 //   Pro            $79 / month   50 reports/month, branded reports
 //
@@ -14,7 +14,7 @@ import Stripe from "stripe";
 
 export const REPORT_PRICE_CENTS = Number(
   process.env.REPORT_PRICE_CENTS ?? 1900,
-); // AUD cents — beta $19 (2900 = $29 after beta)
+); // AUD cents: beta $19 (2900 = $29 after beta)
 export const REPORT_CURRENCY = (process.env.REPORT_CURRENCY ?? "aud").toLowerCase();
 
 export const SUBSCRIPTION_PLANS = {

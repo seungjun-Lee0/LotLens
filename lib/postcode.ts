@@ -6,7 +6,7 @@
 // a keyless national point-query that returns poa_code_2021 (e.g. "4122").
 //
 // Used for DISPLAY only, fetched alongside the parcel lookup at report
-// load — the stored address_text is never mutated, so existing reports
+// load: the stored address_text is never mutated, so existing reports
 // gain a postcode too.
 
 const ABS_POA_QUERY =

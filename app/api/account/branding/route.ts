@@ -1,4 +1,4 @@
-// POST /api/account/branding — save the user's PDF report branding.
+// POST /api/account/branding: save the user's PDF report branding.
 // Subscriber feature (the pricing page sells branded fact packs on paid
 // plans); free accounts get a 403 with a friendly message.
 

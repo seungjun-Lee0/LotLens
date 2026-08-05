@@ -1,6 +1,6 @@
 "use client";
 
-// Account → "Report branding" — subscribers put their own name, accent
+// Account → "Report branding": subscribers put their own name, accent
 // colour and logo on every PDF fact pack they export.
 
 import { useState } from "react";
@@ -83,7 +83,7 @@ export function BrandingForm({
       </div>
       <label className="flex flex-col gap-1.5">
         <span className="text-[12px] font-medium text-muted-foreground">
-          Logo URL (https, PNG/JPG — appears on the cover page)
+          Logo URL (https, PNG/JPG: appears on the cover page)
         </span>
         <Input
           value={logoUrl}
@@ -113,7 +113,7 @@ export function BrandingForm({
         </Button>
         {state === "saved" && (
           <span className="text-[12.5px]" style={{ color: "var(--apple-green)" }}>
-            Saved — applies to your next PDF export.
+            Saved: applies to your next PDF export.
           </span>
         )}
         {state === "error" && (

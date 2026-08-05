@@ -1,7 +1,7 @@
 // POST /api/generate-narrative
 // Body: { addressId: string }
 // Reads council_data for the address, generates a narrative per module
-// (LLM stub in Task 4a — see lib/anthropic.ts), and writes one new
+// (LLM stub in Task 4a: see lib/anthropic.ts), and writes one new
 // reports row. Returns { reportId, narrative }.
 
 import { NextResponse } from "next/server";
@@ -20,7 +20,7 @@ export const maxDuration = 60;
 const BodySchema = z.object({ addressId: z.string().uuid() });
 
 export async function POST(req: Request) {
-  // Will call the Anthropic API once Task ④ lands — keep the same ceiling
+  // Will call the Anthropic API once Task ④ lands: keep the same ceiling
   // as the fetch pipeline it always follows.
   const limited = enforceRateLimit("generate-narrative", req, { limit: 5, windowSec: 600 });
   if (limited) return limited;

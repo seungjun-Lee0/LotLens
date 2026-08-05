@@ -3,7 +3,7 @@
 // MapLibre layer can paint everything in one source with a `get` expression.
 //
 // Colour palette mirrors Develo's property fact pack so the same property
-// renders with the same visual logic — buyers comparing reports recognise
+// renders with the same visual logic: buyers comparing reports recognise
 // the language immediately. Each module gets a single colour FAMILY, with
 // 4 lightness/saturation tiers when the layer has a 4-step risk scale:
 //
@@ -15,7 +15,7 @@
 //   Heritage           purple / pink / indigo
 //   Easements          magenta / pink (single)
 //   Vegetation         mixed (water=blue, MSES=orange, biodiversity=yellow,
-//                            corridor=green) — Develo uses the same scheme
+//                            corridor=green): Develo uses the same scheme
 //   Zoning             multi (Centre / Mixed / Residential / Open space)
 //
 // Module ICON tints stay on the Apple system palette (see module-meta.ts).
@@ -45,7 +45,7 @@ type OverlayScope = "context" | "property";
  * soft blur, and a constant multiplier leaves the pale "very low" tiers
  * (#bfdbfe, #cffafe) with edges as washed out as their fills. Pinning the
  * brightest channel to `target` instead gives every tier an equally
- * definite edge — the fill still carries the severity — on screen and in
+ * definite edge: the fill still carries the severity: on screen and in
  * print. Scaling all three channels keeps the hue. */
 function outlineColor(hex: string, target = 0.4): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
@@ -54,7 +54,7 @@ function outlineColor(hex: string, target = 0.4): string {
   const rgb = [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
   const peak = Math.max(...rgb);
   if (peak === 0) return hex;
-  // Only ever darkens — a fill already below `target` keeps its own value.
+  // Only ever darkens: a fill already below `target` keeps its own value.
   const factor = Math.min(1, (target * 255) / peak);
   return `#${rgb.map((c) => Math.round(c * factor).toString(16).padStart(2, "0")).join("")}`;
 }
@@ -62,50 +62,50 @@ function outlineColor(hex: string, target = 0.4): string {
 // ── Develo-style overlay palette ─────────────────────────────────────────
 
 export const DEVELO_HEX = {
-  // Flooding overall — navy/blue family
+  // Flooding overall: navy/blue family
   floodHigh:    "#1e3a8a",
   floodMedium:  "#2563eb",
   floodLow:     "#60a5fa",
   floodVeryLow: "#bfdbfe",
 
-  // Overland Flow — orange/yellow family
+  // Overland Flow: orange/yellow family
   overlandHigh:    "#c2410c",
   overlandMedium:  "#f97316",
   overlandLow:     "#fbbf24",
   overlandVeryLow: "#fde68a",
 
-  // Storm Tide — cyan/teal family (distinct from main Flooding)
+  // Storm Tide: cyan/teal family (distinct from main Flooding)
   stormHigh:    "#0e7490",
   stormMedium:  "#06b6d4",
   stormLow:     "#67e8f9",
   stormVeryLow: "#cffafe",
 
-  // Flood History — Develo's signature bright magenta
+  // Flood History: Develo's signature bright magenta
   histFeb2022: "#c026d3",
   histJan2011: "#a855f7",
 
-  // Bushfire — orange/red family
+  // Bushfire: orange/red family
   fireVeryHigh: "#b91c1c",
   fireHigh:     "#dc2626",
   fireBuffer:   "#ea580c",
   fireMedium:   "#f59e0b",
 
-  // Heritage / Character — purple family
+  // Heritage / Character: purple family
   heritageState:     "#7e22ce",
   heritageLocal:     "#db2777",
   heritageCharacter: "#a855f7",
 
-  // Easements — magenta/pink
+  // Easements: magenta/pink
   easementHV: "#db2777",
   easementCadastre: "#a21caf",
 
-  // Vegetation — Develo's multi-colour scheme
+  // Vegetation: Develo's multi-colour scheme
   vegWaterway:    "#0284c7",
   vegMSES:        "#ea580c",
   vegBiodiversity: "#84cc16",
   vegCorridor:    "#16a34a",
 
-  // Zoning — keep multi-family
+  // Zoning: keep multi-family
   zoneCentre:   "#dc2626",
   zoneMixed:    "#f97316",
   zoneLowMediumResidential: "#d97706",
@@ -122,7 +122,7 @@ export const DEVELO_HEX = {
   rvmC: "#84cc16",
   rvmR: "#0d9488",
 
-  // Environment — koala / wildlife habitat
+  // Environment: koala / wildlife habitat
   koalaCore:     "#16a34a",
   koalaLocal:    "#4ade80",
   koalaPriority: "#a3e635",
@@ -171,7 +171,7 @@ export const DEVELO_HEX = {
  * line being one indistinguishable brown.
  *
  * Exported because the map, the web legend and the PDF legend all have to
- * draw the same gradient — a second copy would drift.
+ * draw the same gradient: a second copy would drift.
  */
 export const CONTOUR_RAMP = [
   "#7dd3fc", "#38bdf8", "#22d3ee", "#4ade80", "#a3e635",
@@ -186,7 +186,7 @@ export function contourColorAt(t: number): string {
 
 /**
  * Every contour shares ONE legend label so the swatch list collapses to a
- * single row — which the renderers then swap for a gradient bar. Per-
+ * single row: which the renderers then swap for a gradient bar. Per-
  * elevation labels would produce ~20 rows and blow the legend budget.
  */
 export const CONTOUR_LEGEND_LABEL = "Contour line";
@@ -223,7 +223,7 @@ function pushFC(
 
 function floodingColor(props: Record<string, unknown>) {
   // BCC uses FLOOD_RISK; council adapters use OVL2_DESC / LABEL /
-  // Flood_Risk — accept all and keyword-match.
+  // Flood_Risk: accept all and keyword-match.
   const label = String(
     props.FLOOD_RISK ?? props.OVL2_DESC ?? props.LABEL ?? props.Flood_Risk ?? props.CLASS ?? "",
   );
@@ -264,7 +264,7 @@ function stormTideColor(props: Record<string, unknown>) {
 }
 
 function bushfireColor(props: Record<string, unknown>) {
-  // Statewide BPA uses `class`; the old BCC overlay used OVL2_DESC —
+  // Statewide BPA uses `class`; the old BCC overlay used OVL2_DESC -
   // accept both so historical council_data rows still paint.
   const label = String(props.class ?? props.OVL2_DESC ?? "");
   const d = label.toLowerCase();
@@ -310,7 +310,7 @@ function noiseColor(props: Record<string, unknown>) {
     if (n >= 20) return { fillColor: DEVELO_HEX.fireBuffer,   legendLabel: "Aircraft 20-25 ANEF" };
     return { fillColor: DEVELO_HEX.fireMedium, legendLabel: d };
   }
-  // QDC MP4.4 "noise category N" — HIGHER = louder (opposite of the BCC
+  // QDC MP4.4 "noise category N": HIGHER = louder (opposite of the BCC
   // legacy corridor numbering below).
   const qdc = /categor(?:y|ies)\s*(\d)/i.exec(d);
   if (qdc) {
@@ -327,7 +327,7 @@ function noiseColor(props: Record<string, unknown>) {
   return { fillColor: "#94a3b8", legendLabel: d || "Noise corridor" };
 }
 
-// Catchments are suburb-scale polygons stacked per year level — a filled
+// Catchments are suburb-scale polygons stacked per year level: a filled
 // wash drowns the whole map in green. The information is the BOUNDARY, so
 // paint outlines only (fillOpacity 0).
 function schoolsColor(props: Record<string, unknown>) {
@@ -346,7 +346,7 @@ function rvmColor(props: Record<string, unknown>): Classified {
   if (c === "B") return { fillColor: DEVELO_HEX.rvmB, legendLabel: "RVM Category B (remnant)" };
   if (c === "C") return { fillColor: DEVELO_HEX.rvmC, legendLabel: "RVM Category C (regrowth)" };
   if (c === "R") return { fillColor: DEVELO_HEX.rvmR, legendLabel: "RVM Category R (riverine)" };
-  // Category X / water are exempt — paint nothing visible.
+  // Category X / water are exempt: paint nothing visible.
   return { fillColor: "#94a3b8", legendLabel: "Exempt (Category X)", fillOpacity: 0 };
 }
 
@@ -381,7 +381,7 @@ function tenementColor(props: Record<string, unknown>): Classified {
   };
 }
 
-// Zone polygons are dissolved by zone-precinct — a single feature spans a
+// Zone polygons are dissolved by zone-precinct: a single feature spans a
 // whole block of lots, so they blanket the whole viewport. Keep the fill
 // faint (the per-lot cadastre lines carry the structure) so the satellite
 // imagery stays legible instead of drowning under a pink wash.
@@ -425,7 +425,7 @@ function zoningColor(props: Record<string, unknown>): Classified {
 }
 
 // Stormwater is a LINE/POINT network, not an area. `fillOpacity` is
-// irrelevant for lines — MapLibre paints those from strokeColor — but the
+// irrelevant for lines: MapLibre paints those from strokeColor: but the
 // public/private split has to survive into the legend, because only the
 // public assets carry a build-over obligation.
 function stormwaterColor(props: Record<string, unknown>): Classified {
@@ -443,7 +443,7 @@ function stormwaterColor(props: Record<string, unknown>): Classified {
   };
 }
 
-// Plan boundaries are suburb-scale — a filled wash would bury the aerial,
+// Plan boundaries are suburb-scale: a filled wash would bury the aerial,
 // and the information is the BOUNDARY. Outline only, same treatment as
 // school catchments.
 function localPlanAreaColor(): Classified {
@@ -497,7 +497,7 @@ export function extractOverlays(
       return out;
     case "storm_tide": {
       // Statewide coastal-hazard shape: { stormHigh, stormMedium, erosion }.
-      // Legacy BCC rows were a single FC — keep painting those too.
+      // Legacy BCC rows were a single FC: keep painting those too.
       if (isFC(inner)) {
         pushFC(out, inner, stormTideColor);
         return out;
@@ -568,7 +568,7 @@ export function extractOverlays(
       const i = inner as Record<string, unknown>;
       pushFC(out, i.overlay, steepColor);
       // The ramp is normalised to the elevations actually in view, not to
-      // absolute height — a 45–53 m ridge and a 0–8 m riverside flat both
+      // absolute height: a 45–53 m ridge and a 0–8 m riverside flat both
       // need the full colour range to show their own slope.
       const contourElevations: number[] = [];
       if (isFC(i.contours)) {

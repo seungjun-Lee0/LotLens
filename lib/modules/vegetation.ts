@@ -1,7 +1,7 @@
 // Vegetation module.
 //
 // Statewide backbone: the regulated vegetation management map (VM Act
-// 1999) — QSpatial Biota/VegetationManagement layer 109 "RVM - all"
+// 1999): QSpatial Biota/VegetationManagement layer 109 "RVM - all"
 // (verified live 2026-07, field `rvm_cat` ∈ A/B/C/R/X/water). Category
 // A/B (remnant), C (high-value regrowth) and R (GBR riverine) constrain
 // clearing anywhere in Queensland; X = exempt.
@@ -10,7 +10,7 @@
 //
 // Brisbane enhancement: inside Brisbane LGA we also query the BCC City
 // Plan 2014 Biodiversity areas overlay (waterway corridors, MSES lines,
-// council biodiversity areas) — the layer conveyancers cite for BCC lots.
+// council biodiversity areas): the layer conveyancers cite for BCC lots.
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
@@ -161,7 +161,7 @@ export async function fetchVegetationData(
   ];
   if (isBrisbane) {
     sources.push({
-      name: "BCC City Plan 2014 — Biodiversity areas overlay",
+      name: "BCC City Plan 2014: Biodiversity areas overlay",
       url: BCC_BIODIVERSITY_DOC,
       layer: BCC_BIODIVERSITY,
     });

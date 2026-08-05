@@ -1,4 +1,4 @@
-// POST /api/auth/login — { email, password }
+// POST /api/auth/login: { email, password }
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     const rows = (await sql`
       SELECT id, password_hash FROM users WHERE email = ${email} LIMIT 1
     `) as Array<{ id: string; password_hash: string | null }>;
-    // Same error for unknown email vs wrong password — don't leak which.
+    // Same error for unknown email vs wrong password: don't leak which.
     const fail = () =>
       NextResponse.json(
         { error: "Email or password is incorrect." },

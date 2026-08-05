@@ -13,7 +13,7 @@ function subscribe(onChange: () => void) {
 }
 
 // Theme lives in the <html> class, which the server can't see. Report null on the
-// server so we render nothing until the browser tells us — this avoids a hydration
+// server so we render nothing until the browser tells us: this avoids a hydration
 // mismatch without a setState-in-effect.
 const getSnapshot = () => document.documentElement.classList.contains("dark");
 const getServerSnapshot = (): boolean | null => null;

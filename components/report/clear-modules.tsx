@@ -1,4 +1,4 @@
-// "Checked & clear" strip — the clear-module diet. A module with nothing
+// "Checked & clear" strip: the clear-module diet. A module with nothing
 // on the lot doesn't earn a full section with a map; it earns a compact
 // evidence row (what was checked, against which source, verdict). Keeps
 // the "15 layers checked" completeness value without 12 screens of

@@ -1,8 +1,8 @@
-// Water & Sewer module — Urban Utilities' asset network.
+// Water & Sewer module: Urban Utilities' asset network.
 //
 // ⚠ DARK MODULE. Built, tested and wired, but switched OFF at
 // `WATER_SEWER_ENABLED` in lib/db.ts. See the LICENSING note below before
-// turning it on — this is a legal gate, not a technical one.
+// turning it on: this is a legal gate, not a technical one.
 //
 // ─── Why it's worth shipping ─────────────────────────────────────────────
 // A sewer gravity main through the back yard is the single most expensive
@@ -12,7 +12,7 @@
 // (rising) main or a trunk-sized gravity main the answer is often simply
 // no. Measured on four sample lots, two had a QUU main crossing them.
 //
-// ─── LICENSING — read before enabling ────────────────────────────────────
+// ─── LICENSING: read before enabling ────────────────────────────────────
 // These endpoints are public and need no token, but Urban Utilities has
 // NOT published a licence. As at 2026-07 the ArcGIS item metadata reads:
 //
@@ -68,7 +68,7 @@ const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
  */
 const TRUNK_DIAMETER_MM = 300;
 
-/** Urban Utilities' service area — the SEQ councils it supplies. Outside
+/** Urban Utilities' service area: the SEQ councils it supplies. Outside
  * these, water and sewer belong to a different retailer entirely. */
 const UU_LGA_PATTERN =
   /brisbane|ipswich|lockyer|scenic rim|somerset/i;
@@ -81,7 +81,7 @@ export type UtilityAsset = {
   /** Millimetres. Null on manholes. */
   diameterMm: number | null;
   material: string | null;
-  /** Metres below surface — manholes only. */
+  /** Metres below surface: manholes only. */
   depthM: number | null;
   /** True for shared infrastructure; false for this property's own
    * connection line, which carries no build-over obligation. */
@@ -92,7 +92,7 @@ export type WaterSewerResult = {
   riskLevel: RiskLevel;
   /** Assets intersecting the lot. */
   assets: UtilityAsset[];
-  /** A shared main crosses the lot — the build-over trigger. */
+  /** A shared main crosses the lot: the build-over trigger. */
   hasMainOnLot: boolean;
   /** A rising main or trunk-diameter gravity main crosses the lot. These
    * are the ones UU generally will not let you build over at all. */
@@ -251,12 +251,12 @@ export async function fetchWaterSewerData(
     hasConsideration: riskLevel !== "none",
     sources: [
       {
-        name: "Urban Utilities — Sewer network (open data)",
+        name: "Urban Utilities: Sewer network (open data)",
         url: UU_BUILD_OVER_DOC,
         layer: `${SEWER}/18`,
       },
       {
-        name: "Urban Utilities — Water network (open data)",
+        name: "Urban Utilities: Water network (open data)",
         url: UU_BUILD_OVER_DOC,
         layer: `${WATER}/21`,
       },

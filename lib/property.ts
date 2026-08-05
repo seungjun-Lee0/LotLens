@@ -1,13 +1,13 @@
-// Property parcel lookup — the real cadastre lot polygon + metadata.
+// Property parcel lookup: the real cadastre lot polygon + metadata.
 //
-// Source: Queensland DCDB (Land Parcel Property Framework) on QSpatial —
+// Source: Queensland DCDB (Land Parcel Property Framework) on QSpatial -
 // statewide, nightly-updated, so any Queensland address resolves, not just
 // Brisbane. Layer 4 = all cadastral parcels.
 //
 // Field highlights (lowercase in this service):
 //   lot, plan, lotplan (e.g. "1RP84598")
 //   lot_area (m²), tenure ("Freehold" etc.), parcel_typ
-//   locality (suburb), shire_name (LGA, e.g. "Gold Coast City") — this is
+//   locality (suburb), shire_name (LGA, e.g. "Gold Coast City"): this is
 //   how the pipeline decides which council overlay adapter applies.
 
 import type { FeatureCollection, Geometry } from "geojson";
@@ -61,7 +61,7 @@ function num(v: unknown): number | null {
  *
  * Cadastre-snapped overlay layers (easement parcels, zoning) share exact
  * boundary vertices with the lot, and esriSpatialRelIntersects counts a
- * shared fence line as intersecting — so querying with the exact lot
+ * shared fence line as intersecting: so querying with the exact lot
  * polygon would flag the NEIGHBOUR'S easement/zone. A ~10-30 cm inset
  * removes boundary touches without meaningfully changing what's "on" the
  * lot. Centroid scaling isn't a true buffer for concave lots, but at 0.3%
@@ -156,10 +156,10 @@ export async function fetchPropertyParcel(
       inSR: 4326,
       outFields: "lot,plan,lotplan,lot_area,tenure,parcel_typ,locality,shire_name",
       returnGeometry: true,
-      // Tiny simplification — the lot is already a 5–8 vertex rectangle.
+      // Tiny simplification: the lot is already a 5–8 vertex rectangle.
       maxAllowableOffset: 0.00001,
     });
-    // Road/rail/water reserves come back with null lotplan — prefer a real
+    // Road/rail/water reserves come back with null lotplan: prefer a real
     // lot if the point straddles boundaries.
     const direct =
       fc.features.find(hasLotPlan) ?? fc.features.find((x) => !!x.geometry);
@@ -167,7 +167,7 @@ export async function fetchPropertyParcel(
 
     // The pin missed the cadastre (interpolated geocodes drop onto the
     // road; large sites can pin on internal reserves). Search ~40 m out
-    // and take the REAL lot nearest to the pin — without this the whole
+    // and take the REAL lot nearest to the pin: without this the whole
     // report runs point-only: no lot polygon, no lot-clipped overlay
     // checks (heritage/easements silently under-report).
     const near = await queryArcGIS(PARCEL_LAYER, {
@@ -185,14 +185,14 @@ export async function fetchPropertyParcel(
         (a, b) => parcelDistanceSq(a, lat, lng) - parcelDistanceSq(b, lat, lng),
       );
       console.warn(
-        `[property] pin missed cadastre at ${lat.toFixed(6)},${lng.toFixed(6)} — using nearest lot ${
+        `[property] pin missed cadastre at ${lat.toFixed(6)},${lng.toFixed(6)}: using nearest lot ${
           (lots[0].properties as { lotplan?: string })?.lotplan
         }`,
       );
       return toParcelInfo(lots[0]);
     }
 
-    // Nothing real nearby — keep whatever the point hit (reserve) or EMPTY.
+    // Nothing real nearby: keep whatever the point hit (reserve) or EMPTY.
     return direct?.geometry ? toParcelInfo(direct) : EMPTY;
   } catch (err) {
     console.error("[property] parcel lookup failed:", err);
@@ -204,8 +204,8 @@ export async function fetchPropertyParcel(
  * Fetch every cadastre lot polygon within ~155 m of the point so a map can
  * draw the individual lot boundary lines (Develo-style).
  *
- * Zoning polygons are dissolved by zone-precinct — a single polygon spans a
- * whole block of lots — so on their own they read as one flat colour wash.
+ * Zoning polygons are dissolved by zone-precinct: a single polygon spans a
+ * whole block of lots: so on their own they read as one flat colour wash.
  * Overlaying the real per-lot cadastre outlines restores the "each lot is
  * distinct" look of the reference planning map. Geometry only; we don't
  * need attributes for boundary lines.
@@ -221,7 +221,7 @@ export async function fetchParcelLinesNear(
       inSR: 4326,
       outFields: "lotplan",
       returnGeometry: true,
-      bufferDegrees: 0.0014, // ~155 m — comfortably covers the ~115 m viewport
+      bufferDegrees: 0.0014, // ~155 m: comfortably covers the ~115 m viewport
       maxAllowableOffset: 0.00001,
     });
     const features = fc.features.filter(

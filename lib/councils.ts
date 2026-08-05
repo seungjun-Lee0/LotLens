@@ -1,8 +1,8 @@
 // Per-council (LGA) overlay adapter registry.
 //
 // Statewide layers cover every Queensland address; the layers councils
-// publish themselves — detailed flood risk bands, transport noise,
-// planning-scheme zoning, landslide/steep land — live on per-LGA services
+// publish themselves: detailed flood risk bands, transport noise,
+// planning-scheme zoning, landslide/steep land: live on per-LGA services
 // with per-LGA schemas. This file is the single place that knows those
 // URLs and field names. All endpoints verified live 2026-07 (point
 // queries at Maroochydore / Narangba / Burpengary / Surfers / Cleveland).
@@ -45,7 +45,7 @@ export type OverlayAdapter = {
   url: string;
   sourceName: string;
   docUrl: string;
-  /** Candidate property names for the classification label — first
+  /** Candidate property names for the classification label: first
    * non-empty string wins. Defaults cover the common council schemas. */
   labelFields?: string[];
 };
@@ -76,7 +76,7 @@ export function overlayLabel(
 
 /** One label per feature (first matching field). A lot-polygon query can
  * straddle several overlay bands, and ArcGIS feature order is NOT
- * deterministic — callers that grade severity must rank ALL of these and
+ * deterministic: callers that grade severity must rank ALL of these and
  * take the worst, never just the first. */
 export function overlayLabels(
   fc: FeatureCollection<Geometry | null>,
@@ -180,7 +180,7 @@ export const ZONING_ADAPTERS: Partial<Record<CouncilId, ZoningAdapter>> = {
   gold_coast: {
     url: AP1(GC_ORG, "City_Plan_Version_13_Open_Data", 4),
     outFields: "ZONE,ZONE_PRECINCT,LVL1_ZONE,Building_height",
-    sourceName: "City of Gold Coast — City Plan v13 Zoning",
+    sourceName: "City of Gold Coast: City Plan v13 Zoning",
     docUrl: "https://cityplan.goldcoast.qld.gov.au/",
     parse: (p) => ({
       zoneCode: null,
@@ -192,7 +192,7 @@ export const ZONING_ADAPTERS: Partial<Record<CouncilId, ZoningAdapter>> = {
   moreton_bay: {
     url: AP1(MBRC_ORG, "ZM_Zones_Precincts_WebMercator_OpenData", 0),
     outFields: "ZONE_PREC",
-    sourceName: "City of Moreton Bay — Planning Scheme Zones",
+    sourceName: "City of Moreton Bay: Planning Scheme Zones",
     docUrl: "https://www.moretonbay.qld.gov.au/Services/Building-Development/Planning-Schemes",
     parse: (p) => ({
       zoneCode: null,
@@ -204,7 +204,7 @@ export const ZONING_ADAPTERS: Partial<Record<CouncilId, ZoningAdapter>> = {
   sunshine_coast: {
     url: AP1(SCC_ORG, "PlanningScheme_Zoning_SCC", 5),
     outFields: "LABEL,HEADING,DESCRIPT",
-    sourceName: "Sunshine Coast Council — Planning Scheme Zones",
+    sourceName: "Sunshine Coast Council: Planning Scheme Zones",
     docUrl: "https://www.sunshinecoast.qld.gov.au/development/planning-documents/sunshine-coast-planning-scheme-2014",
     parse: (p) => ({
       zoneCode: null,
@@ -216,7 +216,7 @@ export const ZONING_ADAPTERS: Partial<Record<CouncilId, ZoningAdapter>> = {
   redland: {
     url: `${REDLAND}/36/query`,
     outFields: "ZONECODE,ZONEDESC,SUBAREA,SUBAREADESC",
-    sourceName: "Redland City Council — Planning Scheme Zoning",
+    sourceName: "Redland City Council: Planning Scheme Zoning",
     docUrl: "https://www.redland.qld.gov.au/info/20292/redland_city_plan",
     parse: (p) => ({
       zoneCode: str(p.ZONECODE),
@@ -234,25 +234,25 @@ export const ZONING_ADAPTERS: Partial<Record<CouncilId, ZoningAdapter>> = {
 export const FLOOD_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter>> = {
   gold_coast: {
     url: AP1(GC_ORG, "Flood_Risk_Overlay_2024_update01", 0),
-    sourceName: "City of Gold Coast — Flood Risk Overlay 2024",
+    sourceName: "City of Gold Coast: Flood Risk Overlay 2024",
     docUrl: "https://www.goldcoast.qld.gov.au/Services/Flooding-stormwater",
     labelFields: ["Flood_Risk"],
   },
   moreton_bay: {
     url: AP1(MBRC_ORG, "OM_Flood_Hazard_WebMercator_OpenData", 0),
-    sourceName: "City of Moreton Bay — Flood Hazard Overlay",
+    sourceName: "City of Moreton Bay: Flood Hazard Overlay",
     docUrl: "https://www.moretonbay.qld.gov.au/Services/Disaster-Management/Flooding",
     labelFields: ["OVL2_DESC"],
   },
   sunshine_coast: {
     url: AP1(SCC_ORG, "Flood_Hazard_Overlay_i_Flood_Risk_Area", 0),
-    sourceName: "Sunshine Coast Council — Flood Hazard Overlay",
+    sourceName: "Sunshine Coast Council: Flood Hazard Overlay",
     docUrl: "https://www.sunshinecoast.qld.gov.au/living-and-community/natural-hazards/flooding",
     labelFields: ["LABEL"],
   },
   redland: {
     url: `${REDLAND}/8/query`,
-    sourceName: "Redland City Council — Flood Prone, Storm Tide and Drainage Constrained Land",
+    sourceName: "Redland City Council: Flood Prone, Storm Tide and Drainage Constrained Land",
     docUrl: "https://www.redland.qld.gov.au/info/20292/redland_city_plan",
     labelFields: ["CLASS"],
   },
@@ -263,7 +263,7 @@ export const FLOOD_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter>> = {
 export const OVERLAND_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter>> = {
   moreton_bay: {
     url: AP1(MBRC_ORG, "OM_Overland_Flow_Path_WebMercator_OpenData", 0),
-    sourceName: "City of Moreton Bay — Overland Flow Path Overlay",
+    sourceName: "City of Moreton Bay: Overland Flow Path Overlay",
     docUrl: "https://www.moretonbay.qld.gov.au/Services/Disaster-Management/Flooding",
   },
 };
@@ -274,7 +274,7 @@ export const NOISE_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter[]>> = {
   moreton_bay: [
     {
       url: AP1(MBRC_ORG, "MBRC_PlanningScheme_TransportNoiseOverlay", 0),
-      sourceName: "City of Moreton Bay — Transport Noise Overlay",
+      sourceName: "City of Moreton Bay: Transport Noise Overlay",
       docUrl: "https://www.moretonbay.qld.gov.au/Services/Building-Development/Planning-Schemes",
       labelFields: ["OVL2_DESC"],
     },
@@ -282,13 +282,13 @@ export const NOISE_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter[]>> = {
   sunshine_coast: [
     {
       url: AP1(SCC_ORG, "Regional_Infrastructure_Overlay_vi_Transport_Noise_Corridors", 0),
-      sourceName: "Sunshine Coast Council — Transport Noise Corridor (road, mandatory)",
+      sourceName: "Sunshine Coast Council: Transport Noise Corridor (road, mandatory)",
       docUrl: "https://www.sunshinecoast.qld.gov.au/development/planning-documents/sunshine-coast-planning-scheme-2014",
       labelFields: ["LABEL"],
     },
     {
       url: AP1(SCC_ORG, "Regional_Infrastructure_Overlay_vi_Transport_Noise_Corridors", 4),
-      sourceName: "Sunshine Coast Council — Transport Noise Corridor (railway)",
+      sourceName: "Sunshine Coast Council: Transport Noise Corridor (railway)",
       docUrl: "https://www.sunshinecoast.qld.gov.au/development/planning-documents/sunshine-coast-planning-scheme-2014",
       labelFields: ["LABEL"],
     },
@@ -296,7 +296,7 @@ export const NOISE_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter[]>> = {
   redland: [
     {
       url: `${REDLAND}/21/query`,
-      sourceName: "Redland City Council — Road and Rail Noise Impacts Overlay",
+      sourceName: "Redland City Council: Road and Rail Noise Impacts Overlay",
       docUrl: "https://www.redland.qld.gov.au/info/20292/redland_city_plan",
       labelFields: ["CLASS"],
     },
@@ -308,24 +308,24 @@ export const NOISE_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter[]>> = {
 export const STEEP_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter>> = {
   brisbane: {
     url: "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Landslide_overlay/FeatureServer/0/query",
-    sourceName: "BCC City Plan 2014 — Landslide overlay",
+    sourceName: "BCC City Plan 2014: Landslide overlay",
     docUrl: "https://cityplan.brisbane.qld.gov.au/eplan/property/0/0/Landslide",
     labelFields: ["OVL2_DESC"],
   },
   moreton_bay: {
     url: AP1(MBRC_ORG, "MBRC_PlanningScheme_LandslideHazardOverlay", 0),
-    sourceName: "City of Moreton Bay — Landslide Hazard Overlay",
+    sourceName: "City of Moreton Bay: Landslide Hazard Overlay",
     docUrl: "https://www.moretonbay.qld.gov.au/Services/Building-Development/Planning-Schemes",
   },
   sunshine_coast: {
     url: AP1(SCC_ORG, "Landslide_Hazard_and_Steep_Land_Overlay_ii_Slope", 0),
-    sourceName: "Sunshine Coast Council — Landslide Hazard and Steep Land Overlay",
+    sourceName: "Sunshine Coast Council: Landslide Hazard and Steep Land Overlay",
     docUrl: "https://www.sunshinecoast.qld.gov.au/development/planning-documents/sunshine-coast-planning-scheme-2014",
     labelFields: ["LABEL", "Class"],
   },
   redland: {
     url: `${REDLAND}/17/query`,
-    sourceName: "Redland City Council — Landslide Hazard Overlay",
+    sourceName: "Redland City Council: Landslide Hazard Overlay",
     docUrl: "https://www.redland.qld.gov.au/info/20292/redland_city_plan",
     labelFields: ["CLASS"],
   },

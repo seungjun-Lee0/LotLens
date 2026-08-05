@@ -3,7 +3,7 @@
 // Header anchor link with smooth, nicely-framed scrolling. On the home
 // page a click smooth-scrolls so the target section sits CENTRED in the
 // viewport (sections taller than the viewport align near the top with
-// breathing room instead — centring those would cut their heading off).
+// breathing room instead: centring those would cut their heading off).
 // On any other page it falls through to normal navigation to /#hash.
 
 import Link from "next/link";

@@ -1,20 +1,20 @@
-// Mining & resources module — statewide resource authorities + key
+// Mining & resources module: statewide resource authorities + key
 // resource areas.
 //
 // Two statewide QSpatial sources (verified live 2026-07):
 //
-//   Economy/MineralTenement/MapServer/0 — current resource authorities
+//   Economy/MineralTenement/MapServer/0: current resource authorities
 //     (mining leases, exploration permits, mineral development licences).
 //     Fields: tenid, tenname, tentype, tenmineral, tenowner, tenstatus,
 //     appdate, grantdate, expiredate.
 //     An exploration permit over a suburb is common and low-impact; a
 //     granted mining lease on/next to the lot is a serious flag.
 //
-//   GeoscientificInformation/MiningResources/MapServer — Key Resource
+//   GeoscientificInformation/MiningResources/MapServer: Key Resource
 //     Areas (extractive industry protection under the SPP):
 //       9  KRA resource/processing area   (quarry / extraction footprint)
 //      10  KRA separation area            (buffer where sensitive uses are
-//                                          constrained — dust/noise/blast)
+//                                          constrained: dust/noise/blast)
 //
 // Neither replaces a GeoResGlobe search, but they answer the buyer
 // question "is there a quarry buffer or mining tenement over this lot?".
@@ -123,7 +123,7 @@ export async function fetchMiningData(
   // A quarry footprint or granted mining lease over the lot is a serious
   // flag; a separation buffer or granted exploration permit is a medium
   // consideration. Ungranted tenure (applications, lapsed permits) is
-  // informational — exploration applications blanket whole regions and
+  // informational: exploration applications blanket whole regions and
   // authorise nothing on the surface, so a severity there is noise.
   const riskLevel: RiskLevel =
     inKraResourceArea || grantedLease
@@ -135,8 +135,8 @@ export async function fetchMiningData(
           : "none";
 
   const parts: string[] = [];
-  if (inKraResourceArea) parts.push("Key Resource Area — resource/processing area");
-  if (inKraSeparationArea) parts.push("Key Resource Area — separation buffer");
+  if (inKraResourceArea) parts.push("Key Resource Area: resource/processing area");
+  if (inKraSeparationArea) parts.push("Key Resource Area: separation buffer");
   if (tenements.length > 0) {
     const t = tenements[0];
     parts.push(`${t.type ?? "Resource authority"}${t.status ? ` (${t.status.toLowerCase()})` : ""}`);

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { LegalPage, LegalSection } from "@/components/site/legal";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — LotLens",
+  title: "Privacy Policy: LotLens",
   description:
     "How LotLens collects, uses and protects your information when you generate Queensland property reports.",
 };
@@ -27,22 +27,22 @@ export default function PrivacyPage() {
       <LegalSection heading="What we collect">
         <ul>
           <li>
-            <strong>Account details</strong> — your email address, display name
+            <strong>Account details</strong>: your email address, display name
             and a hashed password, or your Google account identifier if you
             sign in with Google. We never see or store your Google password.
           </li>
           <li>
-            <strong>Payment records</strong> — payments are processed by
+            <strong>Payment records</strong>: payments are processed by
             Stripe. We store the transaction reference, plan and credit
             balance; we never store your card number.
           </li>
           <li>
-            <strong>Addresses and reports</strong> — the addresses you search
+            <strong>Addresses and reports</strong>: the addresses you search
             and the reports generated for them, so you can revisit unlocked
             reports.
           </li>
           <li>
-            <strong>Technical data</strong> — IP address and basic request
+            <strong>Technical data</strong>: IP address and basic request
             logs, used for rate limiting and abuse prevention.
           </li>
         </ul>
@@ -67,29 +67,29 @@ export default function PrivacyPage() {
         <ul>
           <li>
             <strong>Queensland Government and council mapping services</strong>{" "}
-            — spatial queries for the searched location (QSpatial, Brisbane
+           : spatial queries for the searched location (QSpatial, Brisbane
             City Council, City of Gold Coast, City of Moreton Bay, Sunshine
             Coast Council, Redland City Council and related services).
           </li>
           <li>
-            <strong>Stripe</strong> — payment processing and subscription
+            <strong>Stripe</strong>: payment processing and subscription
             billing.
           </li>
           <li>
-            <strong>Google</strong> — sign-in (if you choose Google OAuth) and
+            <strong>Google</strong>: sign-in (if you choose Google OAuth) and
             optional address geocoding / autocomplete.
           </li>
           <li>
-            <strong>Anthropic</strong> — the searched address and the public
+            <strong>Anthropic</strong>: the searched address and the public
             overlay results are used to generate the written narrative in your
             report.
           </li>
           <li>
-            <strong>Vercel and Neon</strong> — application hosting and
+            <strong>Vercel and Neon</strong>: application hosting and
             database storage.
           </li>
           <li>
-            <strong>Mapbox</strong> — map rendering, where enabled.
+            <strong>Mapbox</strong>: map rendering, where enabled.
           </li>
         </ul>
       </LegalSection>

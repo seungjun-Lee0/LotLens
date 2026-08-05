@@ -1,4 +1,4 @@
-// POST /api/auth/reset-password — { token, newPassword }
+// POST /api/auth/reset-password: { token, newPassword }
 // Consumes a valid reset token, sets the new password, signs the user in.
 
 import { createHash } from "node:crypto";

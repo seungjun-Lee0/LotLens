@@ -1,4 +1,4 @@
-// POST /api/billing/portal — opens the Stripe customer portal so
+// POST /api/billing/portal: opens the Stripe customer portal so
 // subscribers can update cards, switch plans, or cancel.
 
 import { NextResponse } from "next/server";
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   }
   if (!user.stripeCustomerId) {
     return NextResponse.json(
-      { error: "No billing profile yet — subscribe to a plan first." },
+      { error: "No billing profile yet: subscribe to a plan first." },
       { status: 400 },
     );
   }

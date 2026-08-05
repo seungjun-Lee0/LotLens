@@ -1,8 +1,8 @@
-// Environment module — koala habitat + state wildlife habitat (MSES).
+// Environment module: koala habitat + state wildlife habitat (MSES).
 //
 // Develo's "Environment" page covers exactly this: Core Koala Habitat
 // Area, Koala Priority Area, and MSES wildlife habitat. All statewide
-// (koala layers are SEQ — the regulatory scope of the Nature
+// (koala layers are SEQ: the regulatory scope of the Nature
 // Conservation (Koala) Plan 2020; MSES wildlife habitat is statewide).
 //
 // Endpoints (QSpatial, verified live 2026-07):
@@ -15,7 +15,7 @@
 //
 // Being inside a core koala habitat area makes interfering with koala
 // habitat trees assessable development in the SEQ koala protection
-// framework — a real constraint on clearing/building envelopes.
+// framework: a real constraint on clearing/building envelopes.
 
 import type { Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
@@ -139,7 +139,7 @@ export async function fetchEnvironmentData(
         layer: KOALA_CORE,
       },
       {
-        name: "Matters of State Environmental Significance — wildlife habitat",
+        name: "Matters of State Environmental Significance: wildlife habitat",
         url: MSES_DOC,
         layer: MSES_WILDLIFE,
       },

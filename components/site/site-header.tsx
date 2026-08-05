@@ -78,7 +78,7 @@ export async function SiteHeader({
               >
                 My reports
               </Link>
-              {/* Phones: the inline links above are hidden — the report
+              {/* Phones: the inline links above are hidden: the report
                   list, account and sign-out all live in the avatar menu. */}
               {showCredits && user && (
                 <Link

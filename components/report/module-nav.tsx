@@ -1,7 +1,7 @@
 "use client";
 
 // Floating "jump to module" nav for the report. When a report has many
-// flagged modules the body gets long — this FAB (bottom-right) expands to a
+// flagged modules the body gets long: this FAB (bottom-right) expands to a
 // list of the rendered module sections so you can jump straight to one
 // instead of scrolling. Highlights the section currently in view.
 
@@ -33,7 +33,7 @@ export function ModuleNav({ items }: { items: ModuleNavItem[] }) {
     const io = new IntersectionObserver(
       (entries) => {
         // The topmost section intersecting the upper half of the viewport
-        // wins — matches what the reader is actually looking at.
+        // wins: matches what the reader is actually looking at.
         const visible = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];

@@ -1,12 +1,12 @@
 // Per-IP rate limiting for API routes.
 //
 // Token bucket kept in per-instance memory. On serverless this means the
-// limit applies per warm instance, not globally — still enough to stop
+// limit applies per warm instance, not globally: still enough to stop
 // the realistic abuse cases (credential stuffing a login form, hammering
 // the report pipeline, scripting the geocoder), because a single abuser's
 // requests land on a small number of instances. If limits ever need to be
 // exact/global, swap the Map for Upstash Redis behind the same function
-// signature — callers don't change.
+// signature: callers don't change.
 
 import { NextResponse } from "next/server";
 

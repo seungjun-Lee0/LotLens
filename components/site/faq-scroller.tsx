@@ -1,6 +1,6 @@
 "use client";
 
-// FAQ accordion that plays itself as you scroll — a scroll-spy on the
+// FAQ accordion that plays itself as you scroll: a scroll-spy on the
 // viewport centre: each question unfolds as its row crosses the middle of
 // the screen, and STAYS open while the next ones reveal below. Keeping
 // passed answers open is what makes the choreography smooth: nothing above
@@ -11,7 +11,7 @@
 // Reduced-motion users get the plain accordion too.
 //
 // Answers animate via the grid-rows 0fr→1fr trick (see .faq-answer in
-// globals.css) — works in every browser, unlike <details> +
+// globals.css): works in every browser, unlike <details> +
 // interpolate-size which is Chromium-only and left phones snapping open
 // with no transition at all.
 

@@ -1,4 +1,4 @@
-// Consolidated "Next steps" — every flagged module's questions-to-ask in
+// Consolidated "Next steps": every flagged module's questions-to-ask in
 // one checklist the buyer can forward to their conveyancer, instead of
 // leaving them scattered across module sections.
 

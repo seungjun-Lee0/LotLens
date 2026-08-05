@@ -1,6 +1,6 @@
-// Overland Flow module — BCC Flood Awareness Overland Flow.
+// Overland Flow module: BCC Flood Awareness Overland Flow.
 //
-// Stormwater that runs over the ground when drainage is overwhelmed —
+// Stormwater that runs over the ground when drainage is overwhelmed -
 // distinct from creek / river flooding (which we cover separately in the
 // Flooding module). Tingalpa-style streets with steep gutters and
 // undersized stormwater see this regularly.
@@ -9,7 +9,7 @@
 //   .../Flood_Awareness_Overland_Flow/FeatureServer/0
 // Fields: FLOOD_RISK ∈ {High, Medium, Low, Very Low} + FLOOD_TYPE.
 // Native SRID: EPSG:28356. Same point-buffer trick as the historic
-// flooding layers — lot-edge cases need a ~50 m envelope.
+// flooding layers: lot-edge cases need a ~50 m envelope.
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
@@ -34,7 +34,7 @@ export type OverlandFlowResult = {
   sources: Array<{ name: string; url: string; layer: string }>;
   raw: unknown;
   context: unknown;
-  /** False outside Brisbane LGA — overland-flow mapping is a council
+  /** False outside Brisbane LGA: overland-flow mapping is a council
    * flood-awareness product. */
   available: boolean;
   availabilityNote?: string;
@@ -70,7 +70,7 @@ export async function fetchOverlandFlowData(
       const { point, context, label } = await queryOverlayAdapter(adapter, lat, lng, lot);
       const hit = point.features.length > 0;
       return {
-        // Overland flow paths are presence overlays for most councils —
+        // Overland flow paths are presence overlays for most councils -
         // being on one is a real consideration but not a graded band.
         riskLevel: hit ? "medium" : "none",
         floodType: label ?? (hit ? "Overland flow path" : null),
@@ -132,7 +132,7 @@ export async function fetchOverlandFlowData(
     hasConsideration: riskLevel !== "none",
     sources: [
       {
-        name: "BCC Flood Awareness — Overland Flow",
+        name: "BCC Flood Awareness: Overland Flow",
         url: BCC_OVERLAND_DOC,
         layer: OVERLAND_FLOW,
       },

@@ -6,7 +6,7 @@ import { FileText, LogOut, Shield, UserRound } from "lucide-react";
 
 /**
  * Account avatar with a tap-to-open dropdown (Account, My reports, Admin,
- * Log out). On phones this is the only way to reach those destinations —
+ * Log out). On phones this is the only way to reach those destinations -
  * the header's inline text links are hidden below `sm`. On desktop the
  * inline links stay, and this menu adds one-tap sign-out.
  */

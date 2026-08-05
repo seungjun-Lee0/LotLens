@@ -1,4 +1,4 @@
-// Region framework — which council (LGA) a point belongs to, and which
+// Region framework: which council (LGA) a point belongs to, and which
 // data sources apply there.
 //
 // LotLens layers come from two kinds of sources:
@@ -11,7 +11,7 @@
 //     Each LGA publishes its own service with its own schema; Brisbane
 //     City Council is the first council adapter. Modules that depend on a
 //     council overlay report `available: false` outside adapted LGAs
-//     (Develo does the same — their reports drop pages per-LGA).
+//     (Develo does the same: their reports drop pages per-LGA).
 //
 // The LGA itself comes from the DCDB parcel lookup (`shire_name`, e.g.
 // "Brisbane City", "Gold Coast City", "Noosa Shire"), with a bbox check
@@ -24,7 +24,7 @@ export type Region = {
   isBrisbane: boolean;
 };
 
-/** Queensland-wide bbox — the geocoder gate. */
+/** Queensland-wide bbox: the geocoder gate. */
 export const QLD_BBOX = {
   lonMin: 137.99,
   latMin: -29.18,
@@ -32,7 +32,7 @@ export const QLD_BBOX = {
   latMax: -8.9,
 };
 
-/** Brisbane LGA bbox — fallback LGA detection when no parcel is found. */
+/** Brisbane LGA bbox: fallback LGA detection when no parcel is found. */
 export const BRISBANE_BBOX = {
   lonMin: 152.65,
   latMin: -27.75,
@@ -79,6 +79,6 @@ export type ModuleAvailability = {
 export function unavailableForLga(region: Region, what: string): ModuleAvailability {
   return {
     available: false,
-    availabilityNote: `${what} is published per-council and has not been integrated for ${councilDisplayName(region)} yet. Check the council's planning scheme mapping directly.`,
+    availabilityNote: `${what} is maintained separately by each council. LotLens does not provide this council layer for ${councilDisplayName(region)}. Confirm the property through the council's planning scheme mapping.`,
   };
 }

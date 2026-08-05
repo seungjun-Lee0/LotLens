@@ -12,7 +12,7 @@ import {
 import type { ReportPayload } from "@/lib/pipeline";
 
 // Brisbane CBD GPO (approx). Used for the "distance to CBD" stat in the
-// sidebar — purely informational, no business logic depends on it.
+// sidebar: purely informational, no business logic depends on it.
 const CBD = { lat: -27.4694, lng: 153.0235 };
 
 function haversineKm(
@@ -56,7 +56,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
 
   // Verdict layer: flagged modules first, most severe on top, then failed
   // checks; everything clear collapses into a compact strip below. The
-  // canonical module order stays in the report BODY — this block is the
+  // canonical module order stays in the report BODY: this block is the
   // "read the punchline first" view.
   const attention = modules
     .filter((m) => isFlagged(m.riskLevel, m.hasConsideration) || isFailed(m))
@@ -69,7 +69,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
         RISK_RANK[riskOf(a.riskLevel, a.hasConsideration)]
       );
     });
-  // Facts, not warnings — own lane so they neither raise an alarm nor get
+  // Facts, not warnings: own lane so they neither raise an alarm nor get
   // buried in "clear" (they have real content; see the body sections).
   const info = modules.filter(
     (m) => isInformational(m.riskLevel, m.hasConsideration) && !isFailed(m),
@@ -102,7 +102,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
   return (
     <section className="overflow-hidden rounded-3xl border border-border/60 bg-card/85 backdrop-blur-sm">
       <div className="grid grid-cols-1 gap-x-8 gap-y-6 px-5 py-6 sm:gap-y-8 sm:px-10 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
-        {/* Left — title + 5 module rows */}
+        {/* Left: title + 5 module rows */}
         <div className="flex flex-col gap-5 sm:gap-6">
           <div>
             <h2 className="text-balance text-2xl font-semibold tracking-tight sm:text-4xl">
@@ -115,7 +115,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                   : "Nothing of concern found in the checks that ran."
                 : `${considerationCount} of ${riskCheckCount} checks need your attention${topLine ? `. Most important: ${topLine}` : ""}.`}
               {failedCount > 0 &&
-                ` ${failedCount} check${failedCount > 1 ? "s" : ""} couldn't reach ${failedCount > 1 ? "their sources" : "its source"} this run. Re-run to retry.`}
+                ` ${failedCount} check${failedCount > 1 ? "s require" : " requires"} verification because the source mapping was unavailable at report time.`}
             </p>
           </div>
 
@@ -134,7 +134,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                   const tint = failed
                     ? "var(--apple-orange)"
                     : RISK_STYLE[level].cssVar;
-                  // Drop the redundant address restatement — the whole
+                  // Drop the redundant address restatement: the whole
                   // report is about this one address.
                   const summary = stripAddressPrefix(
                     report.narrative[m.module]?.summary ?? "",
@@ -160,7 +160,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                         </div>
                         {failed ? (
                           <div className="text-[12px] leading-snug text-muted-foreground">
-                            Source unreachable this run. Re-run the checks.
+                            Source mapping was unavailable at report time. Run the check again to complete verification.
                           </div>
                         ) : summary ? (
                           <div className="line-clamp-2 text-[12px] leading-snug text-muted-foreground sm:text-[12.5px]">
@@ -186,7 +186,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                           <TriangleAlert className="size-2.5" strokeWidth={3.5} />
                         </span>
                         <span className="hidden sm:inline">
-                          {failed ? "Not checked" : RISK_STYLE[level].label}
+                          {failed ? "Pending" : RISK_STYLE[level].label}
                         </span>
                       </div>
                     </li>
@@ -266,7 +266,7 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
           )}
         </div>
 
-        {/* Right — metadata sidebar */}
+        {/* Right: metadata sidebar */}
         <aside className="flex min-w-0 flex-col gap-4 border-l-0 border-t border-border/40 pt-6 [overflow-wrap:anywhere] sm:gap-5 sm:pt-7 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
           <Meta label="Date of report">{formatDate(report.generated_at)}</Meta>
           <Meta label="Address"><span className="break-words">{formatAuAddress(address.address_text, payload.postcode)}</span></Meta>

@@ -35,12 +35,12 @@ export async function generateModuleNarrative(
   // immediately.
   //
   // Council-overlay modules outside adapted LGAs mark themselves
-  // `available: false` — render an honest "not integrated here" narrative
+  // `available: false`: render an honest "not integrated here" narrative
   // instead of a false "no considerations identified".
   const rawAvail = (input.councilData.raw_response ?? {}) as Record<string, unknown>;
   // A source that couldn't be reached this run (pipeline wrote a
   // fetchFailed row) is different again from "not integrated for this
-  // LGA" — it's transient, so the narrative should say "re-run", not
+  // LGA": it's transient, so the narrative should say "re-run", not
   // "ask your conveyancer".
   if (rawAvail.fetchFailed === true) {
     return renderStubFetchFailed(input);
@@ -75,12 +75,12 @@ function renderStubFetchFailed(
   input: GenerateModuleNarrativeInput,
 ): ModuleNarrative {
   return {
-    summary: `This check couldn't be completed for ${input.address} because the data source didn't respond.`,
+    summary: `This check for ${input.address} requires verification because its source mapping was unavailable when the report was prepared.`,
     detail:
-      "The government/council mapping service for this module was unreachable when the report ran. No finding here means \"not checked\", not \"clear\". Re-run the checks to retry. These outages are usually brief.",
+      "No conclusion has been recorded for this check. Run the check again to query the source mapping, or confirm the property directly with the relevant authority before relying on the result.",
     questions_to_ask: [
-      "Re-run the report checks to retry this source.",
-      "If it keeps failing, check the source's own website directly. The link is on the module card.",
+      "Run the report check again to complete verification.",
+      "If the source remains unavailable, confirm the property through the authority's mapping service linked in this report.",
     ],
     sources: [],
   };
@@ -93,10 +93,10 @@ function renderStubUnavailable(
   const note =
     typeof raw.availabilityNote === "string"
       ? raw.availabilityNote
-      : "This overlay is published per-council and has not been integrated for this local government area yet.";
+      : "This overlay is maintained separately by each council and LotLens does not provide the council layer for this location.";
   return {
-    summary: `This check is not yet available for ${input.address}'s council area.`,
-    detail: `${note} No finding here means "not checked", not "clear". Treat it as an open item for your conveyancer.`,
+    summary: `This check requires confirmation through the local council's planning mapping.`,
+    detail: `${note}\n\nNo conclusion is recorded for this check. Ask your conveyancer or planning adviser to confirm it before relying on the report.`,
     questions_to_ask: [
       "Ask the local council (or check its online planning-scheme mapping) what this overlay shows for the lot.",
       "Ask your conveyancer to include this check in their searches.",
@@ -161,7 +161,7 @@ function renderStubFlooding(
     summary: `${input.address} carries ${riskWord} per BCC Flood Awareness Mapping.${
       historicLabel.length > 0 ? ` Historic floods: ${historicLabel.join(", ")}.` : ""
     }`,
-    detail: `Brisbane City Council classifies this property as "${raw.riskLevel}" on the combined creek / river / storm tide overlay.${historicSentence} Flood risk affects insurability, build form (raised floor levels), and resale.`,
+    detail: `Brisbane City Council classifies this property as "${raw.riskLevel}" on the combined creek / river / storm tide overlay.${historicSentence}\n\nFlood risk affects insurability, build form (raised floor levels), and resale.`,
     questions_to_ask: [
       "What habitable floor level does the property currently sit at, vs the defined flood event level?",
       "Has the property been physically flooded in recent events? Request photos and insurance claim history.",
@@ -219,7 +219,7 @@ function renderStubStormTide(
   }
   return {
     summary: `${input.address} sits in a ${risk} storm tide area per BCC mapping.`,
-    detail: `Brisbane City Council classifies this property as "${risk}" on the Storm Tide overlay. Habitable floor levels, building envelope resilience, and certain materials may be regulated. Insurance premiums for coastal storm-exposed properties can be materially higher.`,
+    detail: `Brisbane City Council classifies this property as "${risk}" on the Storm Tide overlay.\n\nHabitable floor levels, building envelope resilience, and certain materials may be regulated. Insurance premiums for coastal storm-exposed properties can be materially higher.`,
     questions_to_ask: [
       "What is the habitable floor level versus the defined storm tide event level?",
       "Has insurance been quoted with explicit storm tide / cyclone coverage?",
@@ -276,7 +276,7 @@ function renderStubFloodPlanning(
   const areas = [river, creek].filter((x): x is string => Boolean(x));
   return {
     summary: `${input.address} sits in ${areas.join(" + ")}.`,
-    detail: `Brisbane City Council's statutory flood planning overlay applies: ${areas.join(" + ")}. The numbered suffix (1 strictest, 4 mildest) determines minimum habitable floor levels, fill volumes, and excluded structures for any new build or extension. This is the legally binding control, distinct from the awareness-mapping risk indicator.`,
+    detail: `Brisbane City Council's statutory flood planning overlay applies: ${areas.join(" + ")}.\n\nThe numbered suffix (1 strictest, 4 mildest) determines minimum habitable floor levels, fill volumes, and excluded structures for any new build or extension. This is the legally binding control, distinct from the awareness-mapping risk indicator.`,
     questions_to_ask: [
       "What habitable floor level will any new build / extension need to be raised to?",
       "Are there fill, excavation or excluded-structure limits that affect the build envelope?",
@@ -335,7 +335,7 @@ function renderStubZoning(
   const specific = lvl2 ?? zonePrecinct ?? zoneCode ?? lvl1;
   return {
     summary: `Zoned ${specific} under BCC City Plan 2014.`,
-    detail: `Specific zone: ${lvl2 ?? "not stated"}. Top-level zone: ${lvl1 ?? "not stated"}. Precinct: ${zonePrecinct ?? "not stated"} (${zoneCode ?? "no code"}). Zoning governs what can be built, run as a business, or subdivided on the lot. Brisbane's Centre, Mixed use, and residential zones each carry different precinct overlays, so check the specific zone and precinct description against your intended use.`,
+    detail: `Specific zone: ${lvl2 ?? "not stated"}. Top-level zone: ${lvl1 ?? "not stated"}. Precinct: ${zonePrecinct ?? "not stated"} (${zoneCode ?? "no code"}).\n\nZoning governs what can be built, run as a business, or subdivided on the lot. Brisbane's Centre, Mixed use, and residential zones each carry different precinct overlays, so check the specific zone and precinct description against your intended use.`,
     questions_to_ask: [
       "What is the maximum height / GFA / site cover under this zone?",
       "Is a granny flat / dual occupancy permitted as code-assessable or impact-assessable?",
@@ -368,7 +368,7 @@ function renderStubHeritage(
     .join("; ");
   return {
     summary: `${input.address} is captured by ${types.join(" + ")} overlay${types.length > 1 ? "s" : ""}.`,
-    detail: `Entries: ${desc}. State or local heritage listing typically requires development approval for any external work and may block demolition. Traditional building character protection (pre-1947) restricts demolition and constrains alterations to street-facing form. Confirm the exact controls with BCC eplan.`,
+    detail: `Entries: ${desc}.\n\nState or local heritage listing typically requires development approval for any external work and may block demolition. Traditional building character protection (pre-1947) restricts demolition and constrains alterations to street-facing form. Confirm the exact controls with BCC eplan.`,
     questions_to_ask: [
       "What demolition / external alteration approvals will be needed?",
       "If buying to renovate, what design constraints apply to the street-facing facade?",
@@ -399,7 +399,7 @@ function renderStubNoise(
   const parts = [t, a].filter((x): x is string => Boolean(x));
   return {
     summary: `${input.address} sits in ${parts.join(" + ")}.`,
-    detail: `Brisbane noise overlay flags this property: ${parts.join(" + ")}. New construction will trigger acoustic-attenuation requirements: rated glazing, denser walls, restrictions on habitable rooms facing the source. Practical felt noise depends on prevailing wind, time of day, and traffic mix.`,
+    detail: `Brisbane noise overlay flags this property: ${parts.join(" + ")}.\n\nNew construction will trigger acoustic-attenuation requirements: rated glazing, denser walls, restrictions on habitable rooms facing the source. Practical felt noise depends on prevailing wind, time of day, and traffic mix.`,
     questions_to_ask: [
       "What rated windows and walls would a new build require here?",
       "Is the noise mostly road, rail, or aircraft? Solutions differ.",
@@ -432,7 +432,7 @@ function renderStubSchools(
     .join("; ");
   return {
     summary: `${input.address} is zoned for ${schools.map((s) => s.name).join(" + ")}.`,
-    detail: `In-catchment for: ${lines}. State schools must accept in-catchment enrolments, so choosing this address gives the listed schools as the guaranteed option. Out-of-catchment placements are place-dependent.`,
+    detail: `In-catchment for: ${lines}.\n\nState schools must accept in-catchment enrolments, so choosing this address gives the listed schools as the guaranteed option. Out-of-catchment placements are place-dependent.`,
     questions_to_ask: [
       "Are the catchment schools at NAPLAN / OP performance you're happy with? Check MySchool.",
       "If you're moving for school, confirm enrolment with the school before contract.",
@@ -487,7 +487,7 @@ function renderStubEasements(
     scope,
   ]
     .filter(Boolean)
-    .join(" ");
+    .join("\n\n");
   return {
     summary,
     detail,
@@ -536,7 +536,7 @@ function renderStubEnvironment(
       wildlife
         ? "MSES wildlife habitat (endangered or vulnerable species) is also mapped here, which can trigger state referral and offset requirements for new development."
         : ""
-    } Day-to-day residential use is unaffected; clearing, pools, sheds and extensions in mapped habitat need checking first.`,
+    }\n\nDay-to-day residential use is unaffected; clearing, pools, sheds and extensions in mapped habitat need checking first.`,
     questions_to_ask: [
       "Which trees on the lot are koala habitat trees, and what would removing one require?",
       "Has any previous development application on this lot triggered koala or MSES conditions?",
@@ -560,7 +560,7 @@ function renderStubSteepLand(
     scope: string;
   } | null;
   // The measured fall is the concrete half of this module and applies
-  // statewide, so it leads wherever it exists — including on the
+  // statewide, so it leads wherever it exists: including on the
   // informational path where no council overlay was available.
   //
   // fallM === null means one contour level, i.e. flat to within the
@@ -575,7 +575,7 @@ function renderStubSteepLand(
     ? null
     : elev.fallM === null
       ? `Measured from ${elev.interval} contours, the ground ${where} sits at about ${elev.highM} m AHD and is flat to within the ${elev.interval.split(" ")[0]} m contour interval.`
-      : `Measured from ${elev.interval} contours, the land ${where} runs from about ${elev.lowM} m to ${elev.highM} m AHD — a fall of roughly ${elev.fallM} m.`;
+      : `Measured from ${elev.interval} contours, the land ${where} runs from about ${elev.lowM} m to ${elev.highM} m AHD: a fall of roughly ${elev.fallM} m.`;
 
   if (risk === "none" || risk === "informational") {
     return {
@@ -584,15 +584,19 @@ function renderStubSteepLand(
         : elev.fallM === null
           ? `${input.address} is effectively flat${category ? "" : ", with no landslide overlay mapped"}.`
           : `${input.address} falls about ${elev.fallM} m${category ? "" : ", with no landslide overlay mapped"}.`,
+      // Blank-line separators: the renderers turn "\n\n" into paragraph
+      // breaks, so measurement, overlay status and cost implication each
+      // get their own paragraph instead of one dense block.
       detail: [
         fallText,
-        "The council's landslide / steep land overlay does not place a hazard polygon on this address. That is not a promise of flat ground — it means the site sits outside the mapped hazard thresholds. A big fall across a small lot still costs money to build on regardless of what the overlay says: benched slabs or a pole frame, engineered retaining, and more involved stormwater.",
+        "The council's landslide / steep land overlay does not place a hazard polygon on this address. That is not a promise of flat ground: it means the site sits outside the mapped hazard thresholds.",
+        "A big fall across a small lot still costs money to build on regardless of what the overlay says: benched slabs or a pole frame, engineered retaining, and more involved stormwater.",
       ]
         .filter(Boolean)
-        .join(" "),
+        .join("\n\n"),
       questions_to_ask: [
         elev && elev.fallM !== null && elev.fallM >= 3
-          ? "With this much fall, get a builder's view on site costs before you commit — benching, retaining and drainage add up fast."
+          ? "With this much fall, get a builder's view on site costs before you commit: benching, retaining and drainage add up fast."
           : "If the block is visibly sloping, budget for a contour survey before designing anything.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
@@ -604,10 +608,11 @@ function renderStubSteepLand(
     summary: `${input.address} sits in a landslide / steep land overlay${category ? ` (${category})` : ""}.`,
     detail: [
       fallText,
-      "Mapped steep land means development assessment will usually require a geotechnical report covering slope stability, cut-and-fill limits, retaining and drainage design. Existing dwellings are unaffected day-to-day, but extensions, pools and secondary dwellings on the slope face extra engineering cost and approval time.",
+      "Mapped steep land means development assessment will usually require a geotechnical report covering slope stability, cut-and-fill limits, retaining and drainage design.",
+      "Existing dwellings are unaffected day-to-day, but extensions, pools and secondary dwellings on the slope face extra engineering cost and approval time.",
     ]
       .filter(Boolean)
-      .join(" "),
+      .join("\n\n"),
     questions_to_ask: [
       "Has a geotechnical report ever been done for this lot? Ask the seller for a copy.",
       "Are the existing retaining walls engineered and approved, and who owns each one?",
@@ -643,7 +648,7 @@ function renderStubAcidSulfate(
     summary: `${input.address} sits on mapped acid sulfate soils${mapCode ? ` (map code ${mapCode})` : ""}.`,
     detail: `State mapping${scale ? ` at ${scale} scale` : ""} classifies this land as ${
       meaning ?? "an acid sulfate soil area"
-    }. Undisturbed, this changes nothing day-to-day. Excavation or drainage works (pools, basements, deep footings, canal work) can oxidise sulfidic material and produce sulfuric acid, so development approval typically requires an ASS investigation and management plan, which adds cost.`,
+    }.\n\nUndisturbed, this changes nothing day-to-day. Excavation or drainage works (pools, basements, deep footings, canal work) can oxidise sulfidic material and produce sulfuric acid, so development approval typically requires an ASS investigation and management plan, which adds cost.`,
     questions_to_ask: [
       "Have previous works on the lot (pool, retaining walls) done ASS testing? Ask for the report.",
       "For planned excavation: get an indicative quote for an ASS investigation and management plan.",
@@ -687,15 +692,15 @@ function renderStubMining(
 
   return {
     summary: `${input.address} is affected by: ${parts.join("; ")}.`,
-    detail: `Resource interests exist separately from surface ownership in Queensland. ${
-      kraResource || kraSeparation
-        ? "KRA mapping means extractive industry (quarrying and haulage) is protected here by state policy. Expect long-term noise, dust and truck movements, and constraints on adding new dwellings inside the buffer. "
-        : ""
-    }${
-      tenements.length > 0
-        ? "A tenure over the lot does not by itself grant surface access, but granted mining leases carry real activity rights. The exact terms live with the Department of Resources."
-        : ""
-    }`,
+    detail: [
+      "Resource interests exist separately from surface ownership in Queensland.",
+      (kraResource || kraSeparation) &&
+        "KRA mapping means extractive industry (quarrying and haulage) is protected here by state policy. Expect long-term noise, dust and truck movements, and constraints on adding new dwellings inside the buffer.",
+      tenements.length > 0 &&
+        "A tenure over the lot does not by itself grant surface access, but granted mining leases carry real activity rights. The exact terms live with the Department of Resources.",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     questions_to_ask: [
       "Look the tenure up on GeoResGlobe: what is authorised, until when, and how close is active work?",
       kraSeparation
@@ -725,7 +730,7 @@ function renderStubStormwater(
     return {
       summary: `No mapped stormwater infrastructure on or near ${input.address}.`,
       detail:
-        "Council's stormwater asset network shows no pipe, manhole, gully or outlet on the lot or in the immediate street. That removes the build-over question, but it also means you should confirm where roof and surface water is lawfully discharged before planning any new hard surfaces.",
+        "Council's stormwater asset network shows no pipe, manhole, gully or outlet on the lot or in the immediate street.\n\nThat removes the build-over question, but it also means you should confirm where roof and surface water is lawfully discharged before planning any new hard surfaces.",
       questions_to_ask: [
         "Where does stormwater from this property currently discharge, and is that point lawful?",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -740,7 +745,7 @@ function renderStubStormwater(
       summary: `No Council stormwater main crosses ${input.address}.`,
       detail: `${
         privateCount > 0
-          ? `The ${privateCount} mapped asset${privateCount > 1 ? "s" : ""} on the lot ${privateCount > 1 ? "are" : "is"} privately owned — the property's own roof-water and surface drainage, which you can alter as part of ordinary building work. `
+          ? `The ${privateCount} mapped asset${privateCount > 1 ? "s" : ""} on the lot ${privateCount > 1 ? "are" : "is"} privately owned: the property's own roof-water and surface drainage, which you can alter as part of ordinary building work.\n\n`
           : ""
       }Council's network runs in the surrounding street rather than through the lot, so building over a public main is not a constraint here. The connection point still matters for any new roof area, paving or pool.`,
       questions_to_ask: [
@@ -758,9 +763,9 @@ function renderStubStormwater(
   return {
     summary: `A Council stormwater ${main?.kind.toLowerCase() ?? "asset"} crosses ${input.address}${descriptor ? ` (${descriptor})` : ""}.`,
     detail:
-      "Publicly owned stormwater infrastructure on the lot is a genuine constraint on what you can build and where. Council approval is required to build over or near it, and approval is not automatic: a pool, shed, carport, deck or rear extension sitting over the main can be refused, or approved only on condition the main is relocated at your cost. This obligation does not appear on the title, so it is easy to miss before contract.",
+      "Publicly owned stormwater infrastructure on the lot is a genuine constraint on what you can build and where. Council approval is required to build over or near it, and approval is not automatic: a pool, shed, carport, deck or rear extension sitting over the main can be refused, or approved only on condition the main is relocated at your cost.\n\nThis obligation does not appear on the title, so it is easy to miss before contract.",
     questions_to_ask: [
-      "Get the exact alignment and depth from Council — the mapped line is indicative and can sit metres from the real pipe.",
+      "Get the exact alignment and depth from Council: the mapped line is indicative and can sit metres from the real pipe.",
       "If you have a build in mind: does it sit over or within the clearance zone of the main, and what would relocation cost?",
       "Have any existing structures been built over the main without approval? That becomes your problem at settlement.",
     ],
@@ -781,7 +786,7 @@ function renderStubLocalPlans(
     return {
       summary: `${input.address} is not inside a neighbourhood plan.`,
       detail:
-        "No neighbourhood plan covers this address, so the zone code in the Zoning module is the operative control — there is no suburb-specific layer lifting or tightening it. That makes the zone easier to read, but it also means none of the height or density uplift that neighbourhood plans sometimes grant applies here.",
+        "No neighbourhood plan covers this address, so the zone code in the Zoning module is the operative control: there is no suburb-specific layer lifting or tightening it.\n\nThat makes the zone easier to read, but it also means none of the height or density uplift that neighbourhood plans sometimes grant applies here.",
       questions_to_ask: [
         "Is a neighbourhood plan being drafted for this area? A plan in progress can change the picture before you'd settle.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -791,13 +796,13 @@ function renderStubLocalPlans(
   }
 
   const precinctText = precincts
-    .map((p) => `${p.name}${p.code ? ` (${p.code})` : ""}${p.subPrecinct ? ` — ${p.subPrecinct}` : ""}`)
+    .map((p) => `${p.name}${p.code ? ` (${p.code})` : ""}${p.subPrecinct ? `: ${p.subPrecinct}` : ""}`)
     .join("; ");
 
   return {
     summary: `${input.address} is in the ${planName ?? "local"} plan${precinctText ? `, precinct ${precinctText}` : ""}.`,
     detail:
-      "A neighbourhood plan sits inside the planning scheme and applies rules specific to this area on top of the zone. It can raise permitted height near a centre or station, change density, or impose built-form controls that protect an existing streetscape. The practical effect is that the zone code alone does not tell you what can be built here — the two have to be read together, and where they differ the plan usually governs.",
+      "A neighbourhood plan sits inside the planning scheme and applies rules specific to this area on top of the zone. It can raise permitted height near a centre or station, change density, or impose built-form controls that protect an existing streetscape.\n\nThe practical effect is that the zone code alone does not tell you what can be built here: the two have to be read together, and where they differ the plan usually governs.",
     questions_to_ask: [
       "What does this precinct change about height, density or setbacks compared with the base zone?",
       "Is the plan currently under review or amendment? Draft versions can shift what's achievable.",
@@ -833,10 +838,10 @@ function renderStubTransport(
 
   return {
     summary: `Nearest public transport at ${input.address}: ${nearest.kind.toLowerCase()}${nearest.name ? ` at ${nearest.name}` : ""}, about ${nearest.distanceM} m away.`,
-    detail: `Within the search radius: ${list}. Distances are straight-line, so the real walk is longer wherever hills, a river or a dead-end street get in the way — in parts of Brisbane that difference is substantial. Frequency matters more than proximity: a stop on a turn-up-and-go line is worth considerably more than a closer one served a few times a day.`,
+    detail: `Within the search radius: ${list}.\n\nDistances are straight-line, so the real walk is longer wherever hills, a river or a dead-end street get in the way: in parts of Brisbane that difference is substantial. Frequency matters more than proximity: a stop on a turn-up-and-go line is worth considerably more than a closer one served a few times a day.`,
     questions_to_ask: [
       "Which routes actually serve the nearest stop, and how frequent are they at peak and on weekends?",
-      "Walk the route to the stop before you buy — check the gradient, the crossings and how it feels after dark.",
+      "Walk the route to the stop before you buy: check the gradient, the crossings and how it feels after dark.",
     ],
     sources: sourcesFromRaw(raw),
   };
@@ -860,7 +865,7 @@ function renderStubWaterSewer(
     return {
       summary: `No Urban Utilities water or sewer main is mapped at ${input.address}.`,
       detail:
-        "Neither a sewer main, a water main nor a manhole was found on the lot or in the immediate street. For an established suburb that is unusual enough to be worth confirming — an unconnected lot changes what it costs to build, because connecting to the network becomes your expense.",
+        "Neither a sewer main, a water main nor a manhole was found on the lot or in the immediate street.\n\nFor an established suburb that is unusual enough to be worth confirming: an unconnected lot changes what it costs to build, because connecting to the network becomes your expense.",
       questions_to_ask: [
         "Is the property connected to reticulated water and sewer, or on tank and septic?",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -873,7 +878,7 @@ function renderStubWaterSewer(
     return {
       summary: `No Urban Utilities main crosses ${input.address}.`,
       detail:
-        "The water and sewer network runs in the surrounding street rather than through the lot, so building over a main is not a constraint here. Any service connection on the lot is this property's own line to the network and carries no build-over obligation. That leaves the back yard free of the buried-infrastructure problem that catches out a lot of Brisbane extensions.",
+        "The water and sewer network runs in the surrounding street rather than through the lot, so building over a main is not a constraint here. Any service connection on the lot is this property's own line to the network and carries no build-over obligation.\n\nThat leaves the back yard free of the buried-infrastructure problem that catches out a lot of Brisbane extensions.",
       questions_to_ask: [
         "Confirm the connection points before designing anything that changes where services enter the site.",
       ],
@@ -892,10 +897,10 @@ function renderStubWaterSewer(
   return {
     summary: `An Urban Utilities ${descriptor} crosses ${input.address}.`,
     detail: severe
-      ? `This is a rising main or a trunk-sized gravity main, which is the serious end of this finding. Urban Utilities will generally not permit building over one at all, so the alignment functions as a no-build corridor through the lot — with the setback either side, it can remove most of the usable back yard for building purposes. Relocation is occasionally possible and is expensive. If any part of your plan for this property involves building behind the house, resolve this before contract, not after.`
-      : `Building over or near a Urban Utilities main requires their approval, and it is not automatic. A pool, shed, carport, deck, granny flat or rear extension over the alignment can be refused, or approved subject to concrete encasement, piered foundations bridging the main, or relocation at your cost. None of this appears on the title, so it is easy to miss before contract — and it binds you once you own the land.`,
+      ? `This is a rising main or a trunk-sized gravity main, which is the serious end of this finding. Urban Utilities will generally not permit building over one at all, so the alignment functions as a no-build corridor through the lot: with the setback either side, it can remove most of the usable back yard for building purposes. Relocation is occasionally possible and is expensive.\n\nIf any part of your plan for this property involves building behind the house, resolve this before contract, not after.`
+      : `Building over or near a Urban Utilities main requires their approval, and it is not automatic. A pool, shed, carport, deck, granny flat or rear extension over the alignment can be refused, or approved subject to concrete encasement, piered foundations bridging the main, or relocation at your cost.\n\nNone of this appears on the title, so it is easy to miss before contract: and it binds you once you own the land.`,
     questions_to_ask: [
-      "Get the exact alignment and depth from Urban Utilities — the mapped line is indicative and can sit metres from the real pipe.",
+      "Get the exact alignment and depth from Urban Utilities: the mapped line is indicative and can sit metres from the real pipe.",
       severe
         ? "Ask Urban Utilities directly whether anything can be built over this main, and what the setback either side is."
         : "If you have a build in mind: does it sit over the main or within the clearance zone, and what would encasement or relocation cost?",

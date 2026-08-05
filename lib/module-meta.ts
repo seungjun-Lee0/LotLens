@@ -24,7 +24,7 @@ export type ModuleMeta = {
   name: string;
   /** "Easements" → "What access rights exist over the property?" */
   question: string;
-  /** Module accent colour — used for the map pin, icon, swatches. */
+  /** Module accent colour: used for the map pin, icon, swatches. */
   tint: string;
   /** Hex equivalent of `tint` for React-PDF. */
   tintHex: string;
@@ -32,7 +32,7 @@ export type ModuleMeta = {
   /** Attribution shown above "Things to know". */
   sourceLabel: string;
   /** Two short paragraphs of generic educational content (NOT
-   * property-specific — that's what the AI narrative is for). */
+   * property-specific: that's what the AI narrative is for). */
   thingsToKnow: string[];
   /** Caveat shown after Things to know, mirroring Develo's "Note:" block. */
   note: string;
@@ -41,7 +41,7 @@ export type ModuleMeta = {
   legend: LegendItem[];
 };
 
-// Apple system color hex equivalents — used wherever React-PDF can't
+// Apple system color hex equivalents: used wherever React-PDF can't
 // resolve CSS variables. Match :root in app/globals.css.
 export const APPLE_HEX = {
   blue:   "#007aff",
@@ -57,7 +57,7 @@ export const APPLE_HEX = {
 };
 
 // Develo-mirrored overlay palette (kept in sync with lib/overlays.ts).
-// We re-declare here to avoid a circular import — module-meta is consumed
+// We re-declare here to avoid a circular import: module-meta is consumed
 // by the PDF too. Both files must move together when changing colours.
 const D = {
   floodHigh: "#1e3a8a", floodMedium: "#2563eb", floodLow: "#60a5fa", floodVeryLow: "#bfdbfe",
@@ -84,12 +84,12 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-blue)",
     tintHex: APPLE_HEX.blue,
     icon: Waves,
-    sourceLabel: "Brisbane City Council · Flood Awareness Mapping",
+    sourceLabel: "Council flood-risk and historic flood mapping",
     thingsToKnow: [
-      "If your property is in a potential flood area, it's important to understand the possible risks, impacts and causes of flooding. Flooding most commonly happens when prolonged or heavy rainfall causes creeks and waterways to rise and overflow into nearby properties.",
-      "The likelihood of a flood is often described using Annual Exceedance Probability (AEP). A 1% AEP flood has a 1-in-100 chance of occurring in any given year. Building, renovating, or developing in flood-prone areas may require government assessment. Floor heights might need to sit above the defined flood level, or structures designed to allow water to flow beneath raised buildings.",
+      "Flood mapping shows the modelled likelihood and source of inundation, including river, creek and historic flood extents. A 1% Annual Exceedance Probability event has a 1% chance of occurring in any year.",
+      "A mapped result can affect floor levels, building design, insurance enquiries and development assessment. Confirm the relevant flood level before relying on the map for design or purchase decisions.",
     ],
-    note: "Government flood risk models are broad guides that estimate flood probability and acceptable risk but do not guarantee site-specific accuracy. Newly subdivided lots may have already considered flooding risk and been built above acceptable flood levels. For specific concerns, consult your local authority or a qualified professional.",
+    note: "Flood maps are modelled, not property surveys. Site levels, drainage works and updated modelling can change the practical exposure, so confirm material findings with the council and an appropriately qualified professional.",
     legend: [
       { label: "High possibility (5.0% AEP)",     color: D.floodHigh,    colorHex: D.floodHigh },
       { label: "Moderate possibility (1.0% AEP)", color: D.floodMedium,  colorHex: D.floodMedium },
@@ -106,12 +106,12 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-indigo)",
     tintHex: APPLE_HEX.indigo,
     icon: Waves,
-    sourceLabel: "Brisbane City Council · Flood planning overlays",
+    sourceLabel: "Council planning scheme · Flood planning overlays",
     thingsToKnow: [
-      "Brisbane's City Plan 2014 has statutory flood planning overlays separate from the Flood Awareness Mapping. The planning overlays are the controls Council actually applies when assessing a development application: minimum habitable floor levels, fill volumes, excluded structures, drainage and connection requirements.",
-      "Each planning polygon is labelled 1 through 4. Number 1 is the strictest and 4 is the mildest. A property in area 1 will typically need a substantially raised floor level, while area 4 is a lighter touch. The overlay applies to extensions and new builds as much as new construction.",
+      "Flood planning overlays are separate from flood awareness maps. They identify the planning controls Council may apply to new buildings, extensions, filling, drainage and minimum floor levels.",
+      "The mapped planning-area number indicates the applicable control category. Use the exact category with the planning scheme code when assessing proposed work.",
     ],
-    note: "The planning overlay is the statutory layer, meaning it is what Council will use when assessing your application. Always check it alongside the Flood Awareness Mapping, which describes risk probability rather than planning controls.",
+    note: "Read this statutory planning layer alongside flood-risk mapping. One describes development controls; the other describes modelled exposure.",
     legend: [
       { label: "Planning area 1 - strictest", color: D.floodHigh,    colorHex: D.floodHigh },
       { label: "Planning area 2",             color: D.floodMedium,  colorHex: D.floodMedium },
@@ -122,16 +122,16 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
 
   overland_flow: {
     name: "Overland Flow",
-    question: "Are there any major rainfall issues for this property?",
+    question: "Does a mapped overland flow path affect the property?",
     tint: "var(--apple-teal)",
     tintHex: APPLE_HEX.teal,
     icon: CloudRain,
-    sourceLabel: "Brisbane City Council · Overland Flow mapping",
+    sourceLabel: "Council planning scheme · Overland flow mapping",
     thingsToKnow: [
-      "Overland flow is water running over the ground's surface during heavy rain, distinct from creek or river flooding. It happens when stormwater systems are overwhelmed, drainage paths are blocked, or the land cannot absorb water quickly enough.",
-      "Overland flow is usually localised but can damage structures and flood yards and low-lying areas. Urban properties with hard surfaces nearby (roads, concrete) are particularly vulnerable. Future development of an overland-flow lot may require specific drainage and landscaping measures.",
+      "Overland flow is stormwater moving across the ground during heavy rain rather than flooding from a river or creek. Even a narrow mapped path can affect yards, garages and low floor levels.",
+      "Building work should preserve lawful drainage paths and may require site-specific stormwater design. Do not assume a clear river-flood result also means the property is clear of overland flow.",
     ],
-    note: "Overland flow models are broad guides and may not reflect site-specific conditions. Flooding can still occur outside mapped areas due to local factors. Newly subdivided lots may have engineered drainage that supersedes the mapping.",
+    note: "The mapping is modelled and may not capture small retaining walls, blocked drains or recent earthworks. Inspect the site and obtain drainage advice where the mapped path affects proposed work.",
     legend: [
       { label: "High impact",     color: D.overlandHigh,    colorHex: D.overlandHigh },
       { label: "Moderate impact", color: D.overlandMedium,  colorHex: D.overlandMedium },
@@ -148,10 +148,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: Wind,
     sourceLabel: "Queensland Government · Coastal hazard area mapping",
     thingsToKnow: [
-      "Storm tide is the sea-level rise caused by a severe storm combined with the normal astronomical tide. Bayside and tidal-creek addresses anywhere on the Queensland coast are exposed during cyclones and east-coast lows. The state's coastal hazard maps model inundation out to 2100, including projected sea-level rise.",
-      "Erosion prone areas mark land that could be lost to long-term coastal erosion or permanent tidal inundation. Building in a storm-tide or erosion prone area triggers planning controls: habitable floor levels above the defined storm-tide level, and constraints on how close to the shoreline you can build.",
+      "Storm-tide mapping identifies land that may be inundated when storm surge combines with the normal tide. Erosion-prone mapping identifies land exposed to shoreline movement or permanent tidal effects.",
+      "Mapped coastal hazards can influence floor levels, setbacks and development assessment. The applicable response depends on the council planning scheme and the proposed work.",
     ],
-    note: "Coastal hazard modelling combines historical events, projected sea-level rise, and bathymetry. Site-specific factors (sea walls, elevation surveys) may change the practical risk. Confirm with the council or a qualified coastal engineer before relying on this for a major decision.",
+    note: "Coastal modelling is regional. Site levels, seawalls and local coastal processes require separate confirmation for material development or purchase decisions.",
     legend: [
       { label: "Storm tide (high hazard)",   color: D.stormHigh,      colorHex: D.stormHigh },
       { label: "Storm tide (medium hazard)", color: D.stormMedium,    colorHex: D.stormMedium },
@@ -167,10 +167,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: Flame,
     sourceLabel: "Queensland Government · Bushfire Prone Area (State Planning Policy)",
     thingsToKnow: [
-      "Bushfire prone areas are mapped where vegetation type, slope, and proximity to bushland create an elevated fire risk. The classification affects how new buildings must be constructed (Bushfire Attack Level / BAL standards), what vegetation must be cleared around dwellings, and how access for emergency vehicles is designed.",
-      "If a property sits in a bushfire hazard area or its buffer, building approvals usually require a BAL assessment and may impose specific construction requirements. Insurance premiums for bushfire-affected properties can also be materially higher than for non-affected addresses.",
+      "Bushfire-prone area mapping considers vegetation, slope and proximity to potential fuel. A mapped property may require a Bushfire Attack Level assessment for new building work.",
+      "The result can influence construction materials, defendable space, access and vegetation management. Requirements depend on the site and proposed development.",
     ],
-    note: "This is the statewide Bushfire Prone Area mapping used by the State Planning Policy. Councils may also apply their own bushfire overlay with local refinements, so check the council planning scheme for LGA-specific provisions.",
+    note: "This report uses statewide mapping. Council overlays and a site-specific BAL assessment may provide more detailed requirements.",
     legend: [
       { label: "Very high potential intensity", color: D.fireVeryHigh, colorHex: D.fireVeryHigh },
       { label: "High potential intensity",      color: D.fireHigh,     colorHex: D.fireHigh },
@@ -187,10 +187,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: Leaf,
     sourceLabel: "QLD Regulated Vegetation Map + council biodiversity overlays",
     thingsToKnow: [
-      "The Biodiversity areas overlay protects native vegetation that supports threatened species, wildlife corridors, and ecological communities. Council assessment is required before removing significant trees, clearing understorey, or substantially altering habitat in these areas.",
-      "Owning a property in the overlay does not stop you renovating or extending, but it constrains where buildings can sit, what trees can be removed, and what landscaping can replace cleared vegetation. Many Brisbane renovations are stalled mid-project by overlooked vegetation controls.",
+      "Vegetation and biodiversity overlays identify areas where clearing, tree removal or habitat disturbance may be regulated. They can affect the location of buildings, driveways and services.",
+      "A mapped result does not prohibit all work, but it should be checked before assuming a clear building envelope or removing vegetation.",
     ],
-    note: "The overlay does not include every individual tree of value. Pre-1947 dwellings, Natural Assets Local Law trees, and protected wetlands may impose extra controls. For any work near trees or waterways, an arborist report or council pre-lodgement meeting is the safer path.",
+    note: "The mapped layers do not identify every protected tree or local control. Confirm proposed clearing with the council and obtain specialist advice where significant vegetation or waterways are present.",
     legend: [
       { label: "RVM Category B (remnant)",  color: D.rvmB,            colorHex: D.rvmB },
       { label: "RVM Category C (regrowth)", color: D.rvmC,            colorHex: D.rvmC },
@@ -209,10 +209,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: PawPrint,
     sourceLabel: "QLD Koala Plan mapping + Matters of State Environmental Significance",
     thingsToKnow: [
-      "South East Queensland has regulatory koala habitat mapping under the Nature Conservation (Koala) Plan 2020. Inside a Koala Priority Area, interfering with koala habitat trees in mapped core habitat is assessable development. That is a genuine constraint on clearing, driveways, pools and building envelopes.",
-      "Matters of State Environmental Significance (MSES) wildlife habitat marks areas mapped for endangered or vulnerable species statewide. Development in MSES areas can trigger state referral and offset requirements on top of council rules.",
+      "Koala and wildlife habitat mapping identifies areas where clearing or disturbing habitat may require additional assessment. It can affect trees, driveways, pools and the available building envelope.",
+      "Koala Priority Areas, core habitat and Matters of State Environmental Significance have different functions. The property-specific result below identifies which mapping applies.",
     ],
-    note: "Habitat mapping is periodically refined and councils may hold locally refined versions. A property inside the mapping is not frozen, and most ordinary residential use continues unaffected. Tree removal and new development, however, need checking against the koala and MSES frameworks first.",
+    note: "Habitat mapping can be refined over time and does not itself confirm vegetation on the ground. Check proposed clearing or development against current state and council requirements.",
     legend: [
       { label: "Core koala habitat",        color: D.koalaCore,       colorHex: D.koalaCore },
       { label: "Locally refined habitat",   color: D.koalaLocal,      colorHex: D.koalaLocal },
@@ -229,10 +229,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: Landmark,
     sourceLabel: "Queensland Heritage Register + council heritage/character overlays",
     thingsToKnow: [
-      "Brisbane protects two distinct kinds of buildings and areas. Heritage register listings (state or local) cover places with explicit cultural or historic significance. External work and demolition on a listed place normally require Council assessment, and demolition can be refused. The Traditional Building Character overlay protects pre-1947 housing across whole suburbs to preserve street-facing form.",
-      "Owning a property in either overlay does not stop you renovating, but it constrains what you can do and how it must look. Common impacts: street-facing facades cannot be altered freely, demolition usually requires impact assessment, and additions must respect the original built form.",
+      "Heritage listings protect identified places, while character overlays generally protect the streetscape and traditional building form. The approval implications differ, so the mapped category matters.",
+      "External alterations, demolition and visible additions may require assessment. Confirm the controls before assuming an existing building can be removed or substantially changed.",
     ],
-    note: "Even properties outside both overlays can carry character significance if the house was built before 1947. Council can take an interest in pre-1947 demolition applications case-by-case.",
+    note: "A clear overlay result does not replace a property-specific heritage or building-age check. Confirm demolition and major alteration rights with the council before relying on development potential.",
     legend: [
       { label: "State heritage area",  color: D.heritageState,     colorHex: D.heritageState },
       { label: "Local heritage area",  color: D.heritageLocal,     colorHex: D.heritageLocal },
@@ -248,10 +248,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: ScrollText,
     sourceLabel: "BCC high-voltage overlay + QSpatial cadastre (NOT title search)",
     thingsToKnow: [
-      "Easements are legal rights allowing a person or authority to access a specific portion of land for a particular purpose. They are commonly required for the maintenance of utilities such as large water and sewer pipes, stormwater drains, and power lines, and may also exist for shared vehicle access or built-to-boundary walls.",
-      "Easements are recorded on land title at the time of subdivision and remain on title when the property is sold. A landowner cannot usually build permanent structures within an easement area or obstruct the authorised party's access without approval from the easement owner.",
+      "An easement gives another party rights over part of the land, commonly for drainage, utilities or access. It can limit permanent structures and must remain accessible for its stated purpose.",
+      "The position of an easement is only part of the answer. Its beneficiary, terms and building restrictions are recorded in the title documents.",
     ],
-    note: "This module reads two public sources: BCC's high-voltage powerline overlay and the QSpatial DCDB easement-parcel layer (which catches drainage, sewer, access and other registered easements as separate cadastral parcels). The polygons tell you an easement exists, not its legal terms. The benefiting party, conditions and width are only on the land title, which still requires a QLD Title Search via a conveyancer.",
+    note: "This is a public mapping check, not a title search. Obtain the current title and easement instruments through your conveyancer before making legal or building decisions.",
     legend: [
       { label: "High-voltage easement", color: D.easementHV, colorHex: D.easementHV },
       { label: "Registered easement (cadastre)", color: D.easementCadastre, colorHex: D.easementCadastre },
@@ -264,12 +264,12 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-yellow)",
     tintHex: APPLE_HEX.yellow,
     icon: Volume2,
-    sourceLabel: "Brisbane City Council · Transport noise + ANEF overlays",
+    sourceLabel: "Council transport noise and aircraft ANEF mapping",
     thingsToKnow: [
-      "Brisbane has two noise overlays. The Transport noise corridor covers major roads and rail lines and is numbered 1 (loudest) through 4 (mildest). The Australian Noise Exposure Forecast (ANEF) covers the Brisbane Airport flight paths and is given in noise contours. 20 ANEF and above triggers acoustic construction requirements under AS2021.",
-      "Noise overlays don't stop you living there, but they affect new builds: doors and windows need acoustic-rated glass, walls need extra mass, and habitable rooms can be restricted. Insurance for noise-affected properties is not typically more expensive, but resale can suffer.",
+      "Transport noise corridors and aircraft ANEF contours indicate modelled long-term exposure. Higher mapped categories can trigger acoustic requirements for new or altered buildings.",
+      "The practical response may include acoustic glazing, insulation or room-layout changes. The overlay does not describe the noise experienced at every time of day.",
     ],
-    note: "Subjective noise depends on traffic mix, time of day, and prevailing wind direction. Visit at peak commute, late evening, and on a Sunday before relying on a daytime impression. The mapped corridors are based on modelled long-term equivalent noise level (LAeq).",
+    note: "Visit the property at relevant times and check current road, rail and flight activity. Mapping should support, not replace, an on-site assessment.",
     legend: [
       { label: "Transport corridor 1 - loudest", color: D.fireHigh,    colorHex: D.fireHigh },
       { label: "Transport corridor 2",           color: D.fireBuffer,  colorHex: D.fireBuffer },
@@ -288,10 +288,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: TrendingUp,
     sourceLabel: "Council landslide / steep land overlays",
     thingsToKnow: [
-      "Councils map land where slope, soil and geology create landslide risk, typically slopes above 15%. Building on mapped steep land usually triggers geotechnical assessment requirements: a site-specific report on stability, cut-and-fill limits, retaining design and drainage before approval.",
-      "Steep lots also cost more to build on regardless of hazard mapping: benched slabs or pole homes, engineered retaining walls, and more complex stormwater management. If you're comparing a flat lot and a steep lot at similar prices, the steep one usually carries a five-figure construction premium.",
+      "Council mapping identifies land where slope, geology or soil conditions may require landslide assessment. Building work can require geotechnical advice on stability, excavation, retaining and drainage.",
+      "The measured elevation range helps show the shape of the lot even where no hazard overlay applies. Significant fall can still affect design and site works.",
     ],
-    note: "Two halves, with different coverage. The elevation range is measured from statewide LiDAR contours and is available at every Queensland address. The landslide hazard overlay is a council planning-scheme layer with thresholds that differ by LGA, and is integrated for Brisbane, Moreton Bay, Sunshine Coast and Redland today. A lot outside the overlay can still be steep — the fall figure is the honest check.",
+    note: "This check combines two sources. Statewide LiDAR contours show the elevation range, while council planning schemes define landslide and steep-land thresholds for each local government area. A property outside a mapped hazard area can still have significant fall, so consider both the council classification and the measured elevation range.",
     legend: [
       { label: "Landslide hazard / high slope", color: D.steepHigh, colorHex: D.steepHigh },
       { label: "Steep land overlay area",        color: D.steep,     colorHex: D.steep },
@@ -309,10 +309,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: Droplets,
     sourceLabel: "Queensland Government · Acid sulfate soils mapping",
     thingsToKnow: [
-      "Acid sulfate soils are natural coastal-lowland soils (typically below 5 m elevation) containing iron sulfides. Left undisturbed they are harmless. When excavated or drained they react with air to produce sulfuric acid, which corrodes concrete and steel, kills vegetation, and can trigger costly environmental management obligations.",
-      "For buyers the practical impact lands on earthworks: pools, basements, canal-front works, deep footings and major drainage in mapped areas usually need an acid sulfate soil investigation and a management plan as part of development approval.",
+      "Acid sulfate soils can produce acidic runoff when excavated or drained. The issue is generally associated with earthworks rather than ordinary occupation of the property.",
+      "Pools, basements, deep footings and drainage work in mapped areas may require soil investigation and an approved management approach.",
     ],
-    note: "State mapping is broad-scale (1:25,000 at best) and marks the probability of occurrence, not a confirmed on-site condition. Lots outside mapped areas can still contain acid sulfate soils at depth. Site-specific soil testing is the only definitive answer before major excavation.",
+    note: "The mapping indicates potential occurrence, not a confirmed site condition. Soil testing is the appropriate next step before substantial excavation.",
     legend: [
       { label: "Shallow sulfidic material", color: D.assShallow, colorHex: D.assShallow },
       { label: "Mapped acid sulfate soils", color: D.assMapped,  colorHex: D.assMapped },
@@ -327,10 +327,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: Mountain,
     sourceLabel: "Queensland Government · Resource tenures + Key Resource Areas",
     thingsToKnow: [
-      "Queensland land can carry resource authorities (mining leases, exploration permits, mineral development licences) that exist separately from surface ownership. An exploration permit blanketing a region is common and usually low-impact. A granted mining lease on or beside a lot is a serious flag for noise, dust, subsidence and access rights.",
-      "Key Resource Areas (KRAs) protect extractive resources (quarries, sand, gravel) under the State Planning Policy. A KRA separation area is a buffer where sensitive uses like new dwellings can be constrained because blasting, dust and haulage traffic are expected to continue long-term.",
+      "Resource authorities are separate from land ownership and vary in significance. Exploration permits, mining leases and other tenure types should not be interpreted as equivalent findings.",
+      "Key Resource Areas and their separation areas protect extractive operations and can constrain sensitive development because of noise, dust, blasting or haulage impacts.",
     ],
-    note: "This module reads the public statewide tenure and KRA layers. Historical mines, abandoned workings and current applications are searchable in more depth on GeoResGlobe. Tenure over a lot does not by itself grant surface access, but it is exactly the kind of encumbrance to raise with a conveyancer.",
+    note: "This check covers public tenure and Key Resource Area mapping. Use GeoResGlobe and legal advice to investigate the status, rights and practical effect of any mapped authority.",
     legend: [
       { label: "KRA resource/processing area", color: D.kraResource,   colorHex: D.kraResource },
       { label: "KRA separation buffer",        color: D.kraSeparation, colorHex: D.kraSeparation },
@@ -346,10 +346,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: Waves,
     sourceLabel: "Brisbane City Council · Stormwater assets (existing)",
     thingsToKnow: [
-      "Council stormwater pipes collect roof and surface water from a run of properties and carry it away to the street drainage system. They are frequently laid through back yards rather than under the road, which means a main can cross a lot with nothing on the title to say so.",
-      "You need Council approval to build over or near a Council stormwater main, and it is not automatic. A pool, shed, carport, deck or rear extension sitting over a pipe can be refused outright or made conditional on relocating the main at your cost. If you are buying with a build in mind, this is the layer to check before you sign.",
+      "Public stormwater assets can cross private land and affect where structures, pools or excavation can be placed. Approval may be required for work over or near an asset.",
+      "Public mains and private property drainage have different implications. The property-specific result distinguishes them where ownership information is available.",
     ],
-    note: "This layer includes privately owned drainage (a house's own roof-water pipes) alongside Council mains — only the publicly owned assets create a build-over obligation, and the module distinguishes them. Pipe positions are indicative: the mapped line can sit metres from the real one, and depth is often unrecorded. Order a dial-before-you-dig plan and a survey before excavating. Brisbane's water and sewer mains are owned by Urban Utilities and are not in this dataset.",
+    note: "Mapped alignments and depths are indicative. Obtain current service plans and locate the asset on site before design or excavation.",
     legend: [
       { label: "Council stormwater pipe", color: D.floodMedium, colorHex: D.floodMedium },
       { label: "Private drainage pipe",   color: D.floodLow,    colorHex: D.floodLow },
@@ -365,10 +365,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: Droplets,
     sourceLabel: "Urban Utilities · Water and sewer network (open data)",
     thingsToKnow: [
-      "Sewer mains in Brisbane were commonly laid through back yards rather than under the road, so a main can run the length of a lot with nothing on the title to say so. The property owner cannot build over or near it without Urban Utilities' approval, and that obligation passes to whoever buys the land.",
-      "The consequence lands on anything you want to add: a pool, shed, carport, deck, granny flat or rear extension over a main can be refused, or approved only with concrete encasement or relocation at your cost. A rising (pressure) main or a trunk-sized gravity main is usually an outright no-build corridor. If you're paying a premium for back-yard space, this is the check that tells you whether you can use it.",
+      "Water and sewer mains can constrain pools, extensions and other work over or near their alignment. The asset owner may require setbacks, protection works or separate approval.",
+      "Pressure and trunk mains generally carry more significant constraints than local service assets. Confirm the asset type, depth and applicable building requirements before design.",
     ],
-    note: "Mapped alignments are indicative and can sit metres from the real pipe; depth is often approximate. Before excavating, order a dial-before-you-dig plan and have the main located on site. Urban Utilities supplies Brisbane, Ipswich, Lockyer Valley, Scenic Rim and Somerset — other areas are served by a different retailer and are not in this dataset.",
+    note: "Mapped alignments and depths are indicative. Obtain current service plans and have relevant assets located before design or excavation.",
     legend: [
       { label: "Sewer gravity main",  color: D.easementCadastre, colorHex: D.easementCadastre },
       { label: "Sewer pressure main", color: D.easementHV,       colorHex: D.easementHV },
@@ -386,10 +386,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: Map,
     sourceLabel: "Brisbane City Council · City Plan 2014 neighbourhood plans",
     thingsToKnow: [
-      "A neighbourhood plan sits inside the planning scheme and gives a specific suburb or centre its own rules. It works alongside the zone and can change it: extra height near a station, higher density around a centre, or tighter built-form controls to protect an established streetscape.",
-      "This is where development upside usually lives, and where it usually dies. Two lots in the same zone on the same street can have very different potential if one is inside a precinct that lifts the height limit and the other isn't. Read the zone and the neighbourhood plan together, never the zone alone.",
+      "A local or neighbourhood plan adds area-specific controls to the underlying zone. It can change building height, density, land use or built-form requirements.",
+      "Properties in the same zone can have different development outcomes when they fall in different plan areas or precincts. Read both layers together.",
     ],
-    note: "Neighbourhood plans are amended over time and a plan may be in draft or under review when you buy. The precinct shown here is the currently adopted mapping. For anything involving development, confirm the current version with Council or a town planner before relying on it.",
+    note: "Planning schemes are amended over time. Confirm the current plan, precinct and applicable code before relying on development potential.",
     legend: [
       { label: "Neighbourhood plan area", color: D.zoneOther, colorHex: D.zoneOther },
       { label: "Plan precinct",           color: D.zoneMixed, colorHex: D.zoneMixed },
@@ -404,10 +404,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: TrainFront,
     sourceLabel: "TransLink stops (Queensland Government)",
     thingsToKnow: [
-      "Distance to a train station, busway station or ferry terminal is one of the more durable drivers of residential value in Brisbane, because it doesn't change when the market does. A property inside comfortable walking distance of frequent transport holds a premium through cycles.",
-      "Frequency matters more than proximity. A bus stop 100 m away served four times a day is worth less than a station 900 m away on a turn-up-and-go line. Check the actual timetable for the routes at the nearest stop rather than assuming the distance tells the story.",
+      "Nearby stops show access to the public transport network, but distance alone does not indicate service quality. Frequency, operating hours and route usefulness also matter.",
+      "The reported distances are a starting point for comparison. Check the walking route and current timetable for the services you expect to use.",
     ],
-    note: "Distances here are straight-line from the property, not walking distance — hills, river crossings and dead-end streets can make the real walk considerably longer. Routes and stops change: confirm current services on the TransLink journey planner.",
+    note: "Distances are straight-line measurements, not walking routes. Confirm access, accessibility and current services with the TransLink journey planner.",
     legend: [
       { label: "Train station",  color: D.zoneCentre,      colorHex: D.zoneCentre },
       { label: "Ferry terminal", color: D.vegWaterway,     colorHex: D.vegWaterway },
@@ -423,10 +423,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: GraduationCap,
     sourceLabel: "Queensland Department of Education · State school catchments",
     thingsToKnow: [
-      "Queensland state schools have legal catchment boundaries. If you live inside a school's catchment your child is guaranteed a place there. Out-of-catchment enrolment depends on places being available and is not guaranteed.",
-      "Every Brisbane property typically sits inside one primary and one secondary catchment. Some addresses fall into specialist or selective catchments too. The catchment maps are updated annually so this report reflects the calendar year listed by the QLD Department of Education.",
+      "State school catchments determine the local primary and secondary schools associated with an address. Enrolment rules differ for in-catchment, out-of-catchment and specialist programs.",
+      "Catchment boundaries and school capacity can change. Use the listed school and mapping year as the basis for direct enrolment confirmation.",
     ],
-    note: "Private and Catholic schools are not on this layer. Out-of-catchment applications, sibling rules, and specialist programs (e.g. arts, sport) are handled by the school directly. Confirm enrolment before contract if school choice is decisive.",
+    note: "This layer covers Queensland state schools only. Confirm eligibility, intake year and program requirements directly with the school before relying on the result.",
     legend: [
       { label: "Primary catchment",   color: D.vegBiodiversity, colorHex: D.vegBiodiversity },
       { label: "Secondary catchment", color: D.vegCorridor,     colorHex: D.vegCorridor },
@@ -441,10 +441,10 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     icon: LayoutGrid,
     sourceLabel: "Council planning scheme zoning (SEQ Regional Plan outside adapted LGAs)",
     thingsToKnow: [
-      "Brisbane's City Plan 2014 places every parcel in a specific zone, for example Low density residential, Mixed use, Centre, or Open space. The zone determines what you can build on the land, what the building can be used for, height and density limits, and whether a proposal is code-assessable or impact-assessable.",
-      "Some zones are further divided into precincts that fine-tune the rules for that area's character. Centre frame is different from Principal centre even though both are in the Centre family. The precinct description below tells you the exact precinct that applies.",
+      "The planning scheme zone sets the primary land-use and development framework for the property. It informs permissible uses, assessment pathways and key built-form controls.",
+      "Precincts and overlays can modify the zone outcome. The zone should therefore be read with any local plan, precinct and relevant overlay code.",
     ],
-    note: "Zone codes alone don't tell the full story. Each zone has a code in the City Plan that specifies development standards. Read it alongside any precinct overlay before making any subdivision or building decision.",
+    note: "Zoning is not a development approval or yield assessment. Confirm the current planning scheme provisions and site-specific constraints with the council or a qualified planner.",
     legend: [
       { label: "Centre",                  color: D.zoneCentre,      colorHex: D.zoneCentre },
       { label: "Mixed use",               color: D.zoneMixed,       colorHex: D.zoneMixed },

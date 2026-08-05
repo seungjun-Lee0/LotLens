@@ -2,8 +2,8 @@
 
 // Shown at the top of a report when one or more module sources were
 // unreachable during the last run (fetchFailed rows). One click re-runs
-// the fetch pipeline server-side against the SAME report — no new report,
-// no credit spend — then refreshes the page with whatever now succeeded.
+// the fetch pipeline server-side against the SAME report: no new report,
+// no credit spend: then refreshes the page with whatever now succeeded.
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -64,14 +64,13 @@ export function RetryChecks({
         </span>
         <div>
           <p className="text-[14px] font-semibold tracking-tight">
-            {failedCount} check{failedCount > 1 ? "s" : ""} couldn&apos;t reach{" "}
-            {failedCount > 1 ? "their sources" : "its source"}
+            {failedCount} check{failedCount > 1 ? "s require" : " requires"} verification
           </p>
           <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
-            Government map servers are occasionally briefly unavailable.
+            The source mapping was unavailable when this report was prepared.
             {error
-              ? ` Retry failed: ${error}`
-              : " Re-run the failed checks. The rest of the report is unaffected."}
+              ? ` Verification could not be completed: ${error}`
+              : " Run these checks again to complete the report. All completed findings remain unchanged."}
           </p>
         </div>
       </div>
@@ -83,7 +82,7 @@ export function RetryChecks({
         style={{ background: "var(--apple-orange)" }}
       >
         <RefreshCw className={`size-4 ${running ? "animate-spin" : ""}`} />
-        {running ? "Re-running checks…" : "Re-run checks"}
+        {running ? "Checking sources…" : "Run checks again"}
       </button>
     </section>
   );

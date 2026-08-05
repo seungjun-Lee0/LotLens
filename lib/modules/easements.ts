@@ -1,4 +1,4 @@
-// Easements module — TWO public sources:
+// Easements module: TWO public sources:
 //
 //   1) BCC City Plan high-voltage powerline easements overlay
 //      (regional electricity infrastructure corridors).
@@ -6,7 +6,7 @@
 //      (every easement registered as a separate cadastral parcel:
 //       drainage, sewer, access, party-wall, utility, etc.).
 //
-// Develo's report uses (2) — "Qld Spatial" — so adding it brings our
+// Develo's report uses (2): "Qld Spatial": so adding it brings our
 // coverage in line with theirs for the common easement types BCC's
 // overlay misses.
 //
@@ -34,11 +34,11 @@ const QSPATIAL_DOC =
 export type EasementSource = { name: string; url: string; layer: string };
 
 export type CadastralEasement = {
-  /** Lot/plan code, e.g. "ASP108564" — A on SP108564. */
+  /** Lot/plan code, e.g. "ASP108564": A on SP108564. */
   lotplan: string | null;
   /** When non-null: feat_name from DCDB (often empty for easements). */
   description: string | null;
-  /** parcel_typ — typically "Easement". */
+  /** parcel_typ: typically "Easement". */
   parcelType: string | null;
   /** Polygon area in m² from QSpatial. */
   areaSqm: number | null;
@@ -50,7 +50,7 @@ export type EasementResult = {
   riskLevel: RiskLevel;
   /** Inside a BCC high-voltage easement polygon. */
   hasHighVoltageEasement: boolean;
-  /** Inside a DCDB easement parcel — drainage / sewer / access / etc. */
+  /** Inside a DCDB easement parcel: drainage / sewer / access / etc. */
   hasCadastralEasement: boolean;
   /** Raw OVL2_DESC if a HV polygon is hit. */
   description: string | null;
@@ -60,7 +60,7 @@ export type EasementResult = {
   scopeNote: string;
   hasConsideration: boolean;
   sources: EasementSource[];
-  /** Point-query GeoJSON for HV layer — drives classification. */
+  /** Point-query GeoJSON for HV layer: drives classification. */
   raw: unknown;
   /** Envelope-query GeoJSON (~280 m) for HV map context. */
   context: unknown;
@@ -122,7 +122,7 @@ export async function fetchEasementsData(
       maxAllowableOffset: 0.00003,
     }),
     // DCDB easement parcels intersecting the property. With the cadastre
-    // lot polygon (slightly inset — see insetParcelPolygon) this is exact:
+    // lot polygon (slightly inset: see insetParcelPolygon) this is exact:
     // easement parcels are snapped to the same cadastre, so lot-intersect
     // means "on this lot", full stop. The ~30 m point envelope remains the
     // fallback when the parcel lookup missed (road-centreline geocodes).
@@ -136,7 +136,7 @@ export async function fetchEasementsData(
       maxAllowableOffset: 0.00003,
       lotPolygon: lot,
     }),
-    // Wider envelope for map context — neighbours' easements visible too.
+    // Wider envelope for map context: neighbours' easements visible too.
     queryArcGIS(QSPATIAL_EASEMENTS, {
       geometry: point,
       geometryType: "esriGeometryPoint",
@@ -175,14 +175,14 @@ export async function fetchEasementsData(
     hasConsideration: hit,
     sources: [
       {
-        name: "Queensland DCDB — Easement parcels (QSpatial)",
+        name: "Queensland DCDB: Easement parcels (QSpatial)",
         url: QSPATIAL_DOC,
         layer: QSPATIAL_EASEMENTS,
       },
       ...(isBrisbane
         ? [
             {
-              name: "BCC City Plan 2014 — High voltage easements overlay",
+              name: "BCC City Plan 2014: High voltage easements overlay",
               url: BCC_EASEMENTS_DOC,
               layer: HIGH_VOLTAGE,
             },

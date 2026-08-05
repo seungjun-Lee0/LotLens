@@ -1,4 +1,4 @@
-// Stormwater module — BCC's existing stormwater asset network.
+// Stormwater module: BCC's existing stormwater asset network.
 //
 // Why this earns a page: you need Council approval to build over or near a
 // Council stormwater main, and the answer routinely kills a pool, a shed or
@@ -6,7 +6,7 @@
 // an easement, and unlike an easement it isn't on the title.
 //
 // (Brisbane's water and sewer mains transferred to Urban Utilities in 2010
-// and are NOT published as open data — that's why this module covers
+// and are NOT published as open data: that's why this module covers
 // stormwater only. Urban Utilities access would need a data agreement.)
 //
 // Endpoints (BCC open data, ArcGIS Online org dEKgZETqwmDAh1rP):
@@ -17,7 +17,7 @@
 //   Stormwater_Gully_Existing/FeatureServer/0         (point)
 //   Stormwater_End_Structure_Existing/FeatureServer/0 (point)
 //
-// ⚠ The pipe layer carries PRIVATE assets as well as public mains — a
+// ⚠ The pipe layer carries PRIVATE assets as well as public mains: a
 // house's own roof-water downpipe run is in here with OWNER='PRIVATE'.
 // Grading those as a consideration would flag practically every lot in
 // Brisbane for owning gutters. Only a publicly-owned asset is a
@@ -64,10 +64,10 @@ export type StormwaterAsset = {
   /** "Pipe" | "Manhole" | "Gully" | "End structure" */
   kind: string;
   assetId: string | null;
-  /** e.g. "DRAIN", "ROOF WATER" — null on structures. */
+  /** e.g. "DRAIN", "ROOF WATER": null on structures. */
   pipeType: string | null;
   owner: string | null;
-  /** e.g. "600 MM" — BCC stores this as a string with units. */
+  /** e.g. "600 MM": BCC stores this as a string with units. */
   diameter: string | null;
   material: string | null;
   /** Metres below surface, when recorded. */
@@ -79,10 +79,10 @@ export type StormwaterResult = {
   riskLevel: RiskLevel;
   /** Assets intersecting the lot itself. */
   assets: StormwaterAsset[];
-  /** True when at least one on-lot asset is publicly owned — the case
+  /** True when at least one on-lot asset is publicly owned: the case
    * that actually triggers a build-over/build-near application. */
   hasPublicAssetOnLot: boolean;
-  /** Network exists in the surrounding street even if not on the lot —
+  /** Network exists in the surrounding street even if not on the lot -
    * relevant to "is there a lawful point of discharge". */
   networkNearby: boolean;
   hasConsideration: boolean;
@@ -152,7 +152,7 @@ export async function fetchStormwaterData(
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   // With a cadastre lot polygon this is exact. Without one (road-centreline
   // geocode) fall back to a ~30 m envelope, which can pick up the street
-  // main — the same trade-off the easements module makes.
+  // main: the same trade-off the easements module makes.
   const onLot = {
     geometry: point,
     geometryType: "esriGeometryPoint" as const,
@@ -170,7 +170,7 @@ export async function fetchStormwaterData(
     maxAllowableOffset: 0.00003,
   };
   // Field lists differ per layer and ArcGIS 400s on an unknown name rather
-  // than ignoring it — end structures have no DIAMETER, they have DEPTH and
+  // than ignoring it: end structures have no DIAMETER, they have DEPTH and
   // PREDOMINANTMATERIAL instead.
   const pipeFields = "ASSETID,SUBTYPECD,PIPETYPE,OWNER,DIAMETER,MATERIAL_ABB,AVERAGEDEPTH,STATUS";
   const structureFields = "ASSETID,SUBTYPECD,OWNER,DIAMETER,STATUS";
@@ -208,7 +208,7 @@ export async function fetchStormwaterData(
   //       away. Practically every urban Brisbane lot has a main in the
   //       street, so grading that informational would spend a full report
   //       page on "there is stormwater in your suburb". `networkNearby`
-  //       stays in the payload for the narrative — it just doesn't earn
+  //       stays in the payload for the narrative: it just doesn't earn
   //       a section on its own.
   const riskLevel: RiskLevel = hasPublicAssetOnLot
     ? "medium"
@@ -224,7 +224,7 @@ export async function fetchStormwaterData(
     hasConsideration: riskLevel !== "none",
     sources: [
       {
-        name: "Brisbane City Council — Stormwater assets (existing)",
+        name: "Brisbane City Council: Stormwater assets (existing)",
         url: BCC_STORMWATER_DOC,
         layer: PIPE,
       },

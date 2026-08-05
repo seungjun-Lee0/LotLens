@@ -1,4 +1,4 @@
-// /admin — read-only ops dashboard. Access is gated by ADMIN_EMAILS
+// /admin: read-only ops dashboard. Access is gated by ADMIN_EMAILS
 // (comma-separated env); everyone else is bounced to the landing page.
 
 import { redirect } from "next/navigation";
@@ -195,7 +195,7 @@ export default async function AdminPage() {
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-muted-foreground">
-                      {u.subscription_status ?? "—"}
+                      {u.subscription_status ?? "-"}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{u.credits}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{u.report_count}</td>

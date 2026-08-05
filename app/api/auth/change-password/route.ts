@@ -1,4 +1,4 @@
-// POST /api/auth/change-password — { currentPassword?, newPassword }
+// POST /api/auth/change-password: { currentPassword?, newPassword }
 // Logged-in users change their password; Google-only accounts (no hash
 // yet) set one without a current password.
 
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     const hash = rows[0]?.password_hash ?? null;
 
     if (hash) {
-      // Existing password — must prove they know it.
+      // Existing password: must prove they know it.
       if (!body.currentPassword) {
         return NextResponse.json(
           { error: "Enter your current password." },

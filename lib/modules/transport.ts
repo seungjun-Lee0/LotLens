@@ -1,10 +1,10 @@
-// Public Transport module — TransLink stops, via the Queensland Government
+// Public Transport module: TransLink stops, via the Queensland Government
 // spatial service.
 //
 // Develo sources this from the raw GTFS feed. We don't need to: TMR
 // republishes the same TransLink stops as queryable ArcGIS point layers on
 // the host this codebase already talks to, so there's no zip to download,
-// no CSV import and no table to keep in sync — one point query per mode.
+// no CSV import and no table to keep in sync: one point query per mode.
 //
 // Endpoint: Transportation/OtherTransport/MapServer
 //   101 Train station    102 Bus stop    103 Ferry terminal    104 Tram stops

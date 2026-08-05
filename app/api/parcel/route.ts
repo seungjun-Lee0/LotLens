@@ -1,6 +1,6 @@
 // POST /api/parcel
 // Body: { lat: number, lng: number }
-// Returns the DCDB cadastre parcel at the point — polygon + lot/plan +
+// Returns the DCDB cadastre parcel at the point: polygon + lot/plan +
 // area + tenure + suburb + LGA. Drives the "is this the right lot?"
 // confirmation step between geocoding and running the report, so a bad
 // geocode (road centreline, wrong number) is caught BEFORE ~25 upstream
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // Never throws — returns an EMPTY parcel (all nulls) when the lookup
+  // Never throws: returns an EMPTY parcel (all nulls) when the lookup
   // misses; the client treats polygon:null as "couldn't identify the lot".
   const parcel = await fetchPropertyParcel(parsed.lat, parsed.lng);
   return NextResponse.json({ parcel });

@@ -13,7 +13,7 @@ export function CtaStage({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [focus, setFocus] = useState(false);
   // Phone one-shot: once the show has played, .is-played keeps the card
-  // at full size forever — it never shrinks back and never re-triggers.
+  // at full size forever: it never shrinks back and never re-triggers.
   const [played, setPlayed] = useState(false);
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export function CtaStage({ children }: { children: ReactNode }) {
         if (window.matchMedia("(max-width: 767.98px)").matches) {
           // Phones: ONE-SHOT. The card grows + dims once when it reaches
           // mid-screen scrolling down; when the user scrolls on past (or
-          // retreats far above), only the dim releases — the size stays
+          // retreats far above), only the dim releases: the size stays
           // via .is-played (globals.css) and the whole machine goes
           // inert. No fold, no dwell, nothing to judder or re-trigger.
           if (mobilePlayed) return;
@@ -61,7 +61,7 @@ export function CtaStage({ children }: { children: ReactNode }) {
         // 0 → stage entering at the bottom, 1 → stage gone past the top.
         // With the 130vh runway the sticky pin spans roughly p 0.44–0.57,
         // so focus arms just before the pin engages and releases the moment
-        // the card starts sliding out — no dead scroll before the footer.
+        // the card starts sliding out: no dead scroll before the footer.
         const p = (vh - r.top) / (r.height + vh);
         setFocus((cur) =>
           cur ? p > 0.3 && p < 0.6 : p > 0.38 && p < 0.56,
@@ -69,7 +69,7 @@ export function CtaStage({ children }: { children: ReactNode }) {
       });
     };
     // Only pay for the scroll handler while the stage is anywhere near the
-    // viewport — elsewhere on the page it costs nothing per frame.
+    // viewport: elsewhere on the page it costs nothing per frame.
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && !listening) {

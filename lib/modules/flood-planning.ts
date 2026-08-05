@@ -1,4 +1,4 @@
-// Flood Planning module — BCC City Plan 2014 statutory flood planning
+// Flood Planning module: BCC City Plan 2014 statutory flood planning
 // overlays. Distinct from the Flood Awareness Mapping we cover in the
 // Flooding module: planning overlays are the legally-binding controls
 // that gate development approval (build floor levels, fill volumes,
@@ -11,7 +11,7 @@
 //   Flood_overlay_Creek_waterway_flood_planning_area
 //     Catchment creeks (Bulimba, Norman, Wynnum, Tingalpa etc.). Each
 //     polygon is labelled "Creek/waterway flood planning area N" where
-//     N is 1-4 — lower number = stricter controls.
+//     N is 1-4: lower number = stricter controls.
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
@@ -34,7 +34,7 @@ export type FloodPlanningResult = {
   sources: Array<{ name: string; url: string; layer: string }>;
   raw: { river: unknown; creek: unknown };
   context: { river: unknown; creek: unknown };
-  /** False outside Brisbane LGA — statutory flood planning areas are
+  /** False outside Brisbane LGA: statutory flood planning areas are
    * council planning-scheme instruments. */
   available: boolean;
   availabilityNote?: string;
@@ -46,7 +46,7 @@ function attrs(
   return (f?.properties ?? {}) as Record<string, unknown>;
 }
 
-// The numbered suffix (1-4) — 1 = strictest controls, 4 = mildest.
+// The numbered suffix (1-4): 1 = strictest controls, 4 = mildest.
 function classify(area: string | null): RiskLevel {
   if (!area) return "none";
   const n = parseInt(area.replace(/\D/g, ""), 10);
@@ -73,7 +73,7 @@ export async function fetchFloodPlanningData(
       hasConsideration: false,
       sources: [
         {
-          name: "Council planning scheme — flood overlay",
+          name: "Council planning scheme: flood overlay",
           url: "https://planning.statedevelopment.qld.gov.au/planning-framework/mapping",
           layer: "",
         },
@@ -130,8 +130,8 @@ export async function fetchFloodPlanningData(
     creekArea,
     hasConsideration: riskLevel !== "none",
     sources: [
-      { name: "BCC City Plan 2014 — Brisbane River flood planning area", url: BCC_PLANNING_DOC, layer: RIVER_PLANNING },
-      { name: "BCC City Plan 2014 — Creek/waterway flood planning area", url: BCC_PLANNING_DOC, layer: CREEK_PLANNING },
+      { name: "BCC City Plan 2014: Brisbane River flood planning area", url: BCC_PLANNING_DOC, layer: RIVER_PLANNING },
+      { name: "BCC City Plan 2014: Creek/waterway flood planning area", url: BCC_PLANNING_DOC, layer: CREEK_PLANNING },
     ],
     raw: { river, creek },
     context: { river: riverCtx, creek: creekCtx },

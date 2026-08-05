@@ -16,7 +16,7 @@ export default async function LoginPage({
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center px-4 pb-24 pt-16 sm:pt-24">
         {sp.error === "google" && (
           <p className="mb-4 text-[13px]" style={{ color: "var(--apple-red)" }}>
-            Google sign-in failed — please try again or use email.
+            Google sign-in failed: please try again or use email.
           </p>
         )}
         <AuthForm

@@ -1,7 +1,7 @@
-// Local Plans module — BCC City Plan 2014 neighbourhood plans.
+// Local Plans module: BCC City Plan 2014 neighbourhood plans.
 //
 // Zoning answers "what is this land for". The neighbourhood plan answers
-// "and what does THIS suburb do differently" — it sits inside the planning
+// "and what does THIS suburb do differently": it sits inside the planning
 // scheme and can override the zone's height, density and built-form rules.
 // A buyer reading the zone code alone gets half the answer, which is why
 // Develo prints the two side by side.
@@ -9,12 +9,12 @@
 // Endpoints (BCC open data, ArcGIS Online org dEKgZETqwmDAh1rP):
 //   Neighbourhood_Plan_boundaries/FeatureServer/0
 //     Fields: LP (plan name), DESCRIPTION
-//   Neighbourhood_Plan_precints/FeatureServer/0        [sic — BCC's spelling]
+//   Neighbourhood_Plan_precints/FeatureServer/0        [sic: BCC's spelling]
 //     Fields: LP, LP_PREC, LP_PREC_CODE, DESCRIPTION
 //   Neighbourhood_Plan_sub_precints/FeatureServer/0    [sic]
 //     Fields: LP, LP_PREC, LP_PREC_CODE, LP_SUB_PREC, LP_SUB_PREC_CODE
 //
-// Verified live 2026-07: East Brisbane → "East Brisbane—Coorparoo district
+// Verified live 2026-07: East Brisbane → "East Brisbane-Coorparoo district
 // neighbourhood plan"; Newstead → "Newstead north neighbourhood plan",
 // precinct "Evelyn Street industrial" (NPP-004).
 //
@@ -79,7 +79,7 @@ export async function fetchLocalPlansData(
 ): Promise<LocalPlansResult> {
   // Neighbourhood plans are a City Plan 2014 construct. Other SEQ councils
   // publish the same idea under different names (local plans, structure
-  // plans) on their own services — those land as adapters later.
+  // plans) on their own services: those land as adapters later.
   const isBrisbane = region?.isBrisbane ?? true;
   if (!isBrisbane) {
     return {
@@ -88,7 +88,7 @@ export async function fetchLocalPlansData(
       precincts: [],
       hasConsideration: false,
       sources: [
-        { name: "Council planning scheme — local/neighbourhood plans", url: BCC_NP_DOC, layer: "" },
+        { name: "Council planning scheme: local/neighbourhood plans", url: BCC_NP_DOC, layer: "" },
       ],
       raw: EMPTY_FC,
       context: EMPTY_FC,
@@ -101,7 +101,7 @@ export async function fetchLocalPlansData(
 
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   // Plan boundaries are suburb-scale, so the lot polygon and the point
-  // agree in practice — but precinct lines DO run through blocks, and a
+  // agree in practice: but precinct lines DO run through blocks, and a
   // lot straddling two precincts should list both.
   const pointParams = {
     geometry: point,
@@ -134,7 +134,7 @@ export async function fetchLocalPlansData(
   const planName = str(attrs(boundary.features[0]).LP);
 
   // Sub-precincts are keyed by their parent precinct code, so fold them in
-  // rather than listing them as separate rows — "Evelyn Street industrial
+  // rather than listing them as separate rows: "Evelyn Street industrial
   // (sub-precinct b)" reads as one place, which is what it is.
   const subByPrecinctCode = new Map<string, Record<string, unknown>>();
   for (const f of subPrecinct.features) {
@@ -166,7 +166,7 @@ export async function fetchLocalPlansData(
 
   return {
     // Being inside a neighbourhood plan is a fact about which rules apply,
-    // not a hazard — and roughly half of Brisbane is inside one, so a
+    // not a hazard: and roughly half of Brisbane is inside one, so a
     // severity here would fire constantly while warning of nothing.
     riskLevel: inPlan ? "informational" : "none",
     planName,
@@ -174,12 +174,12 @@ export async function fetchLocalPlansData(
     hasConsideration: inPlan,
     sources: [
       {
-        name: "BCC City Plan 2014 — Neighbourhood plan boundaries",
+        name: "BCC City Plan 2014: Neighbourhood plan boundaries",
         url: BCC_NP_DOC,
         layer: BOUNDARIES,
       },
       {
-        name: "BCC City Plan 2014 — Neighbourhood plan precincts",
+        name: "BCC City Plan 2014: Neighbourhood plan precincts",
         url: BCC_NP_DOC,
         layer: PRECINCTS,
       },

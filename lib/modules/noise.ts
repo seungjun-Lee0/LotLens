@@ -1,9 +1,9 @@
-// Noise module — BCC Transport noise corridor + ANEF aviation noise.
+// Noise module: BCC Transport noise corridor + ANEF aviation noise.
 //
 // Combines two BCC overlays into one report module so we mirror Develo's
 // single "Noise" page. Layers:
 //
-//   Transport_noise_corridor_overlay — road + rail noise corridors.
+//   Transport_noise_corridor_overlay: road + rail noise corridors.
 //     OVL2_DESC e.g. "Transport noise corridor 1" through "4". Lower
 //     number = tighter / louder. Triggers Council acoustic
 //     attenuation requirements on new builds.
@@ -41,7 +41,7 @@ export type NoiseResult = {
   sources: Array<{ name: string; url: string; layer: string }>;
   raw: { transport: unknown; anef: unknown };
   context: { transport: unknown; anef: unknown };
-  /** False outside Brisbane LGA — transport-noise corridors are published
+  /** False outside Brisbane LGA: transport-noise corridors are published
    * per-council (the statewide QDC MP4.4 dataset is download-only). */
   available: boolean;
   availabilityNote?: string;
@@ -54,8 +54,8 @@ function attrs(
 }
 
 // Two corridor vocabularies exist with OPPOSITE scales:
-//   QDC MP4.4:   "… noise category N …" — HIGHER category = louder (0–4).
-//   BCC legacy:  "Transport noise corridor N" — LOWER number = louder (1–4).
+//   QDC MP4.4:   "… noise category N …": HIGHER category = louder (0–4).
+//   BCC legacy:  "Transport noise corridor N": LOWER number = louder (1–4).
 // ANEF: 30 louder than 20 (AS2021: 30+ unacceptable for residential,
 // 25-30 conditionally acceptable, 20-25 acceptable with construction).
 function classify(transport: string | null, anef: string | null): RiskLevel {
@@ -101,7 +101,7 @@ async function fetchCouncilNoise(
   const results = await Promise.all(
     adapters.map((a) => queryOverlayAdapter(a, lat, lng, lot)),
   );
-  // Worst corridor across every adapter's features — order isn't stable.
+  // Worst corridor across every adapter's features: order isn't stable.
   const RANK = RISK_RANK;
   const label = results
     .flatMap((r, i) => overlayLabels(r.point, adapters[i].labelFields))
@@ -162,7 +162,7 @@ export async function fetchNoiseData(
     inSR: 4326,
     outFields: fields,
     returnGeometry: false,
-    // Transport corridors are thin strips along roads/rail — same
+    // Transport corridors are thin strips along roads/rail: same
     // ~50 m buffer trick as historic flood so lot-edge matches work.
     bufferDegrees: 0.00045,
     lotPolygon: lot,
@@ -198,8 +198,8 @@ export async function fetchNoiseData(
     anefCategory,
     hasConsideration: riskLevel !== "none",
     sources: [
-      { name: "BCC City Plan 2014 — Transport noise corridor", url: BCC_NOISE_DOC, layer: TRANSPORT_NOISE },
-      { name: "BCC City Plan 2014 — Airport ANEF noise", url: BCC_NOISE_DOC, layer: ANEF },
+      { name: "BCC City Plan 2014: Transport noise corridor", url: BCC_NOISE_DOC, layer: TRANSPORT_NOISE },
+      { name: "BCC City Plan 2014: Airport ANEF noise", url: BCC_NOISE_DOC, layer: ANEF },
     ],
     raw: { transport, anef },
     context: { transport: transportCtx, anef: anefCtx },

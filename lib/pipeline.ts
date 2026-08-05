@@ -2,11 +2,11 @@
 //
 // Two phases, both addressed by address_id:
 //
-//   1. fetchOverlaysForAddress() — hits every module source in parallel,
+//   1. fetchOverlaysForAddress(): hits every module source in parallel,
 //      writes one council_data row per module. Each fetch settles
 //      independently: a source that's down becomes a fetchFailed row
 //      (risk_level NULL) instead of sinking the whole report.
-//   2. generateReportForAddress() — reads the council_data rows back,
+//   2. generateReportForAddress(): reads the council_data rows back,
 //      generates narrative per module (LLM stub in Task 4a), writes one
 //      reports row.
 //
@@ -158,7 +158,7 @@ export async function fetchOverlaysForAddress(
     }
   }
 
-  // Per-module wall time — one summary line per run so slow government
+  // Per-module wall time: one summary line per run so slow government
   // layers are identifiable in prod logs without extra tooling.
   const timings: Record<string, number> = {};
   const timed = async <T,>(name: string, p: Promise<T>): Promise<T> => {
@@ -191,13 +191,13 @@ export async function fetchOverlaysForAddress(
     );
 
   // The parcel lookup now gates ALL fetchers: its `shire_name` picks the
-  // council adapters AND its polygon becomes the classification geometry —
+  // council adapters AND its polygon becomes the classification geometry -
   // every risk module classifies against the actual cadastre lot (slightly
   // inset so cadastre-snapped layers don't flag the neighbour across a
   // shared boundary), not just the geocoded point. Costs the ~150-300 ms
   // parcel round-trip up front; correctness over latency.
   // fetchPropertyParcel never rejects (returns an EMPTY parcel on failure),
-  // so this always proceeds — with no polygon the fetchers fall back to
+  // so this always proceeds: with no polygon the fetchers fall back to
   // their point/buffer queries.
   const parcelForRegion = await timed(
     "parcel",
@@ -226,7 +226,7 @@ export async function fetchOverlaysForAddress(
   tasks.set("noise", settle("noise", fetchNoiseData(addr.lat, addr.lng, region, lot)));
   tasks.set("steep_land", settle("steep_land", fetchSteepLandData(addr.lat, addr.lng, region, lot)));
   tasks.set("stormwater", settle("stormwater", fetchStormwaterData(addr.lat, addr.lng, region, lot)));
-  // Dark until Urban Utilities confirms reuse terms — see WATER_SEWER_ENABLED.
+  // Dark until Urban Utilities confirms reuse terms: see WATER_SEWER_ENABLED.
   // Guarded here as well as in MODULE_ORDER so the flag can never leave a
   // task running whose result nothing reads.
   if (WATER_SEWER_ENABLED) {
@@ -254,11 +254,11 @@ export async function fetchOverlaysForAddress(
 
   const failedModules = ORDER.filter((_, i) => !settled[i].ok);
   if (failedModules.length === ORDER.length) {
-    // Nothing came back at all — that's our outage (or the machine's
+    // Nothing came back at all: that's our outage (or the machine's
     // network), not N independent source outages. Persisting a full set of
     // blank rows would cache a useless report, so fail the run outright.
     throw new Error(
-      "all module sources failed — aborting instead of writing an empty report",
+      "all module sources failed: aborting instead of writing an empty report",
     );
   }
   if (failedModules.length > 0) {
@@ -297,10 +297,10 @@ export async function fetchOverlaysForAddress(
   // and rewrites the full fresh set.
   await sql`DELETE FROM council_data WHERE address_id = ${addressId}`;
 
-  // One independent single-row insert per module — run them concurrently. Neon's
+  // One independent single-row insert per module: run them concurrently. Neon's
   // HTTP driver issues one stateless request per statement (~30 ms), so
   // sequential would cost ~450 ms; parallel costs one round-trip.
-  // slimGeoJson caps polygon vertex counts before upload — the Brisbane
+  // slimGeoJson caps polygon vertex counts before upload: the Brisbane
   // River flood-planning multipolygon alone is ~7 MB raw, which was
   // costing >10 s of DB write time per report.
   await Promise.all(
@@ -361,7 +361,7 @@ export type ReportPayload = {
   modules: ReportModuleRow[];
   considerationCount: number;
   /** GeoJSON Polygon/MultiPolygon of the actual cadastre lot the property
-   * sits on — fetched from BCC's property_boundaries_parcel layer. Used
+   * sits on: fetched from BCC's property_boundaries_parcel layer. Used
    * as the yellow "selected property" outline on every map. Falls back to
    * the zoning module polygon when the parcel lookup fails. */
   propertyPolygon: unknown | null;
@@ -443,7 +443,7 @@ export async function loadReportPayload(
   // property_boundaries_parcel layer. ~150 ms extra per page load,
   // dwarfed by the rest of the pipeline. Cleanly replaces our previous
   // hack of using the zoning module's polygon (which actually spans
-  // the whole zone-precinct area — hundreds of metres across).
+  // the whole zone-precinct area: hundreds of metres across).
   const [parcel, parcelLines, postcode] = await Promise.all([
     fetchPropertyParcel(address.lat, address.lng),
     fetchParcelLinesNear(address.lat, address.lng),
@@ -491,7 +491,7 @@ export async function loadReportPayload(
  * Retry path for reports that came back with fetchFailed rows: re-run the
  * overlay fetches and regenerate the narrative INTO THE EXISTING report row.
  * Unlike generateReportForAddress this never inserts a new report and never
- * touches credits/paywall state — it's a repair, not a purchase.
+ * touches credits/paywall state: it's a repair, not a purchase.
  *
  * Returns the modules that are still failing after the retry.
  */

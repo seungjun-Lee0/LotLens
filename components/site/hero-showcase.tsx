@@ -1,6 +1,6 @@
 "use client";
 
-// Landing hero — blurred QLD aerial full-bleed with a sharp circular loupe.
+// Landing hero: blurred QLD aerial full-bleed with a sharp circular loupe.
 //
 // Everything drawn here is REAL report output for the demo lot under the
 // loupe (Stafford, lot 10SP348436): the amber outline is the actual cadastre
@@ -10,7 +10,7 @@
 // with coordinates normalised to the hero aerial's bbox (u right, v down).
 //
 // Interaction: chips cycle in three groups (existing 14 s CSS loop). Clicking
-// any chip — or a dot on the rail below — pins that module: the cycle stops
+// any chip: or a dot on the rail below: pins that module: the cycle stops
 // and the pinned layer paints both the loupe AND the background aerial, so
 // the layer's suburb-scale silhouette reads. Clicking the active dot (or
 // AUTO) resumes the cycle.
@@ -34,10 +34,10 @@ export type HeroDemoData = {
 };
 
 // Aerials are baked to /public by scripts/bake-hero-images.ts with the
-// blur pre-applied — identical pixels, none of the runtime CSS-filter
+// blur pre-applied: identical pixels, none of the runtime CSS-filter
 // cost, and no LCP dependency on the QLD imagery server.
 const HERO_AERIAL_SRC = "/hero-aerial.jpg";
-// Same bbox, more pixels, lighter baked blur — phones draw the canvas ~1.7×
+// Same bbox, more pixels, lighter baked blur: phones draw the canvas ~1.7×
 // larger than desktop, which fattens the desktop bake's σ=2 into a smear.
 const HERO_AERIAL_MOBILE_SRC = "/hero-aerial-m.jpg";
 const LOUPE_AERIAL_SRC = "/hero-loupe.jpg";
@@ -77,9 +77,9 @@ const META = Object.fromEntries(RAIL.map((m) => [m.key, m])) as Record<
   (typeof RAIL)[number]
 >;
 
-// Chips orbiting the loupe — three cycling groups, four anchor slots.
+// Chips orbiting the loupe: three cycling groups, four anchor slots.
 // Slot positions are phone-safe at base (chips must stay INSIDE the
-// container — a 390px screen has no bleed room; anything past the edge
+// container: a 390px screen has no bleed room; anything past the edge
 // widens the hero grid track and clips the whole page), with the roomier
 // desktop offsets restored at sm+.
 const SLOT_POS = [
@@ -89,13 +89,13 @@ const SLOT_POS = [
   "left-[11%] bottom-[10%] sm:left-[5%] sm:bottom-[11%]",
 ];
 // Every module in RAIL gets a chip, so the cycle shows the whole set rather
-// than a sample of it. Four anchor slots means ceil(18 / 4) = FIVE groups —
+// than a sample of it. Four anchor slots means ceil(18 / 4) = FIVE groups -
 // four wouldn't fit (16 < 18). Adding a sixth slot isn't an option: the
 // positions are already at the phone-safe limit, and anything past the
 // container edge widens the hero grid track and clips the page.
 //
 // Keep this in sync with the .cycle-gN / .lens-fadeN keyframes in
-// globals.css — the group count lives in both places.
+// globals.css: the group count lives in both places.
 const CHIPS: { key: ModuleKey; group: string; i: number }[] = [
   { key: "flooding", group: "cycle-g1", i: 0 },
   { key: "flood_planning", group: "cycle-g1", i: 1 },
@@ -109,7 +109,7 @@ const CHIPS: { key: ModuleKey; group: string; i: number }[] = [
   { key: "stormwater", group: "cycle-g3", i: 1 },
   { key: "acid_sulfate", group: "cycle-g3", i: 2 },
   { key: "mining", group: "cycle-g3", i: 3 },
-  // Two chips on opposite slots — a sparse beat between the dense groups.
+  // Two chips on opposite slots: a sparse beat between the dense groups.
   { key: "heritage", group: "cycle-g4", i: 0 },
   { key: "noise", group: "cycle-g4", i: 2 },
   { key: "zoning", group: "cycle-g5", i: 0 },
@@ -118,7 +118,7 @@ const CHIPS: { key: ModuleKey; group: string; i: number }[] = [
   { key: "transport", group: "cycle-g5", i: 3 },
 ];
 
-// Auto-cycle groups — derived from CHIPS so the chips on screen and the
+// Auto-cycle groups: derived from CHIPS so the chips on screen and the
 // layers painting the map are always the SAME set of modules. The group
 // COUNT is derived too, so adding a cycle-g6 needs no edit here.
 const GROUP_COUNT = new Set(CHIPS.map((c) => c.group)).size;
@@ -198,11 +198,11 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
   const railRef = useRef<HTMLDivElement | null>(null);
   const pin = (k: ModuleKey | null) => {
     setSel((s) => ({ pinned: k, shown: k ?? s.shown }));
-    // On phones the rail is a horizontal scroller — centre the pinned pill
+    // On phones the rail is a horizontal scroller: centre the pinned pill
     // so tapping a loupe chip visibly selects something the user can find.
     // Scroll the rail element DIRECTLY: scrollIntoView walks every
     // scrollable ancestor, and the hero section (which clips the oversized
-    // aerial canvas) is programmatically scrollable — it shifted the whole
+    // aerial canvas) is programmatically scrollable: it shifted the whole
     // hero sideways.
     const rail = railRef.current;
     const btn = k && rail?.querySelector(`[data-rail="${k}"]`);
@@ -222,7 +222,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
     [L.u0, L.u1, L.v0, L.v1],
   );
 
-  // All path strings are precomputed once — pinning just toggles <g> nodes.
+  // All path strings are precomputed once: pinning just toggles <g> nodes.
   const layers = useMemo(() => {
     const out = {} as Record<ModuleKey, { loupe: Painted[]; bg: Painted[] }>;
     for (const m of RAIL) {
@@ -233,7 +233,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
   }, [data, loupePx]);
 
   const parcelLoupe = useMemo(() => pathFor(data.parcel, loupePx), [data.parcel, loupePx]);
-  // Hero-normalised horizontal centre of the loupe target — the demo lot's
+  // Hero-normalised horizontal centre of the loupe target: the demo lot's
   // spot on the background aerial. Phones slide the aerial canvas so this
   // point sits at the horizontal centre of the screen, under the loupe.
   const mu = (L.u0 + L.u1) / 2;
@@ -255,14 +255,14 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
         style={{ ["--hero-shift" as string]: `-${(mu * 100).toFixed(2)}%` }}
       >
         {/* Aerial canvas. Phones can't cover a portrait screen with the wide
-            16:9 export and still keep the demo lot in frame — a plain
+            16:9 export and still keep the demo lot in frame: a plain
             object-cover centres on unrelated suburb. So below sm the canvas
             keeps the image's own aspect, oversized to 160% height, and is
             aligned so the lot the loupe magnifies sits under the loupe
             itself: horizontally centred via --hero-shift, and vertically by
             the top offset (lot v=0.47 of the canvas → ≈72% of the hero,
             where the loupe circle renders in the stacked layout). Like
-            desktop, the lens sits ON the spot it magnifies — no separate
+            desktop, the lens sits ON the spot it magnifies: no separate
             marker needed. sm+ restores the plain full-bleed cover. */}
         <div className="absolute left-1/2 top-[-3%] aspect-video h-[160%] translate-x-[var(--hero-shift)] sm:left-0 sm:top-0 sm:aspect-auto sm:h-full sm:w-full sm:translate-x-0">
           <picture>
@@ -276,7 +276,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
           </picture>
         </div>
 
-        {/* phone layer silhouette — one svg on the same shifted 16:9 canvas
+        {/* phone layer silhouette: one svg on the same shifted 16:9 canvas
             as the aerial (scale-105 matches the img), so the overlays land
             on the actual streets. No marker/parcel: the canvas alignment
             puts the loupe on the very spot it magnifies, hiding anything
@@ -292,7 +292,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
           <div className="absolute left-1/2 top-[-3%] aspect-video h-[160%] translate-x-[var(--hero-shift)]">
             {/* Hero-space intent: silent above ~46% (copy/backdrop-blur
                 zone), full 64–80% (loupe centre ≈72%), gone by 92%. */}
-            {/* Mask lives on an HTML wrapper, NOT the svg — Firefox resolves
+            {/* Mask lives on an HTML wrapper, NOT the svg: Firefox resolves
                 CSS mask percentages on SVG elements against the CONTENT
                 bbox (layer paths sprawl far past the viewBox), which threw
                 the gradient wildly off for sprawling modules. A div's mask
@@ -332,13 +332,13 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
           </div>
         </div>
 
-        {/* veil: fade the aerial into the page background — gradients live
+        {/* veil: fade the aerial into the page background: gradients live
             in globals.css (.hero-veil-*) because the horizontal wash that
             clears the desktop text column must drop out on phones, where
             the copy stacks ABOVE the map and the lot sits centred. */}
         <div className="hero-veil-light absolute inset-0 dark:hidden" />
         <div className="hero-veil-dark absolute inset-0 hidden dark:block" />
-        {/* layer silhouette + lot marker — masked down on the text side.
+        {/* layer silhouette + lot marker: masked down on the text side.
             The wrapper's VERTICAL mask dissolves the overlay before the
             section edges so it never cuts off in a hard line. */}
         <div
@@ -350,11 +350,11 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
               "linear-gradient(180deg, transparent 0%, #000 14%, #000 72%, transparent 94%)",
           }}
         >
-        {/* auto: the ENTIRE cycling group paints the map — the exact
-            modules the chips are announcing — but a radial mask keeps the
+        {/* auto: the ENTIRE cycling group paints the map: the exact
+            modules the chips are announcing: but a radial mask keeps the
             silhouette hugging the detail circle and fading out towards the
             page edges/text. Pinning (next svg) opens up the full suburb. */}
-        {/* Masks live on HTML wrappers, NOT the svgs — Firefox resolves CSS
+        {/* Masks live on HTML wrappers, NOT the svgs: Firefox resolves CSS
             mask percentages on SVG elements against the CONTENT bbox (layer
             paths sprawl far past the viewBox), so sprawling modules painted
             way outside the intended halo. Same fix as the loupe clip-path. */}
@@ -405,7 +405,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
             <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.5} />
           </g>
           {/* No geographic marker/parcel here: on desktop the loupe sits on
-              (or drifts near — the crop and the layout use different
+              (or drifts near: the crop and the layout use different
               coordinate spaces) the very spot it magnifies, so anything
               drawn there is hidden behind the lens. */}
         </svg>
@@ -413,7 +413,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
         </div>
 
         {/* phones: calm the (sharper) mobile aerial behind the copy and
-            address form — a masked backdrop blur over the top half that
+            address form: a masked backdrop blur over the top half that
             dissolves before the loupe zone. Sits last so it also softens
             any layer paint reaching up there. Kept clear of the animating
             layer band (mask ends ~52%, layers start ~46% at near-zero
@@ -438,7 +438,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
             viewport and clipping the copy column with it. */}
         <div className="flex min-w-0 flex-col">
           <div className="relative mx-auto h-[320px] w-full max-w-[460px] sm:h-[420px]">
-            {/* detail circle — a clean zoomed-in viewport over the marked lot */}
+            {/* detail circle: a clean zoomed-in viewport over the marked lot */}
             <div aria-hidden className="absolute left-1/2 top-[47%] aspect-square w-[min(260px,70%)] -translate-x-1/2 -translate-y-1/2 sm:w-[min(340px,78%)]">
               {/* lens */}
               <div
@@ -457,8 +457,8 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                 />
 
                 {/* real report overlays, projected into the loupe window.
-                    The circular clip lives on this HTML wrapper — not the
-                    svg root and not the parent's rounded overflow —
+                    The circular clip lives on this HTML wrapper: not the
+                    svg root and not the parent's rounded overflow -
                     because Firefox resolves clip-path percentages on SVG
                     elements against the CONTENT bbox (the paths sprawl
                     far past the viewBox, so the "circle" was enormous)
@@ -500,7 +500,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                       </g>
                     ))
                   )}
-                  {/* selected lot — the amber outline every report map carries */}
+                  {/* selected lot: the amber outline every report map carries */}
                   <path
                     d={parcelLoupe}
                     fillOpacity={0.12}
@@ -519,7 +519,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
               </div>
             </div>
 
-            {/* cycling chips — click one to pin its layer. Phones show the
+            {/* cycling chips: click one to pin its layer. Phones show the
                 label only; the data note joins at sm+ where there's room. */}
             {!pinned &&
               CHIPS.map((c) => (
@@ -542,7 +542,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                 </button>
               ))}
 
-            {/* pinned chip — click to resume the cycle */}
+            {/* pinned chip: click to resume the cycle */}
             {pinned && (
               <button
                 type="button"
@@ -580,7 +580,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
             )}
           </div>
 
-          {/* module rail — pin any of the layers; AUTO resumes the cycle.
+          {/* module rail: pin any of the layers; AUTO resumes the cycle.
               Phones have no orbiting chips (they'd overflow the screen), so
               the rail carries the labels there: an edge-to-edge horizontal
               scroller of named pills. sm+ collapses back to the dot rail. */}

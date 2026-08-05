@@ -1,18 +1,18 @@
-// Acid sulfate soils module — statewide QLD ASS mapping.
+// Acid sulfate soils module: statewide QLD ASS mapping.
 //
 // Acid sulfate soils are coastal-lowland soils (typically below ~5 m AHD)
-// that release sulfuric acid when excavated or drained — a real cost on
+// that release sulfuric acid when excavated or drained: a real cost on
 // pools, basements, canal-estate builds and civil works. Councils apply
 // ASS overlay codes; the underlying state mapping is what we query.
 //
 // Endpoint (QSpatial, verified live 2026-07):
 //   GeoscientificInformation/SoilsAndLandResource/MapServer
-//     1902  Project polygons — 1:25 000 scale  (best resolution)
-//     1952  Project polygons — 1:50 000 scale
-//     2002  Project polygons — 1:100 000 scale
+//     1902  Project polygons: 1:25 000 scale  (best resolution)
+//     1952  Project polygons: 1:50 000 scale
+//     2002  Project polygons: 1:100 000 scale
 //   Fields: map_code, map_code_meaning, dominant_entity_meaning, …
 //
-// Coverage is coastal lowlands only — inland lots simply return no
+// Coverage is coastal lowlands only: inland lots simply return no
 // features ("no consideration identified"), which is correct.
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
@@ -32,7 +32,7 @@ export type AcidSulfateResult = {
   riskLevel: RiskLevel;
   /** map_code at the finest scale that hits, e.g. "A0S1". */
   mapCode: string | null;
-  /** map_code_meaning — plain-English description of the ASS class. */
+  /** map_code_meaning: plain-English description of the ASS class. */
   meaning: string | null;
   /** Which mapping scale produced the hit ("1:25 000" etc.). */
   scale: string | null;
@@ -103,7 +103,7 @@ export async function fetchAcidSulfateData(
 
   // ASS presence is a management/cost consideration rather than a hazard
   // band. Codes containing S (sulfidic material at shallow depth) rate
-  // medium — that's the case that actually costs money on excavation.
+  // medium: that's the case that actually costs money on excavation.
   // Anything else mapped is informational: the state layer covers every
   // coastal lowland, so most riverside and bayside lots are inside it with
   // no obligation attached unless you dig.

@@ -1,4 +1,4 @@
-// Coastal hazards module (key: storm_tide) — statewide DETSI coastal
+// Coastal hazards module (key: storm_tide): statewide DETSI coastal
 // hazard area mapping: storm tide inundation + erosion prone areas.
 //
 // Source: QSpatial PlanningCadastre/CoastalManagement MapServer (verified
@@ -6,12 +6,12 @@
 // layer so bayside AND coastal addresses anywhere in Queensland classify.
 //
 // Layers:
-//   11  Storm tide — High hazard area   (inundation > 1.0 m, to 2100)
-//   12  Storm tide — Medium hazard area
-//    7  Erosion prone area — component 2: calculated erosion distance
-//    8  Erosion prone area — component 3: sea level rise
-//    9  Erosion prone area — component 1: 40 m buffer from HAT
-// The storm-tide layers carry no classification attributes — hazard tier
+//   11  Storm tide: High hazard area   (inundation > 1.0 m, to 2100)
+//   12  Storm tide: Medium hazard area
+//    7  Erosion prone area: component 2: calculated erosion distance
+//    8  Erosion prone area: component 3: sea level rise
+//    9  Erosion prone area: component 1: 40 m buffer from HAT
+// The storm-tide layers carry no classification attributes: hazard tier
 // comes from WHICH layer intersects.
 
 import type { Geometry } from "geojson";
@@ -98,8 +98,8 @@ export async function fetchStormTideData(
         : "none";
 
   const parts: string[] = [];
-  if (inHigh) parts.push("Storm tide — high hazard area");
-  else if (inMedium) parts.push("Storm tide — medium hazard area");
+  if (inHigh) parts.push("Storm tide: high hazard area");
+  else if (inMedium) parts.push("Storm tide: medium hazard area");
   if (erosionProne) parts.push("Erosion prone area");
 
   // Merge erosion components into one FC per scope for map painting.
@@ -115,12 +115,12 @@ export async function fetchStormTideData(
     hasConsideration: riskLevel !== "none",
     sources: [
       {
-        name: "QLD Coastal Hazard Area — Storm tide inundation",
+        name: "QLD Coastal Hazard Area: Storm tide inundation",
         url: QLD_COASTAL_DOC,
         layer: STORM_HIGH,
       },
       {
-        name: "QLD Coastal Hazard Area — Erosion prone area",
+        name: "QLD Coastal Hazard Area: Erosion prone area",
         url: QLD_COASTAL_DOC,
         layer: EROSION_CALC,
       },

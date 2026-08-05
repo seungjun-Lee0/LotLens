@@ -1,10 +1,10 @@
 // Transactional email via Resend's HTTP API (no SDK needed). Enabled only
-// when RESEND_API_KEY is set — callers should check emailConfigured() and
+// when RESEND_API_KEY is set: callers should check emailConfigured() and
 // degrade gracefully (e.g. hide "forgot password" delivery) without it.
 //
 // EMAIL_FROM defaults to Resend's shared onboarding sender, which works
 // without domain verification but only delivers to the Resend account
-// owner's inbox — fine for beta testing, verify lotlens.au before launch.
+// owner's inbox: fine for beta testing, verify lotlens.au before launch.
 
 export function emailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
@@ -48,7 +48,7 @@ export function passwordResetHtml(link: string): string {
       Choose a new password
     </a>
     <p style="font-size:12px;line-height:1.6;color:#86868b;margin:24px 0 0;">
-      If you didn't request this, you can safely ignore this email — your
+      If you didn't request this, you can safely ignore this email: your
       password stays unchanged.
     </p>
   </div>`;

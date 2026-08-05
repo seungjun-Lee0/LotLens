@@ -82,7 +82,7 @@ export function NameForm({ initialName }: { initialName: string }) {
   );
 }
 
-/** Change password — or set one for Google-only accounts. */
+/** Change password: or set one for Google-only accounts. */
 export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -109,7 +109,7 @@ export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
         res.ok
           ? hasPassword
             ? "Password updated."
-            : "Password set — you can now log in with email too."
+            : "Password set: you can now log in with email too."
           : (body.error ?? "Update failed."),
       );
       if (res.ok) {

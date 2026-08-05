@@ -2,7 +2,7 @@
 // Re-runs the overlay fetches for a report whose last run had unreachable
 // sources (fetchFailed council_data rows) and regenerates the narrative
 // into the SAME report row. Never creates a new report, never spends
-// credits — it's a repair action, so it's only allowed when at least one
+// credits: it's a repair action, so it's only allowed when at least one
 // module actually failed.
 
 import { NextResponse } from "next/server";
@@ -41,7 +41,7 @@ export async function POST(
     `) as Array<{ module: string }>;
     if (failedRows.length === 0) {
       return NextResponse.json(
-        { error: "nothing to retry — all checks completed" },
+        { error: "nothing to retry: all checks completed" },
         { status: 409 },
       );
     }

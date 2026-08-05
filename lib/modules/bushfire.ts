@@ -1,4 +1,4 @@
-// Bushfire module — statewide Bushfire Prone Area (BPA).
+// Bushfire module: statewide Bushfire Prone Area (BPA).
 //
 // Primary source: the QFD-hosted BPA FeatureServer (proxied via
 // utility.arcgis.com). It carries the full class vocabulary ("Very High /
@@ -15,7 +15,7 @@
 // (tiles.arcgis.com, keyless):
 //   layer "out_5x5"        = bushfire prone (hazard) area
 //   layer "out_5x5_buffer" = potential impact buffer
-// The tiles carry no intensity class — the fallback classifies a hazard
+// The tiles carry no intensity class: the fallback classifies a hazard
 // hit as "Bushfire prone area" (medium) and buffer-only as the buffer
 // (low), which is exactly what QFD's own public checker reports.
 //
@@ -53,7 +53,7 @@ const HAZARD_LAYER = "out_5x5";
 const BUFFER_LAYER = "out_5x5_buffer";
 const HAZARD_CLASS = "Bushfire prone area";
 const BUFFER_CLASS = "Potential impact buffer";
-// z14 tiles are ~2.4 km wide with 0.15 m resolution — plenty for a lot.
+// z14 tiles are ~2.4 km wide with 0.15 m resolution: plenty for a lot.
 const TILE_ZOOM = 14;
 
 export type BushfireSource = { name: string; url: string; layer: string };
@@ -66,7 +66,7 @@ export type BushfireResult = {
   hazardCode: string | null;
   hasConsideration: boolean;
   sources: BushfireSource[];
-  /** Point-query GeoJSON — drives classification. */
+  /** Point-query GeoJSON: drives classification. */
   raw: unknown;
   /** Envelope-query GeoJSON (~280 m around property) for map context. */
   context: unknown;
@@ -78,7 +78,7 @@ function attrs(
   return (f?.properties ?? {}) as Record<string, unknown>;
 }
 
-// Map the BPA vocabulary to our 5-tier RiskLevel. Forgiving matcher — falls
+// Map the BPA vocabulary to our 5-tier RiskLevel. Forgiving matcher: falls
 // back to 'medium' when a hazard polygon is present but the wording is novel
 // (this also classifies the tile fallback's class-less "Bushfire prone
 // area" as medium).
@@ -119,7 +119,7 @@ function pickTileService(lat: number): string {
   const y = mercY(lat);
   const hit = TILE_SERVICES.find((s) => y >= s.ymin && y <= s.ymax);
   if (hit) return hit.url;
-  // Outside every band (shouldn't happen inside QLD) — nearest band.
+  // Outside every band (shouldn't happen inside QLD): nearest band.
   const nearest = [...TILE_SERVICES].sort(
     (a, b) =>
       Math.min(Math.abs(y - a.ymin), Math.abs(y - a.ymax)) -
@@ -167,7 +167,7 @@ async function fetchTile(
   const res = await fetch(`${service}/tile/${z}/${y}/${x}.pbf`, {
     signal: AbortSignal.timeout(15_000),
   });
-  // Missing tiles (open water, far outback) 404 — that's "no data here".
+  // Missing tiles (open water, far outback) 404: that's "no data here".
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`BPA tile ${res.status} at z${z}/${y}/${x}`);
   const buf = Buffer.from(await res.arrayBuffer());
@@ -382,7 +382,7 @@ export async function fetchBushfireData(
     return await fetchBushfireFromFeatureServer(lat, lng, lot);
   } catch {
     // The proxied FeatureServer breaks whenever QFD's stored credential
-    // lapses — the public awareness vector tiles are the durable path.
+    // lapses: the public awareness vector tiles are the durable path.
     return await fetchBushfireFromTiles(lat, lng, lot);
   }
 }

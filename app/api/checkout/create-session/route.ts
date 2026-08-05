@@ -1,6 +1,6 @@
 // POST /api/checkout/create-session
-// Body (single report): { addressId, reportId } — one-time $19 beta payment.
-// Body (subscription):  { plan: "basic" | "pro" } — requires a signed-in
+// Body (single report): { addressId, reportId }: one-time $19 beta payment.
+// Body (subscription):  { plan: "basic" | "pro" }: requires a signed-in
 // user; creates a monthly subscription Checkout. Webhook activates the plan.
 
 import { NextResponse } from "next/server";
@@ -129,7 +129,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "address not found" }, { status: 404 });
     }
     if (rows[0].paid_at) {
-      // Already paid — short-circuit back to the report page.
+      // Already paid: short-circuit back to the report page.
       return NextResponse.json({
         alreadyPaid: true,
         redirectUrl: `/report/${parsed.reportId}`,

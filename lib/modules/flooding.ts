@@ -1,4 +1,4 @@
-// Flooding module — BCC Flood Awareness Mapping (FAM).
+// Flooding module: BCC Flood Awareness Mapping (FAM).
 //
 // ─── Endpoints (BCC Brisbane open data ArcGIS) ────────────────────────────
 //
@@ -61,13 +61,13 @@ export type FloodingResult = {
   historicEvents: HistoricFloodEvent[];
   hasConsideration: boolean;
   sources: FloodingSource[];
-  /** Point-query GeoJSON — drives risk classification. */
+  /** Point-query GeoJSON: drives risk classification. */
   raw: {
     overall: unknown;
     historic2022: unknown;
     historic2011: unknown;
   };
-  /** Envelope-query GeoJSON (~280 m around the property) — for the map
+  /** Envelope-query GeoJSON (~280 m around the property): for the map
    * to show surrounding overlay context even when the property itself
    * isn't inside a polygon. */
   context: {
@@ -75,7 +75,7 @@ export type FloodingResult = {
     historic2022: unknown;
     historic2011: unknown;
   };
-  /** False outside Brisbane LGA — detailed flood-risk bands are published
+  /** False outside Brisbane LGA: detailed flood-risk bands are published
    * per-council; state FloodCheck extents are raster-only. Council flood
    * adapters for other LGAs land incrementally. */
   available: boolean;
@@ -85,7 +85,7 @@ export type FloodingResult = {
 const BCC_FAM_BASE = "https://www.brisbane.qld.gov.au/clean-and-green/natural-environment-and-water/flooding-in-brisbane/flood-awareness-map";
 
 // Council flood-band vocabularies vary ("High risk flood hazard area",
-// "Moderate Flood Risk Area", "High" …) — a forgiving keyword matcher
+// "Moderate Flood Risk Area", "High" …): a forgiving keyword matcher
 // normalises them onto our 5-tier scale.
 function classifyCouncilFlood(label: string | null): RiskLevel {
   if (!label) return "none";
@@ -110,7 +110,7 @@ async function fetchCouncilFlooding(
 ): Promise<FloodingResult> {
   const { point, context } = await queryOverlayAdapter(adapter, lat, lng, lot);
   // The lot can straddle several flood bands and feature order isn't
-  // deterministic — grade every returned band and keep the worst.
+  // deterministic: grade every returned band and keep the worst.
   const RANK = RISK_RANK;
   const label = overlayLabels(point, adapter.labelFields).reduce<string | null>(
     (worst, l) =>
@@ -168,7 +168,7 @@ function pickHistoric(
  * parallel. Returns a normalized result plus the raw GeoJSON for each layer
  * so the LLM step can cite specific fields.
  *
- * No-feature responses are valid — they mean "no consideration identified",
+ * No-feature responses are valid: they mean "no consideration identified",
  * which we surface as riskLevel='none', hasConsideration=false.
  */
 const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
@@ -206,7 +206,7 @@ export async function fetchFloodingData(
     geometryType: "esriGeometryPoint" as const,
     inSR: 4326,
     returnGeometry: false,
-    // Classify against the actual lot polygon when we have it — the
+    // Classify against the actual lot polygon when we have it: the
     // geocoded point can sit on the one corner of a lot the flood band
     // misses.
     lotPolygon: lot,
@@ -215,7 +215,7 @@ export async function fetchFloodingData(
   // only have the geocoded street-centre point. Typical Brisbane lots run
   // 30-50 m deep from the road edge, so a ~50 m half-width envelope
   // (0.00045°) is the smallest buffer that reliably catches lot-edge
-  // matches — verified against Develo's report for 61 Tingalpa Street
+  // matches: verified against Develo's report for 61 Tingalpa Street
   // where Feb 2022 sits ~50 m from the geocoded coord on the back fence
   // line. False positives are rare in practice because historic flood
   // polygons are large and contiguous: if a neighbour's lot is in the
@@ -226,10 +226,10 @@ export async function fetchFloodingData(
     geometryType: "esriGeometryPoint" as const,
     inSR: 4326,
     returnGeometry: true,
-    // ~280m envelope around the property — wide enough for street-level
+    // ~280m envelope around the property: wide enough for street-level
     // context, tight enough to keep payload bounded.
     bufferDegrees: 0.0025,
-    // Polygon vertex simplification ~10m — invisible at the map zoom we
+    // Polygon vertex simplification ~10m: invisible at the map zoom we
     // use but keeps the envelope payload to ~10s of KB.
     maxAllowableOffset: 0.00003,
   };
@@ -247,7 +247,7 @@ export async function fetchFloodingData(
       queryArcGIS(HISTORIC_2011, { ...contextParams, outFields: fieldsHist }),
     ]);
 
-  // A lot-polygon query can straddle several risk bands — report the worst.
+  // A lot-polygon query can straddle several risk bands: report the worst.
 
   const worstOverall = [...overall.features].sort(
     (a, b) =>
@@ -268,7 +268,7 @@ export async function fetchFloodingData(
   if (ev11) historicEvents.push(ev11);
 
   // A lot outside every current FAM band that nonetheless went under in
-  // 2011 or 2022 is not "all clear" — flood reality beats flood model. It
+  // 2011 or 2022 is not "all clear": flood reality beats flood model. It
   // used to keep riskLevel='none' while flagging hasConsideration, which
   // rendered as a green warning chip reading "Considerations · All clear".
   // Promote it to Low so severity and finding agree.
@@ -288,12 +288,12 @@ export async function fetchFloodingData(
         layer: FAM_OVERALL,
       },
       {
-        name: "BCC Historic Floods — February 2022",
+        name: "BCC Historic Floods: February 2022",
         url: BCC_FAM_BASE,
         layer: HISTORIC_2022,
       },
       {
-        name: "BCC Historic Floods — January 2011",
+        name: "BCC Historic Floods: January 2011",
         url: BCC_FAM_BASE,
         layer: HISTORIC_2011,
       },

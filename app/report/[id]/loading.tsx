@@ -1,4 +1,4 @@
-// Instant skeleton for /report/[id] — shown by the App Router the moment
+// Instant skeleton for /report/[id]: shown by the App Router the moment
 // navigation commits, while loadReportPayload (DB + cadastre fetches) runs
 // on the server. Mirrors the real page's layout so the swap doesn't jump.
 

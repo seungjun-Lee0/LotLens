@@ -1,4 +1,4 @@
-// POST /api/auth/forgot-password — { email }
+// POST /api/auth/forgot-password: { email }
 // Always answers 200 with the same body so the endpoint can't be used to
 // probe which emails have accounts. When the user exists and email sending
 // is configured, a single-use 1-hour reset link is issued.
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 
   try {
     if (!emailConfigured()) {
-      // No sender configured — still answer generically.
+      // No sender configured: still answer generically.
       console.warn("[auth/forgot-password] RESEND_API_KEY not set; skipping send");
       return NextResponse.json(GENERIC);
     }
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     if (rows.length === 0) return NextResponse.json(GENERIC);
     const userId = rows[0].id;
 
-    // One live token per user — a new request invalidates older links.
+    // One live token per user: a new request invalidates older links.
     await sql`
       DELETE FROM password_resets WHERE user_id = ${userId} AND used_at IS NULL
     `;
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
     return NextResponse.json(GENERIC);
   } catch (err) {
     console.error("[auth/forgot-password] failed:", err);
-    // Still generic — never leak internals to this endpoint.
+    // Still generic: never leak internals to this endpoint.
     return NextResponse.json(GENERIC);
   }
 }

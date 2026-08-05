@@ -36,7 +36,7 @@ async function markPaid(session: Stripe.Checkout.Session) {
 }
 
 // Newer Stripe API versions expose current_period_end on the subscription
-// item rather than the subscription itself — read whichever is present.
+// item rather than the subscription itself: read whichever is present.
 function periodEnd(sub: Stripe.Subscription): string | null {
   const raw =
     (sub as unknown as { current_period_end?: number }).current_period_end ??
@@ -48,7 +48,7 @@ function periodEnd(sub: Stripe.Subscription): string | null {
  * Persist subscription state onto the user row (idempotent) and manage the
  * credit balance:
  *   - activation / new billing period / plan change → credits reset to the
- *     plan's quota (basic 10, pro 50) — plans renew monthly, they don't
+ *     plan's quota (basic 10, pro 50): plans renew monthly, they don't
  *     accumulate or top up mid-cycle;
  *   - cancellation / non-active status → plan back to free, credits zeroed.
  */
@@ -96,7 +96,7 @@ async function syncSubscription(sub: Stripe.Subscription) {
   `;
 }
 
-/** checkout.session.completed router — one-time report vs subscription. */
+/** checkout.session.completed router: one-time report vs subscription. */
 async function handleSessionCompleted(
   stripe: Stripe,
   session: Stripe.Checkout.Session,
@@ -164,7 +164,7 @@ export async function POST(req: Request) {
   return NextResponse.json({ received: true });
 }
 
-// GET /api/checkout/webhook?session_id=... — polling fallback the report
+// GET /api/checkout/webhook?session_id=...: polling fallback the report
 // page uses while the webhook is in-flight.
 export async function GET(req: Request) {
   const url = new URL(req.url);

@@ -1,6 +1,6 @@
 // Shrink GeoJSON payloads before they hit the database.
 //
-// Some statutory overlays are enormous — the Brisbane River flood planning
+// Some statutory overlays are enormous: the Brisbane River flood planning
 // area is a ~7 MB multipolygon with thousands of parts tracing the whole
 // river. Storing it verbatim costs seconds of Neon upload per report and
 // again on every read. The report map only ever shows a ~300 m viewport,
@@ -11,7 +11,7 @@
 //   3. decimate any ring with more vertices than MAX_RING_VERTICES
 //      (endpoints preserved so rings stay closed).
 //
-// Attributes and structure are untouched — risk classification happens
+// Attributes and structure are untouched: risk classification happens
 // before slimming, this only affects what gets drawn.
 
 const MAX_RING_VERTICES = 1200;

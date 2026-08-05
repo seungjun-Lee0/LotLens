@@ -1,4 +1,4 @@
-// POST /api/auth/signup — { email, password, name? }
+// POST /api/auth/signup: { email, password, name? }
 // Creates a user with a bcrypt password hash and signs them in.
 
 import { NextResponse } from "next/server";

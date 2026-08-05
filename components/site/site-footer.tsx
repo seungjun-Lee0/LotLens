@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-// Shared site footer — brand line, legal links, scope tagline. Used on the
+// Shared site footer: brand line, legal links, scope tagline. Used on the
 // landing page, report pages and the legal pages so the links (and the
 // "public data only" framing) are visible everywhere.
 export function SiteFooter() {

@@ -1,4 +1,4 @@
-// GET /api/auth/google — kicks off the Google OAuth code flow.
+// GET /api/auth/google: kicks off the Google OAuth code flow.
 // Active only when GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are set.
 
 import { NextResponse } from "next/server";

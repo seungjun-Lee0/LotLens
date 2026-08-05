@@ -2,7 +2,7 @@
 //
 // All Brisbane spatial layers we use are hosted on the same FeatureServer
 // pattern: `.../FeatureServer/<layer>/query`. They use varying native SRIDs
-// (BCC layers are mostly EPSG:28356 — GDA94 / MGA Zone 56), but accept
+// (BCC layers are mostly EPSG:28356: GDA94 / MGA Zone 56), but accept
 // reprojected geometry via inSR. We pass lat/lng (EPSG:4326) everywhere and
 // let ArcGIS do the math.
 //
@@ -28,7 +28,7 @@ export type QueryArcGISParams = {
   /**
    * Half-width of an envelope drawn around the point, in `inSR` degrees.
    * Use a small positive value (~5e-5 ≈ 5m at Brisbane latitude) for thin
-   * corridor layers — point queries near polygon boundaries can miss
+   * corridor layers: point queries near polygon boundaries can miss
    * features when ArcGIS reprojects from EPSG:28356 to EPSG:4326. Default
    * 0 = exact point query.
    */
@@ -41,7 +41,7 @@ export type QueryArcGISParams = {
    */
   maxAllowableOffset?: number;
   /**
-   * GeoJSON Polygon/MultiPolygon in EPSG:4326 — the cadastre lot. When set,
+   * GeoJSON Polygon/MultiPolygon in EPSG:4326: the cadastre lot. When set,
    * the query runs as an esriGeometryPolygon intersect against this shape
    * instead of the point/envelope, so "consideration applies" means
    * "anywhere on the lot", not "at the geocoded point" (which can sit on a
@@ -78,7 +78,7 @@ const DEBUG = process.env.NEXT_PUBLIC_DEBUG === "true";
  * Run an esriGeometryPoint intersect query and return GeoJSON.
  *
  * The result's `features` array is empty when the point falls outside every
- * polygon in the layer — that's the "no consideration identified" case, not
+ * polygon in the layer: that's the "no consideration identified" case, not
  * an error.
  */
 export async function queryArcGIS(
@@ -117,7 +117,7 @@ export async function queryArcGIS(
     outFields: params.outFields ?? "*",
     returnGeometry: String(params.returnGeometry ?? false),
     outSR: "4326",
-    // 6 decimal places ≈ 0.1 m — full-precision coordinates double the
+    // 6 decimal places ≈ 0.1 m: full-precision coordinates double the
     // payload of big polygons for zero visible benefit.
     geometryPrecision: "6",
   });
@@ -128,7 +128,7 @@ export async function queryArcGIS(
   }
   const url = `${endpoint}?${search.toString()}`;
   // Polygon queries always go as form POSTs: every ArcGIS server accepts
-  // the same params in a POST body, and GET URL limits vary wildly —
+  // the same params in a POST body, and GET URL limits vary wildly -
   // services-ap1.arcgis.com (Gold Coast et al.) 404s at ~3.5k chars, which
   // a ~70-vertex lot polygon already exceeds. Point/envelope queries stay
   // GET (shorter, and friendlier to any HTTP-level caching).

@@ -1,4 +1,4 @@
-// Session auth — email+password (bcrypt) and Google OAuth, hand-rolled on
+// Session auth: email+password (bcrypt) and Google OAuth, hand-rolled on
 // a signed JWT in an httpOnly cookie. No NextAuth: the surface we need is
 // small (signup/login/logout/session) and this keeps us off beta-adapter
 // churn. Server-only.

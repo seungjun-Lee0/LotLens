@@ -35,7 +35,7 @@ export default async function ReportPage({
   const sp = (await searchParams) ?? {};
   // Best-effort: if Stripe redirected back with session_id, ping the
   // webhook GET handler so paid_at is set even when the async webhook
-  // hasn't landed yet. We don't await response — the page server-render
+  // hasn't landed yet. We don't await response: the page server-render
   // re-loads paid status straight from the DB after.
   if (sp.session_id) {
     try {
@@ -44,7 +44,7 @@ export default async function ReportPage({
         { cache: "no-store" },
       );
     } catch {
-      // ignore — the webhook itself will eventually catch up
+      // ignore: the webhook itself will eventually catch up
     }
   }
 
@@ -52,7 +52,7 @@ export default async function ReportPage({
   if (!payload) notFound();
 
   const { report, address, modules, propertyPolygon, parcelLines } = payload;
-  // Admins bypass the paywall outright — full report, no unlock, no
+  // Admins bypass the paywall outright: full report, no unlock, no
   // credit spend (ADMIN_EMAILS env).
   const paid = payload.paid || isAdmin(await getSessionUser());
   const isFailed = (m: (typeof modules)[number]) =>
@@ -67,7 +67,7 @@ export default async function ReportPage({
   //   clear          → compact evidence strip, no map
   // Note what informational is NOT: it is not the "clear" lane. School
   // catchments and the zone code are the content buyers actually read, so
-  // they keep their map and narrative — they just stop shouting.
+  // they keep their map and narrative: they just stop shouting.
   // Body keeps the canonical module order (comparable across reports);
   // severity-first reading lives in the At-a-glance verdict layer.
   const attentionModules = paid
@@ -95,7 +95,7 @@ export default async function ReportPage({
       <SiteHeader />
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 pb-16 pt-8 sm:gap-10 sm:px-6 sm:pb-24 sm:pt-16">
-        {/* Hero band — title + download */}
+        {/* Hero band: title + download */}
         <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div className="min-w-0">
             <div className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
@@ -116,7 +116,7 @@ export default async function ReportPage({
           )}
         </header>
 
-        {/* Partial-failure banner — some sources were unreachable last run */}
+        {/* Partial-failure banner: some sources were unreachable last run */}
         {failedCount > 0 && (
           <RetryChecks reportId={report.id} failedCount={failedCount} />
         )}
@@ -124,7 +124,7 @@ export default async function ReportPage({
         {/* At a glance */}
         <AtAGlance payload={payload} />
 
-        {/* Module sections — full treatment for flagged/failed checks
+        {/* Module sections: full treatment for flagged/failed checks
             (flooding preview + paywall when unpaid) */}
         <div className="flex flex-col gap-6">
           {attentionModules.map((row) => (
@@ -150,7 +150,7 @@ export default async function ReportPage({
                   Good to know
                 </h2>
                 <p className="max-w-xl text-pretty text-[13.5px] leading-relaxed text-muted-foreground sm:text-[14px]">
-                  Facts about the address rather than warnings — what the land
+                  Facts about the address rather than warnings: what the land
                   is zoned for, which schools it&apos;s in catchment for, what
                   transport is nearby. Nothing here needs action.
                 </p>
@@ -222,11 +222,11 @@ export default async function ReportPage({
         </section>
       </main>
 
-      {/* Floating jump-to-module nav — only when the body has enough
+      {/* Floating jump-to-module nav: only when the body has enough
           full sections to make scrolling a chore. */}
       {paid && (
         <ModuleNav
-          // Every module that rendered a section, in body order — the nav
+          // Every module that rendered a section, in body order: the nav
           // has to reach the informational ones too or "jump to Zoning"
           // silently does nothing.
           items={[...attentionModules, ...infoModules].map((m) => ({

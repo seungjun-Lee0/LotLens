@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { LegalPage, LegalSection } from "@/components/site/legal";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — LotLens",
+  title: "Terms of Service: LotLens",
   description:
     "The terms that apply when you use LotLens Queensland property reports.",
 };
@@ -34,7 +34,7 @@ export default function TermsPage() {
         </p>
         <p>
           Where a report shows that a check was unavailable or could not be
-          completed, that means <strong>not checked — not clear</strong>.
+          completed, that means <strong>not checked: not clear</strong>.
         </p>
       </LegalSection>
 
@@ -45,7 +45,7 @@ export default function TermsPage() {
           incomplete, out of date, generalised in scale, or temporarily
           unavailable, and coverage differs between council areas. We do not
           warrant that any dataset is accurate, complete or current, and map
-          overlays are indicative only — boundaries are not survey-accurate.
+          overlays are indicative only: boundaries are not survey-accurate.
         </p>
       </LegalSection>
 
@@ -86,7 +86,7 @@ export default function TermsPage() {
         <p>
           The LotLens name, report design and software are ours. The
           underlying government and council data remains subject to its own
-          licences — see the{" "}
+          licences: see the{" "}
           <a href="/attribution">Data sources &amp; attribution</a> page.
           Reports you purchase are for your own use in connection with the
           relevant property.

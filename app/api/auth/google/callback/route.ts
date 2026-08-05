@@ -1,4 +1,4 @@
-// GET /api/auth/google/callback — exchanges the code, verifies the Google
+// GET /api/auth/google/callback: exchanges the code, verifies the Google
 // id_token (signature via Google's JWKS), upserts the user, signs them in.
 
 import { NextResponse } from "next/server";

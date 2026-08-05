@@ -1,4 +1,4 @@
-// POST /api/auth/profile — { name } — update display name.
+// POST /api/auth/profile: { name }: update display name.
 
 import { NextResponse } from "next/server";
 import { z } from "zod";

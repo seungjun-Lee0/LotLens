@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 // Typography shell for the legal pages (/privacy, /terms, /attribution).
-// Plain server components — no interactivity, just consistent prose styling.
+// Plain server components: no interactivity, just consistent prose styling.
 
 export function LegalPage({
   title,

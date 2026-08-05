@@ -94,7 +94,7 @@ export default async function AccountPage({
               color: "var(--apple-green)",
             }}
           >
-            ✓ Subscription active — welcome aboard.
+            ✓ Subscription active: welcome aboard.
           </div>
         )}
 
@@ -148,14 +148,14 @@ export default async function AccountPage({
                     <b className="font-semibold text-foreground">
                       No credits left this cycle
                     </b>{" "}
-                    — credits reset when your plan renews
+                   : credits reset when your plan renews
                     {renews ? ` on ${renews}` : ""}. Single reports at $19 still
                     work meanwhile.
                   </>
                 ) : (
                   <>
                     1 credit unlocks 1 full report. Credits reset to {quota} when
-                    your plan renews — they don&rsquo;t accumulate or top up
+                    your plan renews: they don&rsquo;t accumulate or top up
                     mid-cycle.
                   </>
                 )}
@@ -198,7 +198,7 @@ export default async function AccountPage({
           </section>
         )}
 
-        {/* Report branding — subscriber feature */}
+        {/* Report branding: subscriber feature */}
         {subscriber && (
           <section className="glass flex flex-col gap-4 rounded-3xl p-6">
             <div>

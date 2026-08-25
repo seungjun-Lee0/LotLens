@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import { Download, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 
 import { SiteHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { AtAGlance } from "@/components/report/at-a-glance";
 import { ClearModules } from "@/components/report/clear-modules";
+import { DownloadPdfButton } from "@/components/report/download-pdf-button";
 import { ModuleSection } from "@/components/report/module-section";
 import { ModuleNav } from "@/components/report/module-nav";
 import { NextSteps } from "@/components/report/next-steps";
@@ -105,15 +106,7 @@ export default async function ReportPage({
               {formatAuAddress(address.address_text, payload.postcode)}
             </h1>
           </div>
-          {paid && (
-            <a
-              href={`/api/report/${report.id}/pdf`}
-              className="glass inline-flex h-10 shrink-0 items-center gap-2 self-start rounded-full px-4 text-[13px] font-medium text-foreground/80 transition hover:text-foreground sm:self-end sm:text-[13.5px]"
-            >
-              <Download className="size-4" />
-              Download PDF
-            </a>
-          )}
+          {paid && <DownloadPdfButton reportId={report.id} />}
         </header>
 
         {/* Partial-failure banner: some sources were unreachable last run */}

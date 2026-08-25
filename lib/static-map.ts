@@ -188,6 +188,37 @@ function propertyParts(
 }
 
 /**
+ * Fire-and-forget imagery warmer for the PDF route. The upstream
+ * exportImage calls (~2 s each) dominate the render, and none of them
+ * need the full report payload — so the loader kicks this off as soon
+ * as the coordinates and parcel polygon are known, and the later render
+ * calls hit the basePromises memo instead of the network.
+ *
+ * `propertyPolygon` must be the SAME polygon the render will use:
+ * frameFor widens the frame to fit the parcel, so warming without it
+ * computes a different frame and misses the memo (a wasted fetch, never
+ * a wrong image — the memo key is the exact bbox).
+ */
+export function warmFrames(
+  lat: number,
+  lng: number,
+  propertyPolygon: unknown | null = null,
+  transportPoints?: number[][],
+): void {
+  const warm = (w: number, h: number, pts: number[][] = []) => {
+    const frame = frameFor(lat, lng, w, h, propertyPolygon, pts);
+    getBasePNG(frame, w, h).catch(() => {});
+  };
+  if (transportPoints && transportPoints.length > 0) {
+    // The transport module's widened frame — its own upstream call.
+    warm(1200, 720, transportPoints);
+  } else {
+    warm(1200, 720); // shared lot-scale frame, every other module map
+    warm(1050, 1486); // cover aerial
+  }
+}
+
+/**
  * Render a property-centric map image at a fixed lot-scale frame with
  * overlay polygons painted in their fill colours.
  *

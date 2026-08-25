@@ -86,7 +86,10 @@ create index if not exists password_resets_user_idx on password_resets(user_id);
 
 -- PDF report branding (subscriber feature): the fact pack renders the
 -- customer's name/logo/accent instead of plain LotLens.
--- brand_color is #rrggbb; brand_logo_url an https PNG/JPG.
+-- brand_color is #rrggbb; brand_logo_url is either an https PNG/JPG URL
+-- or a data:image/...;base64 URI for logos uploaded from the account page
+-- (resized client-side to ≤1024 px, ≤ 4M chars of base64 — no separate
+-- blob storage).
 alter table users add column if not exists brand_name text;
 alter table users add column if not exists brand_color text;
 alter table users add column if not exists brand_logo_url text;

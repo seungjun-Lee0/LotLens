@@ -34,8 +34,10 @@ export async function POST(req: Request) {
     typeof body.brandName === "string" ? body.brandName.trim().slice(0, 60) : "";
   const color =
     typeof body.brandColor === "string" ? body.brandColor.trim() : "";
-  const logo =
-    typeof body.brandLogoUrl === "string" ? body.brandLogoUrl.trim().slice(0, 300) : "";
+  // No slice here: an uploaded logo arrives as a data: URI far longer than
+  // any URL, and truncating one corrupts the image. Each form is validated
+  // and capped on its own terms below.
+  const logo = typeof body.brandLogoUrl === "string" ? body.brandLogoUrl.trim() : "";
 
   if (color && !HEX_RE.test(color)) {
     return NextResponse.json(
@@ -43,7 +45,23 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  if (logo && !/^https:\/\//i.test(logo)) {
+  if (logo.startsWith("data:")) {
+    // Uploaded from the account page, already resized client-side to
+    // ≤1024 px. 4M chars of base64 ≈ a 3 MB image — anything bigger got
+    // past the client resize, so refuse it.
+    if (!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(logo)) {
+      return NextResponse.json(
+        { error: "Uploaded logo must be a PNG or JPG image." },
+        { status: 400 },
+      );
+    }
+    if (logo.length > 4_000_000) {
+      return NextResponse.json(
+        { error: "Uploaded logo is too large even after resizing." },
+        { status: 400 },
+      );
+    }
+  } else if (logo && (!/^https:\/\//i.test(logo) || logo.length > 300)) {
     return NextResponse.json(
       { error: "Logo must be an https image URL." },
       { status: 400 },

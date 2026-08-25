@@ -46,7 +46,19 @@ async function loadBranding(reportId: string): Promise<ReportBranding | null> {
       return null;
     }
     let logo: Buffer | null = null;
-    if (u.brand_logo_url && /^https:\/\//i.test(u.brand_logo_url)) {
+    const m = u.brand_logo_url
+      ? /^data:image\/(?:png|jpeg);base64,([A-Za-z0-9+/=]+)$/.exec(u.brand_logo_url)
+      : null;
+    if (m) {
+      // Uploaded from the account page: the image bytes ARE the value.
+      // Cap matches the branding API's 4M-char base64 ceiling (~3 MB).
+      try {
+        const buf = Buffer.from(m[1], "base64");
+        if (buf.length > 0 && buf.length <= 3_000_000) logo = buf;
+      } catch {
+        /* logo is optional */
+      }
+    } else if (u.brand_logo_url && /^https:\/\//i.test(u.brand_logo_url)) {
       try {
         const res = await fetch(u.brand_logo_url, {
           signal: AbortSignal.timeout(5000),
@@ -78,7 +90,9 @@ export async function GET(
 ) {
   const { id } = await context.params;
   const [payload, branding] = await Promise.all([
-    loadReportPayload(id),
+    // warmImagery: start the ~2 s QLD aerial fetches while the multi-MB
+    // council_data transfer is still streaming, instead of after it.
+    loadReportPayload(id, { warmImagery: true }),
     loadBranding(id),
   ]);
   if (!payload) {

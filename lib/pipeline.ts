@@ -385,39 +385,99 @@ export type ReportPayload = {
 
 export async function loadReportPayload(
   reportId: string,
+  opts?: {
+    /** PDF route only: prefetch the QLD aerial frames as soon as the
+     * coordinates (and later the transport stops) are known, so the
+     * ~2 s-per-frame upstream imagery calls overlap the multi-MB
+     * council_data transfer instead of queueing behind it. */
+    warmImagery?: boolean;
+  },
 ): Promise<ReportPayload | null> {
   const sql = getDb();
 
-  const reportRows = (await sql`
-    SELECT id, address_id, narrative, generated_at
-    FROM reports
-    WHERE id = ${reportId}
+  // Both queries fire in one round trip: report+address joined, and
+  // council_data keyed through a subquery instead of waiting for the
+  // report row to come back first. (Was three sequential round trips.)
+  // The multi-MB council_data transfer is this loader's long pole, so it
+  // stays a promise while the address-dependent work below gets going.
+  const dataRowsPromise = sql`
+    SELECT module, risk_level, has_consideration,
+           source_name, source_url, raw_response
+    FROM council_data
+    WHERE address_id = (SELECT address_id FROM reports WHERE id = ${reportId})
+  `;
+  const reportRows = await sql`
+    SELECT r.id, r.address_id, r.narrative, r.generated_at,
+           a.address_text, a.lat, a.lng, a.paid_at
+    FROM reports r
+    JOIN addresses a ON a.id = r.address_id
+    WHERE r.id = ${reportId}
     LIMIT 1
-  `) as Array<{
+  `;
+  if ((reportRows as unknown[]).length === 0) {
+    dataRowsPromise.catch(() => {}); // abandoned — don't leak a rejection
+    return null;
+  }
+  const joined = (reportRows as Array<{
     id: string;
     address_id: string;
     narrative: unknown;
     generated_at: string;
-  }>;
-  if (reportRows.length === 0) return null;
-  const report = reportRows[0];
+    address_text: string;
+    lat: number;
+    lng: number;
+    paid_at: string | null;
+  }>)[0];
+  const report = joined;
+  const address = {
+    id: joined.address_id,
+    address_text: joined.address_text,
+    lat: joined.lat,
+    lng: joined.lng,
+    paid_at: joined.paid_at,
+  } as Address;
 
-  const [addrRows, dataRows] = await Promise.all([
-    sql`
-      SELECT id, address_text, lat, lng, paid_at
-      FROM addresses
-      WHERE id = ${report.address_id}
-      LIMIT 1
-    `,
-    sql`
-      SELECT module, risk_level, has_consideration,
-             source_name, source_url, raw_response
-      FROM council_data
-      WHERE address_id = ${report.address_id}
-    `,
+  // Parcel polygon + neighbour lot lines + postcode need only the
+  // coordinates — start them now so they overlap the council transfer.
+  const parcelBatch = Promise.all([
+    fetchPropertyParcel(address.lat, address.lng),
+    fetchParcelLinesNear(address.lat, address.lng),
+    fetchPostcode(address.lat, address.lng),
   ]);
-  if ((addrRows as unknown[]).length === 0) return null;
-  const address = (addrRows as Address[])[0];
+
+  if (opts?.warmImagery) {
+    // Fire-and-forget. Warms the shared module frame + cover as soon as
+    // the parcel polygon exists (the frame depends on it — warming
+    // without it computes a different bbox and misses the memo), then the
+    // transport module's widened frame from a row-sized query rather than
+    // waiting on the full council_data transfer.
+    // Dynamic imports: static-map drags sharp in, and the web report page
+    // (the other caller of this loader) never needs it.
+    void (async () => {
+      const [{ warmFrames }, { extractOverlays }, [parcelRes]] =
+        await Promise.all([
+          import("@/lib/static-map"),
+          import("@/lib/overlays"),
+          parcelBatch,
+        ]);
+      warmFrames(address.lat, address.lng, parcelRes.polygon);
+      const tRows = (await sql`
+        SELECT raw_response FROM council_data
+        WHERE address_id = ${address.id} AND module = 'transport'
+        LIMIT 1
+      `) as Array<{ raw_response: unknown }>;
+      if (!tRows[0]) return;
+      const pts: number[][] = [];
+      for (const f of extractOverlays("transport", tRows[0].raw_response)) {
+        if (f.geometry?.type === "Point") pts.push(f.geometry.coordinates);
+      }
+      if (pts.length > 0) {
+        warmFrames(address.lat, address.lng, parcelRes.polygon, pts);
+      }
+    })().catch(() => {});
+  }
+
+  const dataRows = await dataRowsPromise;
   const rows = dataRows as Pick<
     CouncilDataRow,
     "module" | "risk_level" | "has_consideration" | "source_name" | "source_url" | "raw_response"
@@ -439,16 +499,10 @@ export async function loadReportPayload(
       };
     });
 
-  // Fetch the actual cadastre lot polygon + metadata from BCC's
-  // property_boundaries_parcel layer. ~150 ms extra per page load,
-  // dwarfed by the rest of the pipeline. Cleanly replaces our previous
-  // hack of using the zoning module's polygon (which actually spans
-  // the whole zone-precinct area: hundreds of metres across).
-  const [parcel, parcelLines, postcode] = await Promise.all([
-    fetchPropertyParcel(address.lat, address.lng),
-    fetchParcelLinesNear(address.lat, address.lng),
-    fetchPostcode(address.lat, address.lng),
-  ]);
+  // Cadastre lot polygon + metadata from BCC's property_boundaries_parcel
+  // layer — the batch was kicked off right after the address arrived, so
+  // by now it has usually already resolved.
+  const [parcel, parcelLines, postcode] = await parcelBatch;
 
   // Zoning polygon as the final fallback when the parcel lookup misses
   // (e.g. geocoded coord on a road centreline).

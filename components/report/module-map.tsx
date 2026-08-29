@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
@@ -118,6 +118,10 @@ export function ModuleMap({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  // Legend isolate: tap a legend row to show only that layer. Holds each
+  // overlay layer's base filter so the label condition can be AND-ed onto it.
+  const baseFiltersRef = useRef<Array<[string, unknown]>>([]);
+  const [isolated, setIsolated] = useState<string | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -133,6 +137,11 @@ export function ModuleMap({
       style: buildBasemapStyle(),
     });
     mapRef.current = map;
+
+    // Tapping the map clears any legend isolate — an intuitive "show all"
+    // that never fights the user with a timer. (Legend taps hit the HTML
+    // overlay, not the canvas, so they don't trigger this.)
+    map.on("click", () => setIsolated(null));
 
     map.on("load", async () => {
       if (overlays.length > 0) {
@@ -159,6 +168,21 @@ export function ModuleMap({
         // border over that polygon's own 35% fill, but LineString features
         // (stormwater pipes, contours) ARE their colour: darkening a
         // contour breaks the elevation ramp, so they get their own layer.
+        // White casing UNDER the outline for boundary-only overlays (school
+        // catchments): a thin green thread vanishes over the aerial, so a
+        // white halo makes it read over both dark trees and light rooftops.
+        map.addLayer({
+          id: "overlay-line-casing",
+          type: "line",
+          source: "overlays",
+          filter: ["all", ["==", ["geometry-type"], "Polygon"], ["has", "strokeWidth"]],
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: {
+            "line-color": "#ffffff",
+            "line-width": ["+", ["coalesce", ["get", "strokeWidth"], 2.4], 3],
+            "line-opacity": 0.85,
+          },
+        });
         map.addLayer({
           id: "overlay-line",
           type: "line",
@@ -172,7 +196,8 @@ export function ModuleMap({
             // Darkened fill colour (see lib/overlays.ts) at full opacity -
             // a same-hue outline over a 35% fill blurs into it.
             "line-color": ["coalesce", ["get", "strokeColor"], ["get", "fillColor"]],
-            "line-width": 2.4,
+            // Boundary-only overlays (catchments) opt into a bolder width.
+            "line-width": ["coalesce", ["get", "strokeWidth"], 2.4],
             "line-opacity": 1,
           },
         });
@@ -360,6 +385,20 @@ export function ModuleMap({
           });
         }
       }
+
+      // Snapshot each overlay layer's base filter so the legend can isolate
+      // one layer by AND-ing a legendLabel condition onto it (and restore it
+      // on deselect) without re-deriving the geometry-type filters.
+      baseFiltersRef.current = [
+        "overlay-fill",
+        "overlay-line-casing",
+        "overlay-line",
+        "overlay-linestrings",
+        "overlay-points",
+        "overlay-stop-icons",
+      ]
+        .filter((id) => map.getLayer(id))
+        .map((id) => [id, map.getFilter(id) ?? null]);
     });
 
     return () => {
@@ -371,6 +410,32 @@ export function ModuleMap({
     // overlays, switch to setData on the existing source instead of recreating.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Apply the legend isolate: only features whose legendLabel matches the
+  // tapped row stay visible (the property outline is a separate source, so
+  // isolating it just hides every overlay). Deselect restores base filters.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = () => {
+      // The selected-property outline is its own source/layer, so it's never
+      // filtered here — it stays visible regardless of the isolate.
+      for (const [id, base] of baseFiltersRef.current) {
+        if (!map.getLayer(id)) continue;
+        let filter = base;
+        if (isolated) {
+          const cond = ["==", ["get", "legendLabel"], isolated];
+          filter = base ? ["all", base, cond] : cond;
+        }
+        map.setFilter(id, (filter ?? undefined) as maplibregl.FilterSpecification | undefined);
+      }
+    };
+    if (map.isStyleLoaded()) apply();
+    else map.once("idle", apply);
+  }, [isolated]);
+
+  const toggleIsolate = (label: string) =>
+    setIsolated((prev) => (prev === label ? null : label));
 
   const applicableKeys = new Set(
     applicableOverlays.map((f) => `${f.properties.fillColor}|${f.properties.legendLabel}`),
@@ -405,9 +470,9 @@ export function ModuleMap({
         style={{ background: "var(--muted)" }}
         aria-label="Property location map"
       />
-      <div className="pointer-events-none absolute left-2 top-2 z-10 max-w-[58%] sm:left-auto sm:right-3 sm:top-3 sm:max-w-[48%]">
+      <div className="pointer-events-none absolute left-2 top-2 z-10 max-w-[62%] sm:left-auto sm:right-3 sm:top-3 sm:max-w-[52%]">
         <div
-          className="rounded-lg px-1.5 py-1 text-[8.5px] leading-tight shadow-[0_4px_18px_-6px_rgba(0,0,0,0.4)] sm:rounded-xl sm:px-2.5 sm:py-2 sm:text-[11px]"
+          className="pointer-events-auto rounded-lg px-1.5 py-1 text-[8.5px] leading-tight shadow-[0_4px_18px_-6px_rgba(0,0,0,0.4)] sm:rounded-xl sm:px-2.5 sm:py-2 sm:text-[11px]"
           style={{
             background: "rgba(255,255,255,0.92)",
             backdropFilter: "saturate(180%) blur(14px)",
@@ -416,7 +481,8 @@ export function ModuleMap({
           }}
         >
           <ul className="flex flex-col gap-0.5 sm:gap-1">
-            <li className="flex items-center gap-1.5 sm:gap-2">
+            {/* Selected property: always shown, never a toggle. */}
+            <li className="flex items-center gap-1.5 px-0.5 sm:gap-2">
               <span
                 className="size-1.5 shrink-0 rounded-sm sm:size-2.5"
                 style={{
@@ -426,33 +492,41 @@ export function ModuleMap({
               />
               <span className="truncate font-medium">{SELECTED_PROPERTY_STYLE.label}</span>
             </li>
-            {appliesItems.map((item) => (
-              <li key={`applies-${item.color}-${item.label}`} className="flex items-center gap-1.5 sm:gap-2">
-                <span
-                  className="size-1.5 shrink-0 rounded-sm sm:size-2.5"
-                  style={{
-                    background: item.color,
-                    outline: `1px solid color-mix(in oklab, ${item.color} 75%, transparent)`,
-                  }}
-                />
-                <span className="truncate font-medium">{item.label}</span>
-              </li>
-            ))}
-            {nearbyItems.map((item) => (
-              <li
-                key={`nearby-${item.color}-${item.label}`}
-                className="flex items-center gap-1.5 opacity-65 sm:gap-2"
-              >
-                <span
-                  className="size-1.5 shrink-0 rounded-sm sm:size-2.5"
-                  style={{
-                    background: item.color,
-                    outline: `1px solid color-mix(in oklab, ${item.color} 65%, transparent)`,
-                  }}
-                />
-                <span className="truncate font-medium">{item.label}</span>
-              </li>
-            ))}
+            {[...appliesItems, ...nearbyItems].map((item) => {
+              const on = isolated === item.label;
+              const dim = isolated != null && !on;
+              return (
+                <li key={`${item.color}-${item.label}`}>
+                  <button
+                    type="button"
+                    onClick={() => toggleIsolate(item.label)}
+                    aria-pressed={on}
+                    title={
+                      on ? `Showing ${item.label} only — tap to show all` : `Show ${item.label} only`
+                    }
+                    className={`flex w-full items-center gap-1.5 rounded px-1 py-px text-left transition sm:gap-2 ${dim ? "opacity-35" : ""} ${on ? "font-semibold" : "hover:bg-black/5"}`}
+                    style={
+                      on
+                        ? {
+                            background: `color-mix(in oklab, ${item.color} 20%, transparent)`,
+                            // ring colour via boxShadow so it uses the item hue
+                            boxShadow: `inset 0 0 0 1.5px ${item.color}`,
+                          }
+                        : undefined
+                    }
+                  >
+                    <span
+                      className={`shrink-0 rounded-sm ${on ? "size-2 sm:size-3" : "size-1.5 sm:size-2.5"}`}
+                      style={{
+                        background: item.color,
+                        outline: `1px solid color-mix(in oklab, ${item.color} 75%, transparent)`,
+                      }}
+                    />
+                    <span className="truncate font-medium">{item.label}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>

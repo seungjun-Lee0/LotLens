@@ -34,10 +34,18 @@ export type OverlayFeature = Feature<
     strokeColor: string;
     legendLabel: string;
     fillOpacity?: number;
+    /** Outline width override (px). Set for boundary-only overlays like
+     * school catchments that need a bold, white-cased line to read. */
+    strokeWidth?: number;
   }
 >;
 
-type Classified = { fillColor: string; legendLabel: string; fillOpacity?: number };
+type Classified = {
+  fillColor: string;
+  legendLabel: string;
+  fillOpacity?: number;
+  strokeWidth?: number;
+};
 type OverlayScope = "context" | "property";
 
 /** Outline colour for a fill: the same hue scaled down to a FIXED
@@ -91,9 +99,15 @@ export const DEVELO_HEX = {
   fireMedium:   "#f59e0b",
 
   // Heritage / Character: purple family
-  heritageState:     "#7e22ce",
-  heritageLocal:     "#db2777",
-  heritageCharacter: "#a855f7",
+  // Matched to BCC City Plan symbology: heritage register = blue family,
+  // character overlays = purple/pink family. Local heritage (#0070ff) and
+  // both character fills are the layers' own City Plan renderer colours;
+  // state heritage (QHR, not a City Plan layer) takes a darker heritage-blue
+  // so it stays distinct from local.
+  heritageState:     "#0050c0",
+  heritageLocal:     "#0070ff",
+  heritageCharacter: "#7d007d",
+  heritageDwelling:  "#ffa4a4",
 
   // Easements: magenta/pink
   easementHV: "#db2777",
@@ -104,6 +118,11 @@ export const DEVELO_HEX = {
   vegMSES:        "#ea580c",
   vegBiodiversity: "#84cc16",
   vegCorridor:    "#16a34a",
+  // School catchments: two clearly different hues so primary vs secondary
+  // read apart, and their overlap (a lot is usually in both) shows as two
+  // distinct boundaries rather than one indistinct green wash.
+  catchmentPrimary:   "#16a34a", // green
+  catchmentSecondary: "#4f46e5", // indigo
 
   // Zoning: keep multi-family
   zoneCentre:   "#dc2626",
@@ -327,17 +346,22 @@ function noiseColor(props: Record<string, unknown>) {
   return { fillColor: "#94a3b8", legendLabel: d || "Noise corridor" };
 }
 
-// Catchments are suburb-scale polygons stacked per year level: a filled
-// wash drowns the whole map in green. The information is the BOUNDARY, so
-// paint outlines only (fillOpacity 0).
+// The primary catchment is usually NESTED inside the (larger) secondary
+// one, so simply stacking two translucent fills paints the primary area
+// twice → it blends to purple and reads identical to secondary-only. To
+// keep them distinct we draw the secondary fill FIRST and the primary
+// OVER it with a DOMINANT green (see the sort in extractOverlays): the
+// primary area then reads green, secondary-only reads indigo.
+const CATCHMENT_FILL_PRIMARY = 0.4;
+const CATCHMENT_FILL_SECONDARY = 0.16;
 function schoolsColor(props: Record<string, unknown>) {
   const t = String(props.CatchmentType ?? "").toLowerCase();
   if (t.includes("primary"))
-    return { fillColor: DEVELO_HEX.vegBiodiversity, legendLabel: "Primary catchment", fillOpacity: 0 };
+    return { fillColor: DEVELO_HEX.catchmentPrimary, legendLabel: "Primary catchment", fillOpacity: CATCHMENT_FILL_PRIMARY, strokeWidth: 3.4 };
   // Treat any secondary type (Junior/Senior Secondary) as one band.
   if (t.includes("secondary"))
-    return { fillColor: DEVELO_HEX.vegCorridor, legendLabel: "Secondary catchment", fillOpacity: 0 };
-  return { fillColor: "#94a3b8", legendLabel: t || "School catchment", fillOpacity: 0 };
+    return { fillColor: DEVELO_HEX.catchmentSecondary, legendLabel: "Secondary catchment", fillOpacity: CATCHMENT_FILL_SECONDARY, strokeWidth: 3.4 };
+  return { fillColor: "#94a3b8", legendLabel: t || "School catchment", fillOpacity: CATCHMENT_FILL_SECONDARY, strokeWidth: 3.4 };
 }
 
 function rvmColor(props: Record<string, unknown>): Classified {
@@ -382,12 +406,111 @@ function tenementColor(props: Record<string, unknown>): Classified {
 }
 
 // Zone polygons are dissolved by zone-precinct: a single feature spans a
-// whole block of lots, so they blanket the whole viewport. Keep the fill
-// faint (the per-lot cadastre lines carry the structure) so the satellite
-// imagery stays legible instead of drowning under a pink wash.
-const ZONE_FILL_OPACITY = 0.18;
+// whole block of lots. The fill has to be solid enough to actually read the
+// land use and tell adjacent zones apart over the aerial (the earlier faint
+// 0.18 wash was near-invisible for the light residential colours), while
+// still letting the imagery show through under it.
+const ZONE_FILL_OPACITY = 0.5;
+
+// Brisbane City Plan 2014 zone palette, verbatim from the Zoning_opendata
+// layer's own renderer. Keyed by the precinct code that prefixes
+// ZONE_PREC_DESC ("LMR2 - …"). The residential and centre families are
+// deliberately density-graded — light for low density, darker as intensity
+// rises (LDR→LMR→MDR→HDR; NC→DC→MC→PC) — so the map reads the way the
+// official City Plan map does. Standard Queensland zone codes, so council
+// adapters that share them (Gold Coast etc.) pick up the same scheme.
+const CITYPLAN_ZONE_HEX: Record<string, string> = {
+  LDR: "#ffdcdc",
+  CR1: "#ffafdb", CR2: "#ffafdb",
+  LMR1: "#ffa4a4", LMR2: "#ffa4a4", LMR3: "#ffa4a4",
+  MDR: "#ff6565",
+  HDR1: "#aa0000", HDR2: "#aa0000",
+  TA: "#ff4d29",
+  NC: "#c8e1ff",
+  DC1: "#7082aa", DC2: "#7082aa",
+  MC: "#426bff",
+  PC1: "#0032ff", PC2: "#0032ff",
+  LII: "#e1c8e1",
+  IN1: "#c88fc8", IN2: "#c88fc8", IN3: "#c88fc8",
+  SI: "#961e96",
+  II: "#c8afe1",
+  SR: "#afe1c8", SR1: "#afe1c8", SR2: "#afe1c8", SR3: "#afe1c8",
+  OS: "#6eaf4b", OS1: "#6eaf4b", OS2: "#6eaf4b", OS3: "#6eaf4b",
+  EM: "#327d00",
+  CN: "#379182", CN1: "#379182", CN2: "#379182", CN3: "#379182",
+  EC: "#ffcc99",
+  EI: "#643200",
+  MU1: "#ff7800", MU2: "#ff7800", MU3: "#ff7800",
+  RU: "#f0fae6",
+  RR: "#a07878",
+  T: "#fce1ca",
+  CF1: "#ffff64", CF2: "#ffff64", CF3: "#ffff64", CF4: "#ffff64",
+  CF5: "#ffff64", CF6: "#ffff64", CF7: "#ffff64",
+  SC1: "#96808b", SC2: "#96808b", SC3: "#96808b",
+  SC4: "#96808b", SC5: "#96808b", SC6: "#96808b",
+  SP1: "#cccc00", SP2: "#cccc00", SP3: "#cccc00",
+  SP4: "#cccc00", SP5: "#cccc00", SP6: "#cccc00",
+};
+// State/Priority Development Areas are governed under Part 10, not a zone —
+// City Plan greys them out.
+const CITYPLAN_PDA_HEX = "#828282";
+
+/** Official City Plan colour for a zone feature, or null when the code
+ * isn't a recognised City Plan zone (non-Brisbane council schemes fall
+ * through to the coarse family logic below). */
+function cityPlanZone(props: Record<string, unknown>): Classified | null {
+  const desc = String(props.ZONE_PREC_DESC ?? props.ZONE_PREC ?? "");
+  if (/priority development area|refer to part 10|state development area/i.test(desc)) {
+    return { fillColor: CITYPLAN_PDA_HEX, legendLabel: "Priority/State Development Area (Part 10)", fillOpacity: ZONE_FILL_OPACITY };
+  }
+  // Code prefixes ZONE_PREC_DESC ("LMR2 - …"); else try a bare code field.
+  const m = desc.match(/^([A-Z]{1,3}\d?)\b/);
+  const code = (m?.[1] ?? String(props.ZONE_CODE ?? "").toUpperCase().trim()).toUpperCase();
+  const hex = CITYPLAN_ZONE_HEX[code] ?? CITYPLAN_ZONE_HEX[code.replace(/\d+$/, "")];
+  if (!hex) return null;
+  const label =
+    desc.replace(/^[A-Z]{1,3}\d?\s*-\s*/, "").trim() ||
+    String(props.LVL2_ZONE ?? props.LVL1_ZONE ?? code);
+  return { fillColor: hex, legendLabel: label, fillOpacity: ZONE_FILL_OPACITY };
+}
+
+// Canonical order for the zoning legend so zones read the way City Plan
+// groups them: residential by ASCENDING density (LDR→LMR→MDR→HDR — the
+// comparison a buyer actually makes), then centres by rank, mixed use,
+// industry, and finally community/education, open space and the rest. Keeps
+// a nearby "Education purpose" from wedging between two residential zones.
+function zoneRank(label: string): number {
+  const s = label.toLowerCase();
+  if (s.includes("low density residential")) return 10;
+  if (s.includes("character residential")) return 11;
+  if (s.includes("low-medium")) return 12;
+  if (s.includes("medium density residential")) return 13;
+  if (s.includes("high density residential")) return 14;
+  if (s.includes("tourist")) return 15;
+  if (s.includes("neighbourhood centre")) return 20;
+  if (s.includes("district centre")) return 21;
+  if (s.includes("major centre")) return 22;
+  if (s.includes("principal centre")) return 23;
+  if (s.includes("specialised centre")) return 24;
+  if (s.includes("mixed use") || s.includes("centre frame") || s.includes("corridor") || s.includes("inner city")) return 30;
+  if (s.includes("industry")) return 40;
+  if (s.includes("community") || s.includes("education") || s.includes("health") || s.includes("emergency") || s.includes("cemetery") || s.includes("sports venue")) return 50;
+  if (s.includes("sport") || s.includes("recreation")) return 60;
+  if (s.includes("open space")) return 61;
+  if (s.includes("environment") || s.includes("conservation")) return 62;
+  if (s.includes("rural") || s.includes("township")) return 70;
+  if (s.includes("emerging")) return 80;
+  if (s.includes("special purpose")) return 90;
+  if (s.includes("development area") || s.includes("part 10")) return 95;
+  return 999;
+}
 
 function zoningColor(props: Record<string, unknown>): Classified {
+  // Brisbane (and any council sharing standard QLD zone codes): use the
+  // exact City Plan colour so the density gradient matches the official map.
+  const cp = cityPlanZone(props);
+  if (cp) return cp;
+
   // SEQ Regional Plan land use category (non-Brisbane baseline).
   if (typeof props.rluc2023 === "string" && props.rluc2023) {
     const r = props.rluc2023.toLowerCase();
@@ -626,6 +749,10 @@ export function extractOverlays(
         fillColor: DEVELO_HEX.heritageCharacter,
         legendLabel: "Character (pre-1947)",
       }));
+      pushFC(out, i.dwellingCharacter, () => ({
+        fillColor: DEVELO_HEX.heritageDwelling,
+        legendLabel: "Dwelling house character",
+      }));
       return out;
     }
     case "easements": {
@@ -656,6 +783,13 @@ export function extractOverlays(
     }
     case "schools":
       pushFC(out, inner, schoolsColor);
+      // Secondary first, primary LAST so the primary polygon paints on top
+      // of the (nested) secondary fill and reads green, not purple.
+      out.sort((a, b) => {
+        const pa = a.properties.legendLabel.includes("Primary") ? 1 : 0;
+        const pb = b.properties.legendLabel.includes("Primary") ? 1 : 0;
+        return pa - pb;
+      });
       return out;
     case "stormwater": {
       const i = inner as Record<string, unknown>;
@@ -712,6 +846,7 @@ export function extractOverlays(
     }
     case "zoning":
       pushFC(out, inner, zoningColor);
+      out.sort((a, b) => zoneRank(a.properties.legendLabel) - zoneRank(b.properties.legendLabel));
       return out;
   }
 }

@@ -203,19 +203,25 @@ function ModuleFacts({
         ? (raw.entries as { type: string; description: string | null }[])
         : [];
       if (entries.length === 0) return null;
+      const typeLabel: Record<string, string> = {
+        state: "State heritage",
+        local: "Local heritage",
+        character: "Traditional character",
+        dwelling_character: "Dwelling house character",
+      };
       return (
         <ul className="flex flex-col gap-1 text-[12.5px]">
           {entries.map((e, i) => (
             <li key={i} className="flex items-center gap-2">
               <span
-                className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
+                className="shrink-0 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
                 style={{
                   background:
                     "color-mix(in oklab, var(--apple-purple) 12%, transparent)",
                   color: "var(--apple-purple)",
                 }}
               >
-                {e.type}
+                {typeLabel[e.type] ?? e.type}
               </span>
               <span className="text-muted-foreground">{e.description ?? "No description recorded"}</span>
             </li>
@@ -918,16 +924,16 @@ export function ModuleSection({
               {legendItems.nearby.map((item) => (
                 <li
                   key={`nearby-${item.color}-${item.label}`}
-                  className="flex items-center gap-2 opacity-55"
+                  className="flex items-center gap-2"
                 >
                   <span
                     className="size-3 rounded-sm"
                     style={{
-                      background: `color-mix(in oklab, ${item.color} 45%, transparent)`,
-                      outline: `1px solid color-mix(in oklab, ${item.color} 55%, transparent)`,
+                      background: `color-mix(in oklab, ${item.color} 65%, transparent)`,
+                      outline: `1px solid color-mix(in oklab, ${item.color} 70%, transparent)`,
                     }}
                   />
-                  <span className="text-foreground/70">{item.label}</span>
+                  <span className="text-foreground/80">{item.label}</span>
                 </li>
               ))}
             </ul>

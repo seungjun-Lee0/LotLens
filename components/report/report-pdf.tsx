@@ -33,7 +33,7 @@ import {
   RISK_STYLE,
   riskOf,
 } from "@/lib/risk-style";
-import type { Module, RiskLevel } from "@/lib/db";
+import { ESSENTIAL_MODULES, type Module, type RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
 // ── Print tokens: corporate property-report palette (CoreLogic /
@@ -525,7 +525,16 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
     }
     case "heritage": {
       const entries = asArr<RawAttrs>(raw.entries);
-      return entries.map((e, i) => ({ key: `Entry ${i + 1}`, val: `[${e.type}] ${e.description ?? "No description recorded"}` }));
+      const typeLabel: Record<string, string> = {
+        state: "State heritage",
+        local: "Local heritage",
+        character: "Traditional character",
+        dwelling_character: "Dwelling house character",
+      };
+      return entries.map((e, i) => ({
+        key: `Entry ${i + 1}`,
+        val: `[${typeLabel[String(e.type)] ?? e.type}] ${e.description ?? "No description recorded"}`,
+      }));
     }
     case "easements": {
       const rows: { key: string; val: string }[] = [];
@@ -1034,7 +1043,10 @@ function AtAGlancePage({
   const { report, address, modules, considerationCount } = payload;
   const attention = attentionOrder(modules);
   const informational = informationalOrder(modules);
-  const clear = modules.filter((m) => !m.hasConsideration && !pdfIsFailed(m));
+  // Essential-clear checks get their own full page, so they leave the strip.
+  const clear = modules.filter(
+    (m) => !m.hasConsideration && !pdfIsFailed(m) && !ESSENTIAL_MODULES.has(m.module),
+  );
   // "N modules" must exclude the informational ones, or the headline count
   // never reaches zero and the all-clear sentence is unreachable.
   const riskCheckCount = modules.length - informational.length;
@@ -1654,13 +1666,37 @@ export function ReportPDF({
   // the zone code and the school catchment are content, not filler.
   const attention = attentionOrder(modules);
   const informational = informationalOrder(modules);
-  const clear = modules.filter((m) => !m.hasConsideration && !pdfIsFailed(m));
+  // Essential hazard checks that came back clear keep a full "No issues
+  // found" page; the rest of the clear checks collapse into the strip.
+  const essentialClear = modules.filter(
+    (m) => ESSENTIAL_MODULES.has(m.module) && !m.hasConsideration && !pdfIsFailed(m),
+  );
+  const clear = modules.filter(
+    (m) => !m.hasConsideration && !pdfIsFailed(m) && !ESSENTIAL_MODULES.has(m.module),
+  );
 
   return (
     <Document title={docTitle}>
       <CoverPage payload={payload} branding={branding} coverPng={coverPng} />
       <AtAGlancePage payload={payload} branding={branding} />
       {attention.map((m) => {
+        const raw =
+          m.raw && typeof m.raw === "object" ? (m.raw as RawAttrs) : undefined;
+        return (
+          <ModulePage
+            key={m.module}
+            module={m.module}
+            hasConsideration={m.hasConsideration}
+            riskLevel={m.riskLevel}
+            narrative={report.narrative[m.module]}
+            raw={raw}
+            mapPng={mapByModule.get(m.module) ?? null}
+            address={displayAddress}
+            branding={branding}
+          />
+        );
+      })}
+      {essentialClear.map((m) => {
         const raw =
           m.raw && typeof m.raw === "object" ? (m.raw as RawAttrs) : undefined;
         return (

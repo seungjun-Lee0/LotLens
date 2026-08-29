@@ -39,6 +39,7 @@ import { regionFromParcel } from "@/lib/region";
 import { generateModuleNarrative, type ModuleNarrative } from "@/lib/anthropic";
 import {
   getDb,
+  ENVIRONMENT_ENABLED,
   MODULE_ORDER,
   WATER_SEWER_ENABLED,
   type CouncilDataRow,
@@ -46,6 +47,7 @@ import {
   type RiskLevel,
 } from "@/lib/db";
 import {
+  EMPTY_PARCEL,
   fetchParcelLinesNear,
   fetchPropertyParcel,
   insetParcelPolygon,
@@ -208,10 +210,24 @@ export async function fetchOverlaysForAddress(
     ? insetParcelPolygon(parcelForRegion.polygon)
     : null;
 
+  // Resolve the report's geo blob (neighbour lot lines + postcode) NOW,
+  // alongside the module fan-out, and persist it below. The report page
+  // then reads it from the DB instead of re-hitting the flaky QLD cadastre
+  // and ABS services on every render.
+  const geoExtras = Promise.all([
+    fetchParcelLinesNear(addr.lat, addr.lng),
+    fetchPostcode(addr.lat, addr.lng),
+  ]);
+
   const tasks = new Map<Module, Promise<Settled>>();
   tasks.set("storm_tide", settle("storm_tide", fetchStormTideData(addr.lat, addr.lng, lot)));
   tasks.set("bushfire", settle("bushfire", fetchBushfireData(addr.lat, addr.lng, lot)));
-  tasks.set("environment", settle("environment", fetchEnvironmentData(addr.lat, addr.lng, lot)));
+  // Disabled: the koala/MSES fan-out fails wholesale on a single flaky
+  // MSES 500. Guarded here as well as in MODULE_ORDER so the flag can never
+  // leave a task running whose result nothing reads (see ENVIRONMENT_ENABLED).
+  if (ENVIRONMENT_ENABLED) {
+    tasks.set("environment", settle("environment", fetchEnvironmentData(addr.lat, addr.lng, lot)));
+  }
   tasks.set("acid_sulfate", settle("acid_sulfate", fetchAcidSulfateData(addr.lat, addr.lng, lot)));
   tasks.set("mining", settle("mining", fetchMiningData(addr.lat, addr.lng, lot)));
   // Schools stays point-based on purpose: catchment is decided by where
@@ -316,6 +332,19 @@ export async function fetchOverlaysForAddress(
     ),
   );
 
+  // Persist the parcel / lot-lines / postcode so the report page never has
+  // to touch the live cadastre or ABS services. slimGeoJson caps the
+  // neighbour-lot vertex counts the way it does for module polygons.
+  const [parcelLines, postcode] = await geoExtras;
+  const geo = {
+    parcel: parcelForRegion,
+    parcelLines: parcelLines
+      ? slimGeoJson(parcelLines, { lat: addr.lat, lng: addr.lng })
+      : null,
+    postcode,
+  };
+  await sql`UPDATE addresses SET geo = ${JSON.stringify(geo)}::jsonb WHERE id = ${addressId}`;
+
   const modules = Object.fromEntries(
     overlays.map((o) => [
       o.module,
@@ -408,7 +437,7 @@ export async function loadReportPayload(
   `;
   const reportRows = await sql`
     SELECT r.id, r.address_id, r.narrative, r.generated_at,
-           a.address_text, a.lat, a.lng, a.paid_at
+           a.address_text, a.lat, a.lng, a.paid_at, a.geo
     FROM reports r
     JOIN addresses a ON a.id = r.address_id
     WHERE r.id = ${reportId}
@@ -427,6 +456,11 @@ export async function loadReportPayload(
     lat: number;
     lng: number;
     paid_at: string | null;
+    geo: {
+      parcel: ParcelInfo | null;
+      parcelLines: unknown | null;
+      postcode: string | null;
+    } | null;
   }>)[0];
   const report = joined;
   const address = {
@@ -437,13 +471,23 @@ export async function loadReportPayload(
     paid_at: joined.paid_at,
   } as Address;
 
-  // Parcel polygon + neighbour lot lines + postcode need only the
-  // coordinates — start them now so they overlap the council transfer.
-  const parcelBatch = Promise.all([
-    fetchPropertyParcel(address.lat, address.lng),
-    fetchParcelLinesNear(address.lat, address.lng),
-    fetchPostcode(address.lat, address.lng),
-  ]);
+  // Parcel / lot lines / postcode were resolved once at generation time and
+  // cached on the address row: read them straight from the DB so a report
+  // render never touches the flaky live cadastre / ABS services. Reports
+  // generated before that caching (no `geo`) fall back to a live lookup.
+  const geoBatch: Promise<
+    [ParcelInfo, unknown | null, string | null]
+  > = joined.geo
+    ? Promise.resolve([
+        joined.geo.parcel ?? EMPTY_PARCEL,
+        joined.geo.parcelLines ?? null,
+        joined.geo.postcode ?? null,
+      ])
+    : Promise.all([
+        fetchPropertyParcel(address.lat, address.lng),
+        fetchParcelLinesNear(address.lat, address.lng),
+        fetchPostcode(address.lat, address.lng),
+      ]);
 
   if (opts?.warmImagery) {
     // Fire-and-forget. Warms the shared module frame + cover as soon as
@@ -458,7 +502,7 @@ export async function loadReportPayload(
         await Promise.all([
           import("@/lib/static-map"),
           import("@/lib/overlays"),
-          parcelBatch,
+          geoBatch,
         ]);
       warmFrames(address.lat, address.lng, parcelRes.polygon);
       const tRows = (await sql`
@@ -502,7 +546,7 @@ export async function loadReportPayload(
   // Cadastre lot polygon + metadata from BCC's property_boundaries_parcel
   // layer — the batch was kicked off right after the address arrived, so
   // by now it has usually already resolved.
-  const [parcel, parcelLines, postcode] = await parcelBatch;
+  const [parcel, parcelLines, postcode] = await geoBatch;
 
   // Zoning polygon as the final fallback when the parcel lookup misses
   // (e.g. geocoded coord on a road centreline).

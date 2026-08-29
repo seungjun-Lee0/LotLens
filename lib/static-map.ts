@@ -287,11 +287,20 @@ export async function renderModuleMapPNG({
       const d = ringsToPath(poly, px);
       if (!d) continue;
       const c = f.properties.fillColor;
+      const sw = (f.properties as { strokeWidth?: number }).strokeWidth;
       parts.push(
         `<path d="${d}" fill="${c}" fill-opacity="${f.properties.fillOpacity ?? 0.35}" fill-rule="evenodd"/>`,
       );
+      // Boundary-only overlays (school catchments) carry a strokeWidth: paint
+      // a white casing under a bolder line so the boundary reads over the
+      // aerial (mirrors the web map's overlay-line-casing).
+      if (sw) {
+        outlines.push(
+          `<path d="${d}" fill="none" stroke="#ffffff" stroke-opacity="0.85" stroke-width="${(sw + 3).toFixed(1)}" stroke-linejoin="round"/>`,
+        );
+      }
       outlines.push(
-        `<path d="${d}" fill="none" stroke="${f.properties.strokeColor ?? c}" stroke-width="3.2" stroke-linejoin="round"/>`,
+        `<path d="${d}" fill="none" stroke="${f.properties.strokeColor ?? c}" stroke-width="${(sw ?? 3.2).toFixed(1)}" stroke-linejoin="round"/>`,
       );
     }
     // LineString features (stormwater pipes, sewer/water mains, contour

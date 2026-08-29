@@ -22,6 +22,11 @@ create table if not exists addresses (
 -- For projects upgrading from the v1 schema (no payment columns):
 alter table addresses add column if not exists paid_at timestamptz;
 alter table addresses add column if not exists stripe_session_id text;
+-- Cadastre parcel, neighbour lot lines and postcode, resolved ONCE at
+-- report-generation time and cached here as {parcel, parcelLines, postcode}.
+-- The report page reads this instead of re-hitting the flaky QLD cadastre /
+-- ABS services on every render.
+alter table addresses add column if not exists geo jsonb;
 
 create table if not exists council_data (
   id                uuid primary key default gen_random_uuid(),

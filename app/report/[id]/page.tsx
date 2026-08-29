@@ -15,7 +15,7 @@ import { getSessionUser, isAdmin } from "@/lib/auth";
 import { formatAuAddress } from "@/lib/format-address";
 import { loadReportPayload } from "@/lib/pipeline";
 import { isFlagged, isInformational, RISK_RANK, riskOf } from "@/lib/risk-style";
-import type { Module } from "@/lib/db";
+import { ESSENTIAL_MODULES, type Module } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -79,8 +79,17 @@ export default async function ReportPage({
         (m) => isInformational(m.riskLevel, m.hasConsideration) && !isFailed(m),
       )
     : [];
+  // Essential hazard checks that came back clear keep a full "No issues
+  // found" section; every other clear check collapses into the strip.
+  const essentialClearModules = paid
+    ? modules.filter(
+        (m) => ESSENTIAL_MODULES.has(m.module) && !m.hasConsideration && !isFailed(m),
+      )
+    : [];
   const clearModules = paid
-    ? modules.filter((m) => !m.hasConsideration && !isFailed(m))
+    ? modules.filter(
+        (m) => !m.hasConsideration && !isFailed(m) && !ESSENTIAL_MODULES.has(m.module),
+      )
     : [];
   const flaggedBySeverity = modules
     .filter((m) => isFlagged(m.riskLevel, m.hasConsideration) && !isFailed(m))
@@ -131,6 +140,22 @@ export default async function ReportPage({
               lotLines={parcelLines}
             />
           ))}
+
+          {/* Essential hazard checks that came back clear keep their own full
+              section (each carries its "No considerations identified" status),
+              so no separate heading is needed. */}
+          {paid &&
+            essentialClearModules.map((row) => (
+              <ModuleSection
+                key={row.module}
+                row={row}
+                narrative={report.narrative[row.module as Module]}
+                lat={address.lat}
+                lng={address.lng}
+                propertyPolygon={propertyPolygon}
+                lotLines={parcelLines}
+              />
+            ))}
 
           {paid && (
             <NextSteps rows={flaggedBySeverity} narrative={report.narrative} />

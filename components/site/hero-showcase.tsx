@@ -586,7 +586,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
               scroller of named pills. sm+ collapses back to the dot rail. */}
           <div
             ref={railRef}
-            className="rail-fade -mx-4 mt-4 pt-1 flex items-center gap-1.5 overflow-x-auto px-5 pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-auto sm:max-w-[460px] sm:flex-wrap sm:justify-center sm:overflow-x-visible sm:px-0 sm:pb-0"
+            className="hidden rail-fade -mx-4 mt-4 pt-1 items-center gap-1.5 overflow-x-auto px-5 pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-auto sm:max-w-[460px] sm:flex-wrap sm:justify-center sm:overflow-x-visible sm:px-0 sm:pb-0"
           >
             {RAIL.map((m) => {
               const empty = (data.modules[m.key]?.features.length ?? 0) === 0;

@@ -53,6 +53,25 @@ export type Module =
 export const WATER_SEWER_ENABLED: boolean = false;
 
 /**
+ * Environment (koala habitat + MSES wildlife) is built and tested but
+ * switched off.
+ *
+ * The blocker is source reliability: the module fans out 8 queries across
+ * the QSpatial KoalaPlan and MattersOfStateEnvironmentalSignificance
+ * MapServers, and the MSES layer (…/MapServer/21) intermittently returns
+ * HTTP 500 under load. Because all 8 run in one Promise.all, a single
+ * flaky sub-query fails the whole module, writing a fetchFailed row that
+ * surfaces the "1 check requires verification" banner on otherwise-complete
+ * reports. Flip this back to true once the module is hardened to tolerate a
+ * single-layer outage (settle each layer independently, drop the failed
+ * one) rather than failing wholesale.
+ *
+ * The annotation is load-bearing: without it TypeScript narrows the type
+ * to `false` and reports the guarded branches as dead code.
+ */
+export const ENVIRONMENT_ENABLED: boolean = false;
+
+/**
  * Canonical report order: hazards, then constraints on building, then
  * infrastructure over/under the lot, then planning, then lifestyle facts.
  *
@@ -62,6 +81,29 @@ export const WATER_SEWER_ENABLED: boolean = false;
  * re-sort by severity: the canonical order is what makes two reports
  * comparable side by side.
  */
+/**
+ * Modules that keep a full section (map + narrative) even when they come
+ * back clear, instead of collapsing into the Checked & clear strip —
+ * "not in a flood / bushfire / vegetation / … area" is itself worth showing.
+ * This matches Develo, whose report gives every one of these its own page
+ * regardless of the finding. The only checks that still collapse when clear
+ * are the ones Develo doesn't feature (acid sulfate, mining). Read by both
+ * the web report and the PDF.
+ */
+export const ESSENTIAL_MODULES = new Set<Module>([
+  "flooding",
+  "flood_planning",
+  "overland_flow",
+  "storm_tide",
+  "bushfire",
+  "vegetation",
+  "heritage",
+  "easements",
+  "stormwater",
+  "noise",
+  "local_plans",
+]);
+
 export const MODULE_ORDER: Module[] = [
   "flooding",
   "flood_planning",
@@ -69,7 +111,10 @@ export const MODULE_ORDER: Module[] = [
   "storm_tide",
   "bushfire",
   "vegetation",
-  "environment",
+  // Off until the koala/MSES fan-out tolerates a single-layer outage:
+  // absent from the order = absent from the report, the fetch fan-out and
+  // the freshness row-count, all from the one flag (see ENVIRONMENT_ENABLED).
+  ...(ENVIRONMENT_ENABLED ? (["environment"] as Module[]) : []),
   "heritage",
   "easements",
   "stormwater",

@@ -23,6 +23,12 @@ const LOCAL_HERITAGE =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Hertiage_overlay_Local_heritage_area/FeatureServer/0/query";
 const CHARACTER =
   "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Traditional_building_character_overlay/FeatureServer/0/query";
+// Distinct from the Traditional building character overlay above: the
+// Dwelling house character overlay (City Plan 2014 Part 9) imposes
+// height/form controls on houses (incl. small lots) to protect an area's
+// residential character. Same BCC org, same OVL2_DESC schema.
+const DWELLING_CHARACTER =
+  "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Dwelling_house_character_overlay/FeatureServer/0/query";
 
 const QHR_DOC = "https://qhr.detsi.qld.gov.au/";
 const BCC_HERITAGE_DOC =
@@ -31,8 +37,9 @@ const BCC_HERITAGE_DOC =
 export type HeritageEntry = {
   /** "state" = QLD Heritage Register place, "local" = council local
    * heritage area, "character" = traditional building character
-   * (pre-1947) protection. */
-  type: "state" | "local" | "character";
+   * (pre-1947) protection, "dwelling_character" = dwelling house character
+   * overlay (height/form controls on houses). */
+  type: "state" | "local" | "character" | "dwelling_character";
   category: string | null;
   description: string | null;
   code: string | null;
@@ -48,8 +55,8 @@ export type HeritageResult = {
   entries: HeritageEntry[];
   hasConsideration: boolean;
   sources: HeritageSource[];
-  raw: { state: unknown; local: unknown; character: unknown };
-  context: { state: unknown; local: unknown; character: unknown };
+  raw: { state: unknown; local: unknown; character: unknown; dwellingCharacter: unknown };
+  context: { state: unknown; local: unknown; character: unknown; dwellingCharacter: unknown };
 };
 
 const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
@@ -113,24 +120,31 @@ export async function fetchHeritageData(
     maxAllowableOffset: 0.00003,
   });
 
-  const [state, stateCtx, local, character, localCtx, characterCtx] =
-    await Promise.all([
-      queryArcGIS(QHR_LAYER, pointParams(qhrFields)),
-      queryArcGIS(QHR_LAYER, contextParams(qhrFields)),
-      isBrisbane ? queryArcGIS(LOCAL_HERITAGE, pointParams(bccFields)) : EMPTY_FC,
-      isBrisbane ? queryArcGIS(CHARACTER, pointParams(bccFields)) : EMPTY_FC,
-      isBrisbane ? queryArcGIS(LOCAL_HERITAGE, contextParams(bccFields)) : EMPTY_FC,
-      isBrisbane ? queryArcGIS(CHARACTER, contextParams(bccFields)) : EMPTY_FC,
-    ]);
+  const [
+    state, stateCtx, local, character, dwelling,
+    localCtx, characterCtx, dwellingCtx,
+  ] = await Promise.all([
+    queryArcGIS(QHR_LAYER, pointParams(qhrFields)),
+    queryArcGIS(QHR_LAYER, contextParams(qhrFields)),
+    isBrisbane ? queryArcGIS(LOCAL_HERITAGE, pointParams(bccFields)) : EMPTY_FC,
+    isBrisbane ? queryArcGIS(CHARACTER, pointParams(bccFields)) : EMPTY_FC,
+    isBrisbane ? queryArcGIS(DWELLING_CHARACTER, pointParams(bccFields)) : EMPTY_FC,
+    isBrisbane ? queryArcGIS(LOCAL_HERITAGE, contextParams(bccFields)) : EMPTY_FC,
+    isBrisbane ? queryArcGIS(CHARACTER, contextParams(bccFields)) : EMPTY_FC,
+    isBrisbane ? queryArcGIS(DWELLING_CHARACTER, contextParams(bccFields)) : EMPTY_FC,
+  ]);
 
   const entries: HeritageEntry[] = [
     ...state.features.map(qhrEntry),
     ...local.features.map((f) => bccEntry("local", f)),
     ...character.features.map((f) => bccEntry("character", f)),
+    ...dwelling.features.map((f) => bccEntry("dwelling_character", f)),
   ];
   const hasState = entries.some((e) => e.type === "state");
   const hasLocal = entries.some((e) => e.type === "local");
-  const hasCharacter = entries.some((e) => e.type === "character");
+  const hasCharacter = entries.some(
+    (e) => e.type === "character" || e.type === "dwelling_character",
+  );
   const riskLevel: RiskLevel =
     hasState || hasLocal ? "high" : hasCharacter ? "medium" : "none";
 
@@ -153,6 +167,11 @@ export async function fetchHeritageData(
         url: BCC_HERITAGE_DOC,
         layer: CHARACTER,
       },
+      {
+        name: "BCC City Plan 2014: Dwelling house character overlay",
+        url: BCC_HERITAGE_DOC,
+        layer: DWELLING_CHARACTER,
+      },
     );
   }
 
@@ -161,7 +180,12 @@ export async function fetchHeritageData(
     entries,
     hasConsideration: entries.length > 0,
     sources,
-    raw: { state, local, character },
-    context: { state: stateCtx, local: localCtx, character: characterCtx },
+    raw: { state, local, character, dwellingCharacter: dwelling },
+    context: {
+      state: stateCtx,
+      local: localCtx,
+      character: characterCtx,
+      dwellingCharacter: dwellingCtx,
+    },
   };
 }

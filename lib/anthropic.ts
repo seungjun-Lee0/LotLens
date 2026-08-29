@@ -354,7 +354,7 @@ function renderStubHeritage(
     return {
       summary: `No heritage or character overlay applies to ${input.address}.`,
       detail:
-        "BCC's State heritage area, Local heritage area, and Traditional building character overlays all return no polygons for this address. Renovation and demolition controls tied to those overlays do not apply.",
+        "BCC's State heritage area, Local heritage area, Traditional building character and Dwelling house character overlays all return no polygons for this address. Renovation, demolition and building-form controls tied to those overlays do not apply.",
       questions_to_ask: [
         "Even with no overlay, individual pre-1947 dwellings can attract Council interest. Confirm the house's construction year.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -362,13 +362,20 @@ function renderStubHeritage(
       sources: sourcesFromRaw(raw),
     };
   }
-  const types = Array.from(new Set(entries.map((e) => String(e.type))));
+  const typeLabel: Record<string, string> = {
+    state: "State heritage",
+    local: "Local heritage",
+    character: "Traditional building character",
+    dwelling_character: "Dwelling house character",
+  };
+  const label = (t: string) => typeLabel[t] ?? t;
+  const types = Array.from(new Set(entries.map((e) => label(String(e.type)))));
   const desc = entries
-    .map((e) => `${e.type} (${e.description ?? "no description"})`)
+    .map((e) => `${label(String(e.type))} (${e.description ?? "no description"})`)
     .join("; ");
   return {
     summary: `${input.address} is captured by ${types.join(" + ")} overlay${types.length > 1 ? "s" : ""}.`,
-    detail: `Entries: ${desc}.\n\nState or local heritage listing typically requires development approval for any external work and may block demolition. Traditional building character protection (pre-1947) restricts demolition and constrains alterations to street-facing form. Confirm the exact controls with BCC eplan.`,
+    detail: `Entries: ${desc}.\n\nState or local heritage listing typically requires development approval for any external work and may block demolition. Traditional building character protection (pre-1947) restricts demolition and constrains alterations to street-facing form. The Dwelling house character overlay instead imposes height and form controls on houses (including small lots), so new builds and extensions can need extra assessment. Confirm the exact controls with BCC eplan.`,
     questions_to_ask: [
       "What demolition / external alteration approvals will be needed?",
       "If buying to renovate, what design constraints apply to the street-facing facade?",

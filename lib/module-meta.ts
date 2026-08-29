@@ -65,9 +65,11 @@ const D = {
   stormHigh: "#0e7490", stormMedium: "#06b6d4", stormLow: "#67e8f9", stormVeryLow: "#cffafe",
   histFeb2022: "#c026d3", histJan2011: "#a855f7",
   fireVeryHigh: "#b91c1c", fireHigh: "#dc2626", fireBuffer: "#ea580c", fireMedium: "#f59e0b",
-  heritageState: "#7e22ce", heritageLocal: "#db2777", heritageCharacter: "#a855f7",
+  heritageState: "#0050c0", heritageLocal: "#0070ff", heritageCharacter: "#7d007d",
+  heritageDwelling: "#ffa4a4",
   easementHV: "#db2777", easementCadastre: "#a21caf",
   vegWaterway: "#0284c7", vegMSES: "#ea580c", vegBiodiversity: "#84cc16", vegCorridor: "#16a34a",
+  catchmentPrimary: "#16a34a", catchmentSecondary: "#4f46e5",
   zoneCentre: "#dc2626", zoneMixed: "#f97316", zoneLowMediumResidential: "#d97706", zoneResidential: "#facc15", zoneOpenSpace: "#16a34a", zoneOther: "#6366f1",
   coastalErosion: "#d97706",
   rvmA: "#15803d", rvmB: "#16a34a", rvmC: "#84cc16", rvmR: "#0d9488",
@@ -230,13 +232,15 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     sourceLabel: "Queensland Heritage Register + council heritage/character overlays",
     thingsToKnow: [
       "Heritage listings protect identified places, while character overlays generally protect the streetscape and traditional building form. The approval implications differ, so the mapped category matters.",
+      "Brisbane runs two separate character overlays. The Traditional building character overlay protects pre-1947 housing and controls demolition and external work. The Dwelling house character overlay (City Plan 2014 Part 9) instead imposes height and form controls on houses, including houses on small lots, to protect an area's residential character, so a new build or extension can face extra assessment even where nothing old is being removed.",
       "External alterations, demolition and visible additions may require assessment. Confirm the controls before assuming an existing building can be removed or substantially changed.",
     ],
     note: "A clear overlay result does not replace a property-specific heritage or building-age check. Confirm demolition and major alteration rights with the council before relying on development potential.",
     legend: [
-      { label: "State heritage area",  color: D.heritageState,     colorHex: D.heritageState },
-      { label: "Local heritage area",  color: D.heritageLocal,     colorHex: D.heritageLocal },
-      { label: "Character (pre-1947)", color: D.heritageCharacter, colorHex: D.heritageCharacter },
+      { label: "State heritage area",         color: D.heritageState,     colorHex: D.heritageState },
+      { label: "Local heritage area",         color: D.heritageLocal,     colorHex: D.heritageLocal },
+      { label: "Character (pre-1947)",         color: D.heritageCharacter, colorHex: D.heritageCharacter },
+      { label: "Dwelling house character",     color: D.heritageDwelling,  colorHex: D.heritageDwelling },
     ],
   },
 
@@ -428,8 +432,8 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "This layer covers Queensland state schools only. Confirm eligibility, intake year and program requirements directly with the school before relying on the result.",
     legend: [
-      { label: "Primary catchment",   color: D.vegBiodiversity, colorHex: D.vegBiodiversity },
-      { label: "Secondary catchment", color: D.vegCorridor,     colorHex: D.vegCorridor },
+      { label: "Primary catchment",   color: D.catchmentPrimary,   colorHex: D.catchmentPrimary },
+      { label: "Secondary catchment", color: D.catchmentSecondary, colorHex: D.catchmentSecondary },
     ],
   },
 
@@ -445,13 +449,17 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
       "Precincts and overlays can modify the zone outcome. The zone should therefore be read with any local plan, precinct and relevant overlay code.",
     ],
     note: "Zoning is not a development approval or yield assessment. Confirm the current planning scheme provisions and site-specific constraints with the council or a qualified planner.",
+    // City Plan colours, density-graded like the official map: residential
+    // darkens with intensity, centres deepen with rank.
     legend: [
-      { label: "Centre",                  color: D.zoneCentre,      colorHex: D.zoneCentre },
-      { label: "Mixed use",               color: D.zoneMixed,       colorHex: D.zoneMixed },
-      { label: "Low-medium residential",  color: D.zoneLowMediumResidential, colorHex: D.zoneLowMediumResidential },
-      { label: "General residential",     color: D.zoneResidential, colorHex: D.zoneResidential },
-      { label: "Open space / Recreation", color: D.zoneOpenSpace,   colorHex: D.zoneOpenSpace },
-      { label: "Industry / Other",        color: D.zoneOther,       colorHex: D.zoneOther },
+      { label: "Low density residential",      color: "#ffdcdc", colorHex: "#ffdcdc" },
+      { label: "Low-medium density residential", color: "#ffa4a4", colorHex: "#ffa4a4" },
+      { label: "Medium density residential",   color: "#ff6565", colorHex: "#ff6565" },
+      { label: "High density residential",     color: "#aa0000", colorHex: "#aa0000" },
+      { label: "Centre (Neighbourhood → Principal)", color: "#426bff", colorHex: "#426bff" },
+      { label: "Mixed use",                    color: "#ff7800", colorHex: "#ff7800" },
+      { label: "Industry",                     color: "#c88fc8", colorHex: "#c88fc8" },
+      { label: "Open space / Recreation",      color: "#6eaf4b", colorHex: "#6eaf4b" },
     ],
   },
 };

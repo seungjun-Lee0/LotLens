@@ -74,6 +74,58 @@ export class ArcGISError extends Error {
 
 const DEBUG = process.env.NEXT_PUBLIC_DEBUG === "true";
 
+// ── Per-host concurrency limiter ──────────────────────────────────────────
+//
+// The QLD on-prem GIS host serves several genuinely slow statewide layers
+// (mining, steep land, easements — seconds each, server-side). Firing the
+// whole ~18-layer module fan-out at it AT ONCE makes it queue requests and
+// time some out. Capping in-flight requests PER HOST so each query gets the
+// server's attention shortens the tail and cuts timeouts, without throttling
+// the fast Esri-cloud (AGOL) hosts the council overlays use.
+
+class Semaphore {
+  private active = 0;
+  private readonly queue: Array<() => void> = [];
+  constructor(private readonly max: number) {}
+  async acquire(): Promise<void> {
+    if (this.active < this.max) {
+      this.active++;
+      return;
+    }
+    // Wait for a holder to release; the slot passes straight to us, so the
+    // in-flight count never exceeds `max`.
+    await new Promise<void>((resolve) => this.queue.push(resolve));
+  }
+  release(): void {
+    const next = this.queue.shift();
+    if (next) next();
+    else this.active--;
+  }
+}
+
+// Host patterns → max concurrent requests. Unlisted hosts are unlimited.
+const HOST_LIMITS: Array<[RegExp, number]> = [
+  [/(^|\.)information\.qld\.gov\.au$/i, 6],
+];
+const limiters = new Map<string, Semaphore>();
+
+function limiterFor(endpoint: string): Semaphore | null {
+  let host: string;
+  try {
+    host = new URL(endpoint).hostname;
+  } catch {
+    return null;
+  }
+  const rule = HOST_LIMITS.find(([re]) => re.test(host));
+  if (!rule) return null;
+  let sem = limiters.get(host);
+  if (!sem) {
+    sem = new Semaphore(rule[1]);
+    limiters.set(host, sem);
+  }
+  return sem;
+}
+
 /**
  * Run an esriGeometryPoint intersect query and return GeoJSON.
  *
@@ -135,28 +187,65 @@ export async function queryArcGIS(
   const usePost = rings !== null || url.length > 4000;
   if (DEBUG) console.log(`[arcgis] ${usePost ? "POST" : "GET"}`, usePost ? endpoint : url);
 
-  let res: Response;
+  // Cap in-flight requests to slow hosts (acquired around the whole
+  // fetch+retry+read so retries and body transfer count as one slot).
+  const sem = limiterFor(endpoint);
+  if (sem) await sem.acquire();
   try {
-    res = await fetch(usePost ? endpoint : url, {
-      method: usePost ? "POST" : "GET",
-      headers: {
-        Accept: "application/geo+json",
-        ...(usePost
-          ? { "Content-Type": "application/x-www-form-urlencoded" }
-          : {}),
-      },
-      body: usePost ? search.toString() : undefined,
-      // Government ArcGIS servers occasionally hang; cap the wait so one
-      // stuck layer can't stall the whole parallel overlay fan-out.
-      signal: AbortSignal.timeout(15_000),
-    });
-  } catch (err) {
-    throw new ArcGISError(
-      `Network error querying ${endpoint}: ${(err as Error).message}`,
-      endpoint,
-    );
-  }
-  if (!res.ok) {
+  // The Queensland Government ArcGIS servers intermittently return 5xx (and
+  // 429) under load — a retry a moment later almost always succeeds. Retry
+  // transient failures SILENTLY and internally so a flaky server never
+  // surfaces to the user; only a genuinely persistent failure propagates to
+  // the caller's graceful fallback. 4xx and ArcGIS error-JSON aren't
+  // transient (bad request, expired token) so they fail fast.
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const MAX_ATTEMPTS = 3;
+  const BACKOFF_MS = [300, 800];
+  let res: Response | null = null;
+  let lastErr: ArcGISError | null = null;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    if (attempt > 0) await sleep(BACKOFF_MS[attempt - 1] ?? 800);
+    try {
+      res = await fetch(usePost ? endpoint : url, {
+        method: usePost ? "POST" : "GET",
+        headers: {
+          Accept: "application/geo+json",
+          ...(usePost
+            ? { "Content-Type": "application/x-www-form-urlencoded" }
+            : {}),
+        },
+        body: usePost ? search.toString() : undefined,
+        // Government ArcGIS servers occasionally hang; cap the wait so one
+        // stuck layer can't stall the whole parallel overlay fan-out.
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (err) {
+      lastErr = new ArcGISError(
+        `Network error querying ${endpoint}: ${(err as Error).message}`,
+        endpoint,
+      );
+      res = null;
+      // A timeout means the layer is genuinely SLOW, not flaky — retrying
+      // just triples the wait (up to 3×15 s) on a query that might have
+      // finished at 16 s. Fail fast on timeouts; retry only real connection
+      // blips (DNS/reset), which recover immediately.
+      if ((err as Error)?.name === "TimeoutError") break;
+      continue;
+    }
+    if (res.ok) break;
+    // Retry only transient server-side statuses; fail fast on 4xx.
+    if (res.status >= 500 || res.status === 429) {
+      const body = await res.text().catch(() => "");
+      lastErr = new ArcGISError(
+        `ArcGIS ${res.status} ${res.statusText} at ${endpoint}`,
+        endpoint,
+        res.status,
+        body.slice(0, 500),
+      );
+      res = null;
+      continue;
+    }
+    // Non-retryable HTTP error.
     const body = await res.text().catch(() => "");
     throw new ArcGISError(
       `ArcGIS ${res.status} ${res.statusText} at ${endpoint}`,
@@ -164,6 +253,12 @@ export async function queryArcGIS(
       res.status,
       body.slice(0, 500),
     );
+  }
+  if (!res) {
+    // Every attempt failed transiently — hand the caller its last error so
+    // its try/catch can fall back (empty parcel, skipped overlay, etc.).
+    throw lastErr ??
+      new ArcGISError(`ArcGIS request failed at ${endpoint}`, endpoint);
   }
   const json = (await res.json()) as
     | FeatureCollection<Geometry | null, GeoJsonProperties>
@@ -178,4 +273,7 @@ export async function queryArcGIS(
     );
   }
   return json as FeatureCollection<Geometry | null, GeoJsonProperties>;
+  } finally {
+    if (sem) sem.release();
+  }
 }

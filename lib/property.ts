@@ -48,6 +48,10 @@ const EMPTY: ParcelInfo = {
   ward: null,
 };
 
+/** The "no cadastre hit" parcel. Exported so the report loader can stand in
+ * for a cached geo blob whose parcel is absent without a live lookup. */
+export const EMPTY_PARCEL: ParcelInfo = EMPTY;
+
 function str(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
 }
@@ -195,7 +199,10 @@ export async function fetchPropertyParcel(
     // Nothing real nearby: keep whatever the point hit (reserve) or EMPTY.
     return direct?.geometry ? toParcelInfo(direct) : EMPTY;
   } catch (err) {
-    console.error("[property] parcel lookup failed:", err);
+    // Expected, handled degradation (server flaked after retries): the
+    // report just loses the cadastre lot outline. warn, not error, so a
+    // transient upstream doesn't throw a red dev overlay at the user.
+    console.warn("[property] parcel lookup unavailable, continuing without it:", (err as Error).message);
     return EMPTY;
   }
 }
@@ -219,18 +226,27 @@ export async function fetchParcelLinesNear(
       geometry: { x: lng, y: lat, spatialReference: 4326 },
       geometryType: "esriGeometryPoint",
       inSR: 4326,
-      outFields: "lotplan",
+      // No attributes: these are drawn as plain boundary lines, so we keep
+      // geometry only. ~2 m simplification is invisible at the map's zoom
+      // but roughly halves the vertex count on curved boundaries.
+      outFields: "",
       returnGeometry: true,
       bufferDegrees: 0.0014, // ~155 m: comfortably covers the ~115 m viewport
-      maxAllowableOffset: 0.00001,
+      maxAllowableOffset: 0.00002,
     });
-    const features = fc.features.filter(
-      (f): f is typeof f & { geometry: Geometry } => f.geometry != null,
-    );
+    // Geometry-only Features: the boundary lines never read a property, and
+    // dropping them trims the payload sent to the browser and stored in geo.
+    const features = fc.features
+      .filter((f): f is typeof f & { geometry: Geometry } => f.geometry != null)
+      .map((f) => ({
+        type: "Feature" as const,
+        geometry: f.geometry,
+        properties: {},
+      }));
     if (features.length === 0) return null;
     return { type: "FeatureCollection", features };
   } catch (err) {
-    console.error("[property] parcel-lines lookup failed:", err);
+    console.warn("[property] parcel-lines unavailable, continuing without them:", (err as Error).message);
     return null;
   }
 }

@@ -9,6 +9,7 @@ import {
   RISK_STYLE,
   riskOf,
 } from "@/lib/risk-style";
+import { ESSENTIAL_MODULES } from "@/lib/db";
 import type { ReportPayload } from "@/lib/pipeline";
 
 // Brisbane CBD GPO (approx). Used for the "distance to CBD" stat in the
@@ -74,7 +75,11 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
   const info = modules.filter(
     (m) => isInformational(m.riskLevel, m.hasConsideration) && !isFailed(m),
   );
-  const clear = modules.filter((m) => !m.hasConsideration && !isFailed(m));
+  // Essential hazard checks that came back clear get their own full "No
+  // issues found" section in the body, so they leave the compact strip.
+  const clear = modules.filter(
+    (m) => !m.hasConsideration && !isFailed(m) && !ESSENTIAL_MODULES.has(m.module),
+  );
   // Denominator for "N of M checks": informational modules never fail this
   // test, so counting them would make the ratio permanently unreachable.
   const riskCheckCount = modules.length - info.length;

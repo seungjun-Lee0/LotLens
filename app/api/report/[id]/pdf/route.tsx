@@ -13,7 +13,7 @@ import {
   type ReportBranding,
 } from "@/components/report/report-pdf";
 import { getSessionUser, isAdmin } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { ESSENTIAL_MODULES, getDb } from "@/lib/db";
 import { formatAuAddress } from "@/lib/format-address";
 import { extractOverlays } from "@/lib/overlays";
 import { loadReportPayload } from "@/lib/pipeline";
@@ -108,12 +108,14 @@ export async function GET(
     );
   }
 
-  // Render map PNGs in parallel: but only for modules that get a full
-  // page (flagged or failed); clear modules collapse to the summary page
-  // and never show a map.
+  // Render map PNGs in parallel: only for modules that get a full page -
+  // flagged, failed, or an essential hazard check that came back clear (it
+  // keeps a "No issues found" page). The other clear checks collapse to the
+  // summary strip and never show a map.
   const needsMap = payload.modules.filter(
     (row) =>
       row.hasConsideration ||
+      ESSENTIAL_MODULES.has(row.module) ||
       (!!row.raw &&
         typeof row.raw === "object" &&
         (row.raw as Record<string, unknown>).fetchFailed === true),

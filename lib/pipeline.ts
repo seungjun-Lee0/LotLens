@@ -35,6 +35,8 @@ import { fetchVegetationData } from "@/lib/modules/vegetation";
 import { fetchZoningData } from "@/lib/modules/zoning";
 import { slimGeoJson } from "@/lib/geo-slim";
 import { regionFromParcel } from "@/lib/region";
+import { geocodeAddress } from "@/lib/geocoder";
+import { formatAuAddress } from "@/lib/format-address";
 
 import { generateModuleNarrative, type ModuleNarrative } from "@/lib/anthropic";
 import {
@@ -622,7 +624,7 @@ export async function retryFailedChecks(reportId: string): Promise<{
     rows.map(async (row) => {
       narrative[row.module as Module] = await generateModuleNarrative({
         module: row.module as Module,
-        address: addr.address_text,
+        address: formatAuAddress(addr.address_text),
         councilData: row,
       });
     }),
@@ -704,7 +706,7 @@ export async function generateReportForAddress(
     rows.map(async (row) => {
       narrative[row.module as Module] = await generateModuleNarrative({
         module: row.module as Module,
-        address: addr.address_text,
+        address: formatAuAddress(addr.address_text),
         councilData: row,
       });
     }),
@@ -734,4 +736,38 @@ export async function generateReportForAddress(
     quotaUnlock,
     elapsedMs: Math.round(performance.now() - t0),
   };
+}
+
+/**
+ * End-to-end for one free-text address: geocode → upsert the address row →
+ * fetch every overlay → generate the report. This is the whole single-search
+ * flow behind one call, used by the admin bulk importer. Throws with a clear
+ * message on a geocode miss so the caller can report per-address failure.
+ */
+export async function generateReportForQuery(
+  query: string,
+  userId?: string | null,
+): Promise<{ addressId: string; reportId: string; displayName: string }> {
+  const hit = await geocodeAddress(query);
+  if (!hit) {
+    throw new Error("Address not found in Queensland");
+  }
+  const sql = getDb();
+  // Reuse an address row with the exact same resolved label, else insert.
+  const existing = (await sql`
+    SELECT id FROM addresses WHERE address_text = ${hit.displayName} LIMIT 1
+  `) as Array<{ id: string }>;
+  const addressId =
+    existing[0]?.id ??
+    (
+      (await sql`
+        INSERT INTO addresses (address_text, lat, lng)
+        VALUES (${hit.displayName}, ${hit.lat}, ${hit.lng})
+        RETURNING id
+      `) as Array<{ id: string }>
+    )[0].id;
+
+  await fetchOverlaysForAddress(addressId);
+  const { reportId } = await generateReportForAddress(addressId, userId ?? null);
+  return { addressId, reportId, displayName: hit.displayName };
 }

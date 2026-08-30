@@ -82,13 +82,36 @@ export const ENVIRONMENT_ENABLED: boolean = false;
  * comparable side by side.
  */
 /**
- * Modules that keep a full section (map + narrative) even when they come
- * back clear, instead of collapsing into the Checked & clear strip —
- * "not in a flood / bushfire / vegetation / … area" is itself worth showing.
- * This matches Develo, whose report gives every one of these its own page
- * regardless of the finding. The only checks that still collapse when clear
- * are the ones Develo doesn't feature (acid sulfate, mining). Read by both
- * the web report and the PDF.
+ * "Good to know" modules: the ones that always carry a genuine fact about
+ * the address — a zone code, school catchments, nearest transport, the
+ * local/neighbourhood plan — rather than a hazard result. These keep a full
+ * section (map + narrative) under the "Good to know" heading regardless of
+ * finding. Every module NOT in this set follows the hazard logic: flagged →
+ * "Needs attention", otherwise it collapses into the "Checked & clear" strip
+ * (so a hazard check that came back clear — flood, bushfire, stormwater,
+ * steep land — reads as reassurance, not a full page). Read by both the web
+ * report and the PDF.
+ */
+export const GOOD_TO_KNOW_MODULES = new Set<Module>([
+  "zoning",
+  "schools",
+  "transport",
+  "local_plans",
+]);
+
+/**
+ * Hazard / infrastructure checks that keep a full section (map + narrative)
+ * even when they come back clear — "not in a flood / bushfire / coastal
+ * area", "no stormwater main crosses", "effectively flat" is itself worth
+ * showing, and matches Develo, which gives every one of these its own page
+ * regardless of finding (verified against the sample reports in /report:
+ * Develo pages Steep Land, Stormwater, Water and Sewer even when clear).
+ * When one of these is clear it reads as an explicit "No considerations
+ * identified" section rather than collapsing into the strip. The ONLY checks
+ * that still collapse into the "Checked & clear" strip when they find
+ * nothing are the ones Develo doesn't feature: acid sulfate and mining. The
+ * fact modules (zoning, local plan, schools, transport) live in their own
+ * "Good to know" lane, above. Read by web + PDF.
  */
 export const ESSENTIAL_MODULES = new Set<Module>([
   "flooding",
@@ -97,11 +120,13 @@ export const ESSENTIAL_MODULES = new Set<Module>([
   "storm_tide",
   "bushfire",
   "vegetation",
+  "environment",
   "heritage",
   "easements",
   "stormwater",
+  "water_sewer",
   "noise",
-  "local_plans",
+  "steep_land",
 ]);
 
 export const MODULE_ORDER: Module[] = [

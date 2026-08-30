@@ -806,8 +806,15 @@ function renderStubLocalPlans(
     .map((p) => `${p.name}${p.code ? ` (${p.code})` : ""}${p.subPrecinct ? `: ${p.subPrecinct}` : ""}`)
     .join("; ");
 
+  // planName often already ends in "… plan"/"neighbourhood plan"; only add
+  // "plan" when it doesn't, so we never write "… plan plan".
+  const planPhrase = planName
+    ? /plan\b/i.test(planName)
+      ? planName
+      : `${planName} plan`
+    : "local plan";
   return {
-    summary: `${input.address} is in the ${planName ?? "local"} plan${precinctText ? `, precinct ${precinctText}` : ""}.`,
+    summary: `${input.address} is in the ${planPhrase}${precinctText ? `, precinct ${precinctText}` : ""}.`,
     detail:
       "A neighbourhood plan sits inside the planning scheme and applies rules specific to this area on top of the zone. It can raise permitted height near a centre or station, change density, or impose built-form controls that protect an existing streetscape.\n\nThe practical effect is that the zone code alone does not tell you what can be built here: the two have to be read together, and where they differ the plan usually governs.",
     questions_to_ask: [

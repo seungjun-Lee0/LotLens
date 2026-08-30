@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { SiteHeader } from "@/components/site/site-header";
+import { BulkImport } from "@/components/site/bulk-import";
 import { getSessionUser, isAdmin } from "@/lib/auth";
 import { SUBSCRIPTION_PLANS } from "@/lib/stripe";
 import { getDb } from "@/lib/db";
@@ -122,6 +123,8 @@ export default async function AdminPage() {
             Operations
           </h1>
         </header>
+
+        <BulkImport />
 
         {/* Stat tiles */}
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

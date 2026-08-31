@@ -26,7 +26,11 @@ import type { Feature, FeatureCollection, Geometry } from "geojson";
 import type { Module } from "@/lib/db";
 
 export type OverlayFeature = Feature<
-  Geometry,
+  // null geometry: property-scoped extraction keeps attribute-only features
+  // (point queries fetch no geometry) so the legend can tell "applies to
+  // the lot" from "nearby context". Map renderers only ever receive the
+  // context scope, whose features always carry geometry.
+  Geometry | null,
   {
     fillColor: string;
     /** Darkened `fillColor`, used for the polygon outline. Derived here so
@@ -37,6 +41,15 @@ export type OverlayFeature = Feature<
     /** Outline width override (px). Set for boundary-only overlays like
      * school catchments that need a bold, white-cased line to read. */
     strokeWidth?: number;
+    /** Line opacity override for LineString features. */
+    strokeOpacity?: number;
+    /** Fill the polygon with a diagonal hatch in fillColor instead of a
+     * solid tint. For zones that must stay readable when OVERLAPPED by
+     * another translucent fill (secondary school catchment over the
+     * primary's green): stacked tints blend into mud, hatch-over-tint
+     * reads as "both". Set fillOpacity 0 alongside — the solid-fill
+     * renderers skip it and the hatch pass draws instead. */
+    fillPattern?: "hatch";
   }
 >;
 
@@ -45,6 +58,8 @@ type Classified = {
   legendLabel: string;
   fillOpacity?: number;
   strokeWidth?: number;
+  strokeOpacity?: number;
+  fillPattern?: "hatch";
 };
 type OverlayScope = "context" | "property";
 
@@ -210,6 +225,95 @@ export function contourColorAt(t: number): string {
  */
 export const CONTOUR_LEGEND_LABEL = "Contour line";
 
+/**
+ * Bbox (lng/lat) of the contour features, padded ~6% of its span.
+ *
+ * The contour fetch window follows the lot with a hard cap, so a very
+ * large lot's map frame can extend past the data and the lines stop in an
+ * abrupt edge that reads as a bug. The renderers dim everything OUTSIDE
+ * this box instead: the covered area reads as the measured extent, and it
+ * costs no extra fetch (works on already-stored reports too). null when
+ * the features carry no contours.
+ */
+export function contourCoverageBbox(
+  features: OverlayFeature[],
+): { west: number; south: number; east: number; north: number } | null {
+  let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+  const scan = (c: unknown): void => {
+    if (!Array.isArray(c)) return;
+    if (c.length >= 2 && typeof c[0] === "number" && typeof c[1] === "number") {
+      const x = c[0] as number;
+      const y = c[1] as number;
+      if (x < w) w = x;
+      if (x > e) e = x;
+      if (y < s) s = y;
+      if (y > n) n = y;
+      return;
+    }
+    for (const sub of c) scan(sub);
+  };
+  for (const f of features) {
+    if (f.properties.legendLabel !== CONTOUR_LEGEND_LABEL) continue;
+    scan((f.geometry as { coordinates?: unknown } | null)?.coordinates);
+  }
+  if (!Number.isFinite(w) || e <= w || n <= s) return null;
+  // No padding: the veil's feathered edge is centred on this box, so half
+  // the fade overlaps the outermost lines. Padding outward left a strip of
+  // undimmed-but-contourless aerial — a visible gap between data and veil.
+  return { west: w, south: s, east: e, north: n };
+}
+
+/** Chaikin corner-cutting with pinned endpoints. Contours are smooth
+ * terrain curves, but they reach us simplified to metre-scale chords
+ * (server-side maxAllowableOffset, and older rows were fetched at ~4.4 m),
+ * which drew as jagged zigzags nothing like the Dept of Resources maps.
+ * Two rounds of corner cutting restore the curve without inventing detail
+ * beyond the chord tolerance. Contours ONLY: stormwater pipes and sewer
+ * mains really are straight engineered runs. */
+function chaikin(line: number[][], rounds = 2): number[][] {
+  let pts = line;
+  for (let r = 0; r < rounds; r++) {
+    if (pts.length < 3) return pts;
+    const out: number[][] = [pts[0]];
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [ax, ay] = pts[i];
+      const [bx, by] = pts[i + 1];
+      out.push([ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25]);
+      out.push([ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75]);
+    }
+    out.push(pts[pts.length - 1]);
+    pts = out;
+  }
+  return pts;
+}
+
+/** The contour FeatureCollection with every line run through chaikin(). */
+function smoothContourLines(fc: unknown): unknown {
+  if (!isFC(fc)) return fc;
+  return {
+    ...fc,
+    features: fc.features.map((f) => {
+      const g = f.geometry as { type?: string; coordinates?: unknown } | null;
+      if (g?.type === "LineString") {
+        return {
+          ...f,
+          geometry: { ...g, coordinates: chaikin(g.coordinates as number[][]) },
+        };
+      }
+      if (g?.type === "MultiLineString") {
+        return {
+          ...f,
+          geometry: {
+            ...g,
+            coordinates: (g.coordinates as number[][][]).map((l) => chaikin(l)),
+          },
+        };
+      }
+      return f;
+    }),
+  };
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 function isFC(v: unknown): v is FeatureCollection<Geometry, Record<string, unknown>> {
@@ -220,19 +324,30 @@ function isFC(v: unknown): v is FeatureCollection<Geometry, Record<string, unkno
   );
 }
 
+// True while extractOverlays runs a property-scoped pass: the point
+// queries fetch attributes WITHOUT geometry (returnGeometry: false), so
+// requiring geometry there silently emptied the "applies to the lot" set —
+// the legend then showed every layer as nearby-context even when the lot
+// sat squarely inside one. Labels don't need geometry; keep the features.
+let includeGeometryless = false;
+
 function pushFC(
   out: OverlayFeature[],
   fc: unknown,
-  classify: (props: Record<string, unknown>) => Classified,
+  // null = drop the feature entirely: for categories that mean "nothing
+  // applies here" (RVM Category X), which would otherwise pay a legend row
+  // for an invisible layer.
+  classify: (props: Record<string, unknown>) => Classified | null,
 ) {
   if (!isFC(fc)) return;
   for (const f of fc.features) {
-    if (!f.geometry) continue;
+    if (!f.geometry && !includeGeometryless) continue;
     const props = (f.properties ?? {}) as Record<string, unknown>;
     const classified = classify(props);
+    if (!classified) continue;
     out.push({
       type: "Feature",
-      geometry: f.geometry,
+      geometry: f.geometry ?? null,
       properties: { ...classified, strokeColor: outlineColor(classified.fillColor) },
     });
   }
@@ -347,31 +462,34 @@ function noiseColor(props: Record<string, unknown>) {
 }
 
 // The primary catchment is usually NESTED inside the (larger) secondary
-// one, so simply stacking two translucent fills paints the primary area
-// twice → it blends to purple and reads identical to secondary-only. To
-// keep them distinct we draw the secondary fill FIRST and the primary
-// OVER it with a DOMINANT green (see the sort in extractOverlays): the
-// primary area then reads green, secondary-only reads indigo.
+// one, so two stacked translucent fills inevitably BLEND where they
+// overlap (green over indigo → murky). Split the treatments instead:
+//   primary   → soft green FILL (the smaller, decision-relevant zone)
+//   secondary → indigo diagonal HATCH (fillPattern), no solid tint
+// Overlap then reads as green-with-indigo-stripes = "both catchments",
+// not a third colour. Both keep the cased-outline via strokeWidth.
 const CATCHMENT_FILL_PRIMARY = 0.4;
-const CATCHMENT_FILL_SECONDARY = 0.16;
-function schoolsColor(props: Record<string, unknown>) {
+function schoolsColor(props: Record<string, unknown>): Classified {
   const t = String(props.CatchmentType ?? "").toLowerCase();
   if (t.includes("primary"))
     return { fillColor: DEVELO_HEX.catchmentPrimary, legendLabel: "Primary catchment", fillOpacity: CATCHMENT_FILL_PRIMARY, strokeWidth: 3.4 };
   // Treat any secondary type (Junior/Senior Secondary) as one band.
   if (t.includes("secondary"))
-    return { fillColor: DEVELO_HEX.catchmentSecondary, legendLabel: "Secondary catchment", fillOpacity: CATCHMENT_FILL_SECONDARY, strokeWidth: 3.4 };
-  return { fillColor: "#94a3b8", legendLabel: t || "School catchment", fillOpacity: CATCHMENT_FILL_SECONDARY, strokeWidth: 3.4 };
+    return { fillColor: DEVELO_HEX.catchmentSecondary, legendLabel: "Secondary catchment", fillOpacity: 0, fillPattern: "hatch", strokeWidth: 3.4 };
+  return { fillColor: "#94a3b8", legendLabel: t || "School catchment", fillOpacity: 0, fillPattern: "hatch", strokeWidth: 3.4 };
 }
 
-function rvmColor(props: Record<string, unknown>): Classified {
+function rvmColor(props: Record<string, unknown>): Classified | null {
   const c = String(props.rvm_cat ?? "").toUpperCase();
   if (c === "A") return { fillColor: DEVELO_HEX.rvmA, legendLabel: "RVM Category A" };
   if (c === "B") return { fillColor: DEVELO_HEX.rvmB, legendLabel: "RVM Category B (remnant)" };
   if (c === "C") return { fillColor: DEVELO_HEX.rvmC, legendLabel: "RVM Category C (regrowth)" };
   if (c === "R") return { fillColor: DEVELO_HEX.rvmR, legendLabel: "RVM Category R (riverine)" };
-  // Category X / water are exempt: paint nothing visible.
-  return { fillColor: "#94a3b8", legendLabel: "Exempt (Category X)", fillOpacity: 0 };
+  // Category X / water = exempt, i.e. "no vegetation regulation applies".
+  // Dropped outright: an invisible fill that still claimed a legend row
+  // ("Exempt (Category X)") told the reader nothing. The narrative still
+  // reports exemption from the module data itself.
+  return null;
 }
 
 function assColor(props: Record<string, unknown>): Classified {
@@ -600,6 +718,11 @@ export function extractOverlays(
   const r = raw as Record<string, unknown>;
   const inner = scope === "context" ? r.context ?? r.raw : r.raw;
   if (inner === undefined) return out;
+  // Property-scope features come from point queries that fetch attributes
+  // only (no geometry); keep them — the legend needs their labels. The
+  // switch below runs synchronously, so setting the module flag here is
+  // safe (no interleaving).
+  includeGeometryless = scope === "property";
 
   switch (module) {
     case "flooding": {
@@ -702,13 +825,16 @@ export function extractOverlays(
       }
       const lo = contourElevations.length ? Math.min(...contourElevations) : 0;
       const hi = contourElevations.length ? Math.max(...contourElevations) : 0;
-      pushFC(out, i.contours, (props) => {
+      pushFC(out, smoothContourLines(i.contours), (props) => {
         const e = props.elevation_m;
         const t = typeof e === "number" && hi > lo ? (e - lo) / (hi - lo) : 0.5;
         return {
           fillColor: contourColorAt(t),
           legendLabel: CONTOUR_LEGEND_LABEL,
           fillOpacity: 0,
+          // Thin, Develo-style: terrain reads from many fine lines, drawn
+          // bare on the aerial exactly like the Dept of Resources maps.
+          strokeWidth: 1.5,
         };
       });
       return out;
@@ -781,16 +907,31 @@ export function extractOverlays(
       pushFC(out, i.anef, noiseColor);
       return out;
     }
-    case "schools":
+    case "schools": {
       pushFC(out, inner, schoolsColor);
+      // The source layer is per YEAR LEVEL, so one band arrives as several
+      // near-identical stacked polygons — each repainting its translucent
+      // fill/hatch until the map is a moiré mess. One polygon per label is
+      // the whole visual story; the year-level detail lives in the module
+      // narrative. (Geometry-less property-scope rows keep every label.)
+      const seenLabel = new Set<string>();
+      const deduped = out.filter((f) => {
+        if (!f.geometry) return true;
+        if (seenLabel.has(f.properties.legendLabel)) return false;
+        seenLabel.add(f.properties.legendLabel);
+        return true;
+      });
+      out.length = 0;
+      out.push(...deduped);
       // Secondary first, primary LAST so the primary polygon paints on top
-      // of the (nested) secondary fill and reads green, not purple.
+      // of the (nested) secondary hatch.
       out.sort((a, b) => {
         const pa = a.properties.legendLabel.includes("Primary") ? 1 : 0;
         const pb = b.properties.legendLabel.includes("Primary") ? 1 : 0;
         return pa - pb;
       });
       return out;
+    }
     case "stormwater": {
       const i = inner as Record<string, unknown>;
       pushFC(out, i.pipe, stormwaterColor);

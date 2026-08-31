@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { CONTOUR_LEGEND_LABEL, type OverlayFeature } from "@/lib/overlays";
+import {
+  CONTOUR_LEGEND_LABEL,
+  contourCoverageBbox,
+  type OverlayFeature,
+} from "@/lib/overlays";
 import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
 import { hasStopIcon, stopBadgeSVG } from "@/lib/stop-icons";
 
@@ -85,6 +89,28 @@ function buildBasemapStyle(): maplibregl.StyleSpecification {
 // raster basemap (free, no key). Each feature carries a `fillColor` in its
 // properties so a single fill layer paints them all.
 
+type ViewBox = { west: number; south: number; east: number; north: number };
+
+/** True when the feature's bbox intersects the fitted viewport. */
+function featureInView(f: OverlayFeature, box: ViewBox): boolean {
+  let xMin = Infinity, yMin = Infinity, xMax = -Infinity, yMax = -Infinity;
+  const scan = (c: unknown): void => {
+    if (!Array.isArray(c)) return;
+    if (c.length >= 2 && typeof c[0] === "number" && typeof c[1] === "number") {
+      const x = c[0] as number;
+      const y = c[1] as number;
+      if (x < xMin) xMin = x;
+      if (x > xMax) xMax = x;
+      if (y < yMin) yMin = y;
+      if (y > yMax) yMax = y;
+      return;
+    }
+    for (const sub of c) scan(sub);
+  };
+  scan((f.geometry as { coordinates?: unknown } | null)?.coordinates);
+  return xMax >= box.west && xMin <= box.east && yMax >= box.south && yMin <= box.north;
+}
+
 export function ModuleMap({
   lat,
   lng,
@@ -95,6 +121,7 @@ export function ModuleMap({
   propertyPolygon = null,
   lotLines = null,
   fitPoints = false,
+  tightFrame = false,
 }: {
   lat: number;
   lng: number;
@@ -115,6 +142,10 @@ export function ModuleMap({
   /** Widen the initial frame so overlay POINT features (transport stops)
    * are in view. Off by default: every other module frames the lot. */
   fitPoints?: boolean;
+  /** Frame ~half as wide as the default so the selected lot stays the
+   * obvious subject. For maps whose layer fills the whole viewport
+   * (contours): everywhere-colour needs a closer look at the lot. */
+  tightFrame?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -122,6 +153,10 @@ export function ModuleMap({
   // overlay layer's base filter so the label condition can be AND-ed onto it.
   const baseFiltersRef = useRef<Array<[string, unknown]>>([]);
   const [isolated, setIsolated] = useState<string | null>(null);
+  // The fitted initial viewport, set once after fitBounds: the legend lists
+  // only layers actually visible in this frame. A row for an off-screen
+  // feature reads as "it's here somewhere" and sends the reader hunting.
+  const [viewBox, setViewBox] = useState<ViewBox | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -144,12 +179,20 @@ export function ModuleMap({
     map.on("click", () => setIsolated(null));
 
     map.on("load", async () => {
+      // Hatch-fill layer ids (one per colour), so the legend isolate can
+      // filter them like every other overlay layer.
+      const hatchLayerIds: string[] = [];
       if (overlays.length > 0) {
         map.addSource("overlays", {
           type: "geojson",
           data: {
             type: "FeatureCollection",
-            features: overlays,
+            // Context overlays always carry geometry; the null-geometry
+            // form only exists in property-scoped (legend) extractions.
+            features: overlays.filter(
+              (f): f is typeof f & { geometry: GeoJSON.Geometry } =>
+                f.geometry != null,
+            ),
           },
         });
         map.addLayer({
@@ -164,6 +207,53 @@ export function ModuleMap({
             "fill-antialias": true,
           },
         });
+        // Diagonal-hatch fills for features that opt in via fillPattern
+        // (secondary school catchments): a hatch OVER another zone's tint
+        // reads as "both", where two stacked tints blend into mud. One
+        // stripe tile + one layer per colour actually present.
+        const hatchColors = [
+          ...new Set(
+            overlays
+              .filter((f) => f.properties.fillPattern === "hatch")
+              .map((f) => f.properties.fillColor),
+          ),
+        ];
+        for (const color of hatchColors) {
+          // Sparse, light stripes (the catchment usually covers the whole
+          // frame — a dense hatch would wallpaper the map). 48px tile at
+          // pixelRatio 2 = 24 logical px spacing, ~2.5px stripes.
+          const tile = document.createElement("canvas");
+          tile.width = 48;
+          tile.height = 48;
+          const tg = tile.getContext("2d");
+          if (!tg) continue;
+          tg.strokeStyle = color;
+          tg.lineWidth = 5;
+          for (const off of [-48, 0, 48]) {
+            tg.beginPath();
+            tg.moveTo(off, 48);
+            tg.lineTo(off + 48, 0);
+            tg.stroke();
+          }
+          const name = `hatch-${color}`;
+          if (!map.hasImage(name)) {
+            map.addImage(name, tg.getImageData(0, 0, 48, 48), { pixelRatio: 2 });
+          }
+          const id = `overlay-fill-hatch-${color}`;
+          map.addLayer({
+            id,
+            type: "fill",
+            source: "overlays",
+            filter: [
+              "all",
+              ["==", ["geometry-type"], "Polygon"],
+              ["==", ["get", "fillPattern"], "hatch"],
+              ["==", ["get", "fillColor"], color],
+            ],
+            paint: { "fill-pattern": name, "fill-opacity": 0.65 },
+          });
+          hatchLayerIds.push(id);
+        }
         // Polygon OUTLINES only. The darkened strokeColor is right for a
         // border over that polygon's own 35% fill, but LineString features
         // (stormwater pipes, contours) ARE their colour: darkening a
@@ -201,6 +291,57 @@ export function ModuleMap({
             "line-opacity": 1,
           },
         });
+        // Contour coverage veil: dim everything OUTSIDE the fetched contour
+        // window (a big lot's frame can extend past the data; a hard edge
+        // of lines reads as a bug, a dimmed border reads as "measured
+        // extent"). Drawn as a geo-anchored IMAGE — a canvas filled with
+        // the veil colour, the coverage box erased through a blur so the
+        // dim falls off GRADUALLY instead of stopping at a hard seam. The
+        // image extends far past any plausible frame and tracks pan/zoom.
+        const cov = contourCoverageBbox(overlays);
+        if (cov) {
+          const spanX = cov.east - cov.west;
+          const spanY = cov.north - cov.south;
+          const EXT = 2.5 * Math.max(spanX, spanY);
+          const W = 1024;
+          const H = 1024;
+          const sx = W / (spanX + 2 * EXT);
+          const sy = H / (spanY + 2 * EXT);
+          const canvas = document.createElement("canvas");
+          canvas.width = W;
+          canvas.height = H;
+          const g = canvas.getContext("2d");
+          if (g) {
+            g.fillStyle = "#0b1220";
+            g.fillRect(0, 0, W, H);
+            // Feathered hole over the coverage box: the blurred erase makes
+            // the veil fade in over ~a tenth of the coverage span.
+            const hx = EXT * sx;
+            const hy = EXT * sy;
+            const hw = spanX * sx;
+            const hh = spanY * sy;
+            g.globalCompositeOperation = "destination-out";
+            g.filter = `blur(${(0.12 * Math.min(hw, hh)).toFixed(1)}px)`;
+            g.fillStyle = "#000";
+            g.fillRect(hx, hy, hw, hh);
+            map.addSource("contour-coverage", {
+              type: "image",
+              url: canvas.toDataURL(),
+              coordinates: [
+                [cov.west - EXT, cov.north + EXT],
+                [cov.east + EXT, cov.north + EXT],
+                [cov.east + EXT, cov.south - EXT],
+                [cov.west - EXT, cov.south - EXT],
+              ],
+            });
+            map.addLayer({
+              id: "contour-coverage-veil",
+              type: "raster",
+              source: "contour-coverage",
+              paint: { "raster-opacity": 0.55, "raster-fade-duration": 0 },
+            });
+          }
+        }
         map.addLayer({
           id: "overlay-linestrings",
           type: "line",
@@ -212,8 +353,10 @@ export function ModuleMap({
           },
           paint: {
             "line-color": ["get", "fillColor"],
-            "line-width": 2,
-            "line-opacity": 0.95,
+            // Per-feature overrides: contours ask for thin lines; pipes
+            // and mains keep the bolder defaults.
+            "line-width": ["coalesce", ["get", "strokeWidth"], 2],
+            "line-opacity": ["coalesce", ["get", "strokeOpacity"], 0.95],
           },
         });
       }
@@ -288,7 +431,11 @@ export function ModuleMap({
       // but the bounds EXTEND to contain the whole selected parcel, so a
       // shopping-centre-sized lot (Westfield Chermside spans ~470 m)
       // doesn't get its outline sliced off at the viewport edges.
-      const PAD = 0.00105; // ~115 m half-width at Brisbane latitude
+      // Contour maps opt into a tighter frame: their layer covers the WHOLE
+      // viewport, so at the default frame the lot drowns in colour. ~66 m
+      // half-width keeps the parcel unmistakably the subject (the wider
+      // contour fetch window still fills the frame edge to edge).
+      const PAD = tightFrame ? 0.0006 : 0.00105; // ~66 m / ~115 m half-width
       const bounds = new maplibregl.LngLatBounds(
         [lng - PAD, lat - PAD],
         [lng + PAD, lat + PAD],
@@ -306,18 +453,47 @@ export function ModuleMap({
       if (propertyGeom !== fallbackBox) extendRings(propertyGeom);
       const pointFeats = overlays.filter((f) => f.geometry?.type === "Point");
       if (fitPoints) {
-        for (const f of pointFeats) {
-          const [x, y] = (f.geometry as GeoJSON.Point).coordinates;
-          bounds.extend([x, y]);
-        }
+        // Frame the CLOSEST handful of stops, not every stop the module
+        // returned: fitting them all zoomed the frame out to suburb scale,
+        // and a radius alone fails in the CBD, where "within 800 m" is
+        // still dozens of stops spanning kilometres. Nearest five inside
+        // ~800 m; always at least the closest two so a transit desert
+        // still shows something. (Mirrors nearbyStopPoints in
+        // lib/static-map.ts — keep the two rules identical.)
+        const NEAR_DEG = 0.0072; // ~800 m
+        const MIN_STOPS = 2;
+        const MAX_STOPS = 5;
+        const withDist = pointFeats
+          .map((f) => {
+            const [x, y] = (f.geometry as GeoJSON.Point).coordinates;
+            const dx = (x - lng) * Math.cos((lat * Math.PI) / 180);
+            const dy = y - lat;
+            return { x, y, d: Math.hypot(dx, dy) };
+          })
+          .sort((a, b) => a.d - b.d);
+        withDist.forEach((p, i) => {
+          if (i < MIN_STOPS || (i < MAX_STOPS && p.d <= NEAR_DEG)) {
+            bounds.extend([p.x, p.y]);
+          }
+        });
       }
       map.fitBounds(
         bounds,
         // padding gives the parcel breathing room when it drives the
         // frame; maxZoom 18 keeps small lots from overzooming past the
-        // imagery's native resolution.
-        { padding: 28, maxZoom: 18, duration: 0 },
+        // imagery's native resolution (tight frames trade a touch of
+        // sharpness for a legible lot).
+        { padding: 28, maxZoom: tightFrame ? 18.5 : 18, duration: 0 },
       );
+      // duration 0 → bounds are final immediately; hand them to the legend
+      // so it can drop rows for features outside this frame.
+      const vb = map.getBounds();
+      setViewBox({
+        west: vb.getWest(),
+        south: vb.getSouth(),
+        east: vb.getEast(),
+        north: vb.getNorth(),
+      });
 
       // Point features. Fill/line layers ignore Point geometry entirely,
       // so without these the stops never appeared on the map at all.
@@ -391,12 +567,13 @@ export function ModuleMap({
       // on deselect) without re-deriving the geometry-type filters.
       baseFiltersRef.current = [
         "overlay-fill",
+        ...hatchLayerIds,
         "overlay-line-casing",
         "overlay-line",
         "overlay-linestrings",
         "overlay-points",
         "overlay-stop-icons",
-      ]
+      ] // (overlay-line-casing = the polygon-boundary halo, e.g. catchments)
         .filter((id) => map.getLayer(id))
         .map((id) => [id, map.getFilter(id) ?? null]);
     });
@@ -437,19 +614,27 @@ export function ModuleMap({
   const toggleIsolate = (label: string) =>
     setIsolated((prev) => (prev === label ? null : label));
 
+  // Match on the LABEL alone: the property-scoped extraction can colour the
+  // same layer slightly differently from the context pass (ramp
+  // normalisation, per-feature grading), and keying on colour+label made
+  // genuinely on-lot layers show as context-only.
   const applicableKeys = new Set(
-    applicableOverlays.map((f) => `${f.properties.fillColor}|${f.properties.legendLabel}`),
+    applicableOverlays.map((f) => f.properties.legendLabel),
   );
   const visibleLegendItems: { color: string; label: string; applies: boolean }[] = [];
   const seenVisible = new Set<string>();
   for (const f of overlays) {
+    // Only layers actually visible in the fitted frame earn a legend row —
+    // a row for an off-screen feature reads as "it's on this map somewhere"
+    // and sends the reader hunting for a shape that isn't there.
+    if (viewBox && !featureInView(f, viewBox)) continue;
     const key = `${f.properties.fillColor}|${f.properties.legendLabel}`;
     if (seenVisible.has(key)) continue;
     seenVisible.add(key);
     visibleLegendItems.push({
       color: f.properties.fillColor,
       label: f.properties.legendLabel,
-      applies: applicableKeys.has(key),
+      applies: applicableKeys.has(f.properties.legendLabel),
     });
   }
   // Show both property and surrounding context in the canvas legend without
@@ -515,6 +700,10 @@ export function ModuleMap({
                         : undefined
                     }
                   >
+                    {/* Plain colour key, uniformly styled. Whether a layer
+                        touches the LOT is the module badge + summary's job;
+                        the only ordering nod is applies-first (see
+                        appliesItems/nearbyItems). */}
                     <span
                       className={`shrink-0 rounded-sm ${on ? "size-2 sm:size-3" : "size-1.5 sm:size-2.5"}`}
                       style={{

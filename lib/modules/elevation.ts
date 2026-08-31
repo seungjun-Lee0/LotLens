@@ -59,8 +59,12 @@ const CONTOUR_LAYERS = [
  * surrounding relief and a ceiling so one enormous parcel can't turn this
  * into the slowest query in the report.
  */
-const MIN_HALF_DEG = 0.0012; // ~130 m
-const MAX_HALF_DEG = 0.0055; // ~600 m
+// The FLOOR is set by the widest frame a renderer shows, not the lot: the
+// web map lands at maxZoom 18 for suburban lots, which is ~700 m across on
+// a desktop container. A 130 m floor left contours covering only a middle
+// band of that frame, with bare corners that read as unfinished.
+const MIN_HALF_DEG = 0.0035; // ~385 m — covers the web map's widest frame
+const MAX_HALF_DEG = 0.007; // ~770 m — big-lot frames zoom out further
 
 function halfWindowDeg(lot?: Geometry | null): number {
   if (!lot) return MIN_HALF_DEG;
@@ -260,7 +264,15 @@ export async function fetchElevationProfile(
       inSR: 4326,
       outFields,
       returnGeometry: true,
-      maxAllowableOffset: 0.00004,
+      // ~2.2 m. The old 0.00004 (~4.4 m) chorded the smooth LiDAR curves
+      // into visible zigzags — contours are the one layer where the line
+      // SHAPE is the content. The renderer's Chaikin smoothing (see
+      // overlays.ts) rounds the remaining chords, so 2.2 m reads as a
+      // clean curve while keeping the payload of the now much wider
+      // window in check. Server timing is index-dominated, so tolerance
+      // costs transfer size only (clipContoursToWindow + slimGeoJson
+      // still bound what we store).
+      maxAllowableOffset: 0.00002,
       bufferDegrees: CONTEXT_HALF_DEG,
     }).catch(() => null);
     if (!rawContext || rawContext.features.length === 0) continue;

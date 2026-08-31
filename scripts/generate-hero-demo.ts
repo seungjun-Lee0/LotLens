@@ -252,7 +252,8 @@ function pointToSquare(coord: number[], halfMetres: number): [number, number][] 
   ];
 }
 
-function geometryToRings(geom: Geometry, tol = 0): Ring[] {
+function geometryToRings(geom: Geometry | null, tol = 0): Ring[] {
+  if (!geom) return [];
   const polys: number[][][][] =
     geom.type === "Polygon" ? [geom.coordinates] :
     geom.type === "MultiPolygon" ? geom.coordinates : [];
@@ -316,7 +317,8 @@ function ringArea(r: Ring): number {
 }
 
 // Ray-cast: is the demo point inside this (lon/lat) geometry?
-function containsCenter(geom: Geometry): boolean {
+function containsCenter(geom: Geometry | null): boolean {
+  if (!geom) return false;
   const polys: number[][][][] =
     geom.type === "Polygon" ? [geom.coordinates] :
     geom.type === "MultiPolygon" ? geom.coordinates : [];

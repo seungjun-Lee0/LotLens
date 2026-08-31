@@ -794,6 +794,9 @@ export function ModuleSection({
           // Transport is the one module whose features are POINTS spread up
           // to ~2 km out: frame them, or the map shows an empty lot.
           fitPoints={row.module === "transport"}
+          // Contours colour the entire viewport, so a tighter frame keeps
+          // the lot legible inside the everywhere-layer.
+          tightFrame={row.module === "steep_land"}
         />
       </div>
 
@@ -899,26 +902,26 @@ export function ModuleSection({
             <ul className="flex flex-col gap-2 text-[12.5px]">
               <li className="flex items-center gap-2">
                 <span
-                  className="size-3 rounded-sm"
+                  className="size-3 shrink-0 rounded-sm"
                   style={{
                     background: SELECTED_PROPERTY_STYLE.color,
                     boxShadow: "0 0 0 1.5px white",
                     outline: `1px solid color-mix(in oklab, ${SELECTED_PROPERTY_STYLE.color} 70%, transparent)`,
                   }}
                 />
-                <span className="text-foreground/80">{SELECTED_PROPERTY_STYLE.label}</span>
+                <span className="leading-none text-foreground/80">{SELECTED_PROPERTY_STYLE.label}</span>
               </li>
               {elevationLegend && <ElevationLegend elevation={elevationLegend} />}
               {legendItems.applies.map((item) => (
                 <li key={`applies-${item.color}-${item.label}`} className="flex items-center gap-2">
                   <span
-                    className="size-3 rounded-sm"
+                    className="size-3 shrink-0 rounded-sm"
                     style={{
                       background: `color-mix(in oklab, ${item.color} 65%, transparent)`,
                       outline: `1px solid color-mix(in oklab, ${item.color} 70%, transparent)`,
                     }}
                   />
-                  <span className="text-foreground/80">{item.label}</span>
+                  <span className="leading-none text-foreground/80">{item.label}</span>
                 </li>
               ))}
               {legendItems.nearby.map((item) => (
@@ -927,13 +930,13 @@ export function ModuleSection({
                   className="flex items-center gap-2"
                 >
                   <span
-                    className="size-3 rounded-sm"
+                    className="size-3 shrink-0 rounded-sm"
                     style={{
                       background: `color-mix(in oklab, ${item.color} 65%, transparent)`,
                       outline: `1px solid color-mix(in oklab, ${item.color} 70%, transparent)`,
                     }}
                   />
-                  <span className="text-foreground/80">{item.label}</span>
+                  <span className="leading-none text-foreground/80">{item.label}</span>
                 </li>
               ))}
             </ul>

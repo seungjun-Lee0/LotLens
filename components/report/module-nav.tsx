@@ -5,7 +5,7 @@
 // list of the rendered module sections so you can jump straight to one
 // instead of scrolling. Highlights the section currently in view.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { List, X } from "lucide-react";
 
 import { MODULE_META } from "@/lib/module-meta";
@@ -19,7 +19,15 @@ export type ModuleNavItem = {
   failed: boolean;
 };
 
-export function ModuleNav({ items }: { items: ModuleNavItem[] }) {
+export function ModuleNav({
+  items,
+  action,
+}: {
+  items: ModuleNavItem[];
+  /** Optional control rendered in the floating stack, directly above the
+      FAB (e.g. the Download PDF button). */
+  action?: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<Module | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -116,6 +124,8 @@ export function ModuleNav({ items }: { items: ModuleNavItem[] }) {
           </ul>
         </div>
       )}
+
+      {action}
 
       <button
         type="button"

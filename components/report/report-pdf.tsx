@@ -33,7 +33,7 @@ import {
   RISK_STYLE,
   riskOf,
 } from "@/lib/risk-style";
-import { ESSENTIAL_MODULES, type Module, type RiskLevel } from "@/lib/db";
+import { ESSENTIAL_MODULES, GOOD_TO_KNOW_MODULES, MODULE_ORDER, type Module, type RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
 // ── Print tokens: corporate property-report palette (CoreLogic /
@@ -105,11 +105,12 @@ function asArr<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
-/** Cover one-liner from a module summary: the AI lead restates the full
+/** Summary line for the At-a-glance list: the AI lead restates the full
  * address ("Westfield Chermside, Gympie Rd, … carries high flood risk…"),
- * which wastes the whole line on the cover: strip it, uppercase the
- * first letter, and truncate at a WORD boundary (mid-word "registered
- * c…" reads broken). */
+ * which wastes the line: strip it and uppercase the first letter. The row
+ * allows the text to WRAP to two lines (maxLines on the <Text>), so this
+ * only truncates summaries too long even for two lines — at a word
+ * boundary (mid-word "registered c…" reads broken). */
 function coverLine(
   summary: string | undefined,
   address: string,
@@ -121,7 +122,7 @@ function coverLine(
     s = s.slice(addr.length).replace(/^[\s,-–-]+/, "");
   }
   if (s.length > 0) s = s[0].toUpperCase() + s.slice(1);
-  const MAX = 95;
+  const MAX = 200; // ≈ two wrapped lines at the row's 7.5pt width
   if (s.length > MAX) {
     const cut = s.slice(0, MAX);
     const atWord = cut.slice(0, Math.max(40, cut.lastIndexOf(" ")));
@@ -216,23 +217,25 @@ const styles = StyleSheet.create({
   },
 
   // ── Status + sources strip ─────────────────────────────────────────
+  // Column, not row: the pill sits on its own line and the sources line
+  // gets the FULL content width below it, so a long source label
+  // ("Queensland Heritage Register + council …") wraps cleanly instead of
+  // fighting the pill for space and breaking the layout.
   metaRow: {
     marginTop: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
+    flexDirection: "column",
+    alignItems: "flex-start",
   },
   // Fixed pill height + lineHeight 1 keeps the uppercase label optically
-  // centred in the chip (react-pdf's font-default line box sits the
-  // glyphs high otherwise); the sources line shares the same baseline
-  // treatment so the row reads level.
+  // centred in the chip (react-pdf's font-default line box sits the glyphs
+  // high otherwise). alignSelf flex-start so the pill hugs its own width.
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "flex-start",
     height: 17,
     paddingHorizontal: 9,
     borderRadius: 999,
-    marginRight: 8,
   },
   statusDot: { width: 6, height: 6, borderRadius: 999, marginRight: 5 },
   statusLabel: {
@@ -245,9 +248,9 @@ const styles = StyleSheet.create({
   },
   sourceLine: {
     fontSize: 7.5,
-    lineHeight: 1,
-    marginTop: 1.5,
-    letterSpacing: 1.2,
+    lineHeight: 1.35,
+    marginTop: 6,
+    letterSpacing: 1,
     color: TEXT_MUTED,
     textTransform: "uppercase",
   },
@@ -330,7 +333,7 @@ const styles = StyleSheet.create({
   // ── Legend ────────────────────────────────────────────────────────
   legendRow: { flexDirection: "row", alignItems: "center", marginBottom: 3.5 },
   legendSwatch: { width: 9, height: 9, borderRadius: 2.5, marginRight: 7 },
-  legendLabel: { fontSize: 8.5, color: TEXT_BODY },
+  legendLabel: { fontSize: 8.5, lineHeight: 1, color: TEXT_BODY },
 
   // Plain text, not a Link: a printed report's references shouldn't look
   // clickable.
@@ -779,7 +782,7 @@ function ModulePage({
       <ChromeTop branding={branding} address={address} />
       {/* Header */}
       <View>
-        <Text style={styles.eyebrow}>0{moduleIndex(module)} · {meta.name.toUpperCase()}</Text>
+        <Text style={styles.eyebrow}>{String(moduleIndex(module)).padStart(2, "0")} · {meta.name.toUpperCase()}</Text>
         <Text style={styles.title}>{meta.name}</Text>
         <Text style={styles.question}>{meta.question}</Text>
       </View>
@@ -973,23 +976,6 @@ function ModulePage({
   );
 }
 
-const MODULE_ORDER: Module[] = [
-  "flooding",
-  "flood_planning",
-  "overland_flow",
-  "storm_tide",
-  "bushfire",
-  "vegetation",
-  "environment",
-  "heritage",
-  "easements",
-  "noise",
-  "steep_land",
-  "acid_sulfate",
-  "mining",
-  "schools",
-  "zoning",
-];
 function moduleIndex(m: Module): number {
   return MODULE_ORDER.indexOf(m) + 1;
 }
@@ -1024,12 +1010,16 @@ function attentionOrder(modules: ReportPayload["modules"]) {
     });
 }
 
-/** Facts, not warnings. Keeps a full page (map + narrative) like a flagged
+/** "Good to know" facts, not warnings — a fixed set (zone, schools,
+ * transport, local plan). Keeps a full page (map + narrative) like a flagged
  * module, but is excluded from the count, the verdict list and Next steps.
  * Canonical order, not severity: there is no severity to sort by. */
 function informationalOrder(modules: ReportPayload["modules"]) {
   return modules.filter(
-    (m) => isInformational(m.riskLevel, m.hasConsideration) && !pdfIsFailed(m),
+    (m) =>
+      GOOD_TO_KNOW_MODULES.has(m.module) &&
+      !isFlagged(m.riskLevel, m.hasConsideration) &&
+      !pdfIsFailed(m),
   );
 }
 
@@ -1043,9 +1033,14 @@ function AtAGlancePage({
   const { report, address, modules, considerationCount } = payload;
   const attention = attentionOrder(modules);
   const informational = informationalOrder(modules);
-  // Essential-clear checks get their own full page, so they leave the strip.
+  // Core hazard checks that came back clear get their own full page, so they
+  // leave the strip (as do the Good to know facts).
   const clear = modules.filter(
-    (m) => !m.hasConsideration && !pdfIsFailed(m) && !ESSENTIAL_MODULES.has(m.module),
+    (m) =>
+      !isFlagged(m.riskLevel, m.hasConsideration) &&
+      !pdfIsFailed(m) &&
+      !GOOD_TO_KNOW_MODULES.has(m.module) &&
+      !ESSENTIAL_MODULES.has(m.module),
   );
   // "N modules" must exclude the informational ones, or the headline count
   // never reaches zero and the all-clear sentence is unreachable.
@@ -1128,7 +1123,17 @@ function AtAGlancePage({
                         <Text style={{ fontSize: 9.5, fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY }}>
                           {meta.name}
                         </Text>
-                        <Text style={{ fontSize: 7.5, color: TEXT_MUTED, lineHeight: 1.35 }}>
+                        {/* Up to two wrapped lines, no mid-sentence "…":
+                            maxLines clips the rare over-long summary. */}
+                        <Text
+                          style={{
+                            fontSize: 7.5,
+                            color: TEXT_MUTED,
+                            lineHeight: 1.35,
+                            maxLines: 2,
+                            textOverflow: "ellipsis",
+                          }}
+                        >
                           {line}
                         </Text>
                       </View>
@@ -1489,6 +1494,12 @@ function CoverPage({
   const { report, address } = payload;
   const accent = branding?.color ?? ACCENT_DEFAULT;
   const who = branding?.name ?? "LotLens";
+  // The cover aerial is now DARK, so its type is light. Solid hexes only
+  // (react-pdf renders rgba/8-digit-hex borders red; text rgba is fine but
+  // solids keep it simple).
+  const COVER_INK = "#ffffff";
+  const COVER_MUTED = "#c7d2e0";
+  const COVER_LINE = "#4b5563";
   const subLine = [
     payload.parcel?.suburb,
     payload.parcel?.lotPlan
@@ -1500,7 +1511,7 @@ function CoverPage({
     .join("  ·  ");
 
   return (
-    <Page size="A4" style={{ backgroundColor: PAGE_BG, fontFamily: "Helvetica" }} wrap={false}>
+    <Page size="A4" style={{ backgroundColor: "#0b1220", fontFamily: "Helvetica" }} wrap={false}>
       {/* Full-A4 flow canvas: a wrap={false} page shrinks to its content
         * height and drops top-anchored absolutes when everything is
         * absolute: this View pins the page to true A4 and anchors the
@@ -1528,22 +1539,22 @@ function CoverPage({
               style={{ height: 30, width: 110, objectFit: "contain", objectPosition: "left", marginRight: 10 }}
             />
           )}
-          <Text style={{ fontSize: 19, fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY, letterSpacing: -0.2 }}>
+          <Text style={{ fontSize: 19, fontFamily: "Helvetica-Bold", color: COVER_INK, letterSpacing: -0.2 }}>
             {who}
           </Text>
         </View>
-        <Text style={{ fontSize: 8.5, color: TEXT_MUTED, marginTop: 4, letterSpacing: 0.3 }}>
+        <Text style={{ fontSize: 8.5, color: COVER_MUTED, marginTop: 4, letterSpacing: 0.3 }}>
           Property due diligence from public council &amp; Queensland Government data
         </Text>
 
         <View style={{ width: 34, height: 3, backgroundColor: accent, marginTop: 24, marginBottom: 24 }} />
 
-        <Text style={styles.eyebrow}>Property due diligence report</Text>
-        <Text style={{ fontSize: 26, fontFamily: "Helvetica-Bold", lineHeight: 1.12, color: TEXT_PRIMARY, letterSpacing: -0.4 }}>
+        <Text style={[styles.eyebrow, { color: COVER_MUTED }]}>Property due diligence report</Text>
+        <Text style={{ fontSize: 26, fontFamily: "Helvetica-Bold", lineHeight: 1.12, color: COVER_INK, letterSpacing: -0.4 }}>
           {formatAuAddress(address.address_text, payload.postcode)}
         </Text>
         {subLine && (
-          <Text style={{ fontSize: 9, color: TEXT_MUTED, marginTop: 7, letterSpacing: 0.2 }}>
+          <Text style={{ fontSize: 9, color: COVER_MUTED, marginTop: 7, letterSpacing: 0.2 }}>
             {subLine}
           </Text>
         )}
@@ -1559,30 +1570,30 @@ function CoverPage({
           borderTopWidth: 0.5,
           // Solid 6-digit hex only: react-pdf paints rgba()/8-digit-hex
           // BORDER colors as red (backgrounds are fine).
-          borderTopColor: "#94a3b8",
+          borderTopColor: COVER_LINE,
           paddingTop: 12,
           flexDirection: "row",
           justifyContent: "space-between",
         }}
       >
         <View>
-          <Text style={styles.metaLabel}>Prepared by</Text>
-          <Text style={{ fontSize: 9, color: TEXT_PRIMARY, fontFamily: "Helvetica-Bold" }}>
+          <Text style={[styles.metaLabel, { color: COVER_MUTED }]}>Prepared by</Text>
+          <Text style={{ fontSize: 9, color: COVER_INK, fontFamily: "Helvetica-Bold" }}>
             {who}
             {branding?.name ? "  ·  with LotLens" : ""}
           </Text>
         </View>
         <View>
-          <Text style={styles.metaLabel}>Date</Text>
-          <Text style={{ fontSize: 9, color: TEXT_PRIMARY }}>{formatDate(report.generated_at)}</Text>
+          <Text style={[styles.metaLabel, { color: COVER_MUTED }]}>Date</Text>
+          <Text style={{ fontSize: 9, color: COVER_INK }}>{formatDate(report.generated_at)}</Text>
         </View>
         <View>
-          <Text style={styles.metaLabel}>Checks run</Text>
-          <Text style={{ fontSize: 9, color: TEXT_PRIMARY }}>{payload.modules.length} public-data modules</Text>
+          <Text style={[styles.metaLabel, { color: COVER_MUTED }]}>Checks run</Text>
+          <Text style={{ fontSize: 9, color: COVER_INK }}>{payload.modules.length} public-data modules</Text>
         </View>
         <View>
-          <Text style={styles.metaLabel}>Report id</Text>
-          <Text style={{ fontSize: 9, color: TEXT_PRIMARY }}>{report.id.slice(0, 8)}</Text>
+          <Text style={[styles.metaLabel, { color: COVER_MUTED }]}>Report id</Text>
+          <Text style={{ fontSize: 9, color: COVER_INK }}>{report.id.slice(0, 8)}</Text>
         </View>
       </View>
       </View>
@@ -1666,13 +1677,20 @@ export function ReportPDF({
   // the zone code and the school catchment are content, not filler.
   const attention = attentionOrder(modules);
   const informational = informationalOrder(modules);
-  // Essential hazard checks that came back clear keep a full "No issues
-  // found" page; the rest of the clear checks collapse into the strip.
+  // Core hazard checks that came back clear keep a full "No considerations
+  // identified" page; the minor clear checks collapse into the strip.
   const essentialClear = modules.filter(
-    (m) => ESSENTIAL_MODULES.has(m.module) && !m.hasConsideration && !pdfIsFailed(m),
+    (m) =>
+      ESSENTIAL_MODULES.has(m.module) &&
+      !isFlagged(m.riskLevel, m.hasConsideration) &&
+      !pdfIsFailed(m),
   );
   const clear = modules.filter(
-    (m) => !m.hasConsideration && !pdfIsFailed(m) && !ESSENTIAL_MODULES.has(m.module),
+    (m) =>
+      !isFlagged(m.riskLevel, m.hasConsideration) &&
+      !pdfIsFailed(m) &&
+      !GOOD_TO_KNOW_MODULES.has(m.module) &&
+      !ESSENTIAL_MODULES.has(m.module),
   );
 
   return (

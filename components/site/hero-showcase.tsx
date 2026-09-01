@@ -15,7 +15,13 @@
 // the layer's suburb-scale silhouette reads. Clicking the active dot (or
 // AUTO) resumes the cycle.
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 // ── Fixture types (shape written by scripts/generate-hero-demo.ts) ──────
 type Bbox = { xmin: number; ymin: number; xmax: number; ymax: number };
@@ -156,6 +162,10 @@ function pathFor(rings: number[][][], px: Project): string {
 
 type Painted = { d: string; c: string; o: number };
 
+// Store that never changes: pairs with useSyncExternalStore below to read
+// "has hydration finished" without an effect-driven setState.
+const subscribeNever = () => () => {};
+
 function paint(features: HeroFeature[], px: Project): Painted[] {
   return features.map((f) => ({ d: pathFor(f.p, px), c: f.c, o: f.o ?? 0.35 }));
 }
@@ -195,6 +205,19 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
     shown: "flooding",
   });
   const { pinned, shown } = sel;
+  // Layer paths render only after hydration. SSR'ing every module's paths
+  // in all three SVGs (phone silhouette + desktop background + loupe) put
+  // ~1.4 MB of markup on the landing page — for decoration whose CSS cycle
+  // starts animating post-hydration anyway. The aerial <img>, veils, chips
+  // and the amber parcel outline stay server-rendered, so the first paint
+  // looks composed; the layers fade in with their existing animation.
+  // (useSyncExternalStore: server snapshot false → client true, the
+  // effect-free way to detect "we're past hydration".)
+  const mounted = useSyncExternalStore(
+    subscribeNever,
+    () => true,
+    () => false,
+  );
   const railRef = useRef<HTMLDivElement | null>(null);
   const pin = (k: ModuleKey | null) => {
     setSel((s) => ({ pinned: k, shown: k ?? s.shown }));
@@ -223,14 +246,18 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
   );
 
   // All path strings are precomputed once: pinning just toggles <g> nodes.
+  // Skipped entirely until mount — the SSR pass (and matching first client
+  // render) emits no layer paths, so building ~2,800 path strings there is
+  // pure wasted CPU per request.
   const layers = useMemo(() => {
     const out = {} as Record<ModuleKey, { loupe: Painted[]; bg: Painted[] }>;
+    if (!mounted) return out;
     for (const m of RAIL) {
       const feats = data.modules[m.key]?.features ?? [];
       out[m.key] = { loupe: paint(feats, loupePx), bg: paint(feats, bgPx) };
     }
     return out;
-  }, [data, loupePx]);
+  }, [data, loupePx, mounted]);
 
   const parcelLoupe = useMemo(() => pathFor(data.parcel, loupePx), [data.parcel, loupePx]);
   // Hero-normalised horizontal centre of the loupe target: the demo lot's
@@ -311,7 +338,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
               {/* Phones run the layers noticeably stronger than desktop:
                   the narrow mask band + the veil already dim them twice,
                   so the shared --hero-layer values read as barely-there. */}
-              {!pinned &&
+              {mounted && !pinned &&
                 GROUPS.map((grp, gi) => (
                   <g key={`m-grp-${gi}`} className={`lens-fade${gi + 1}`}>
                     <g style={{ opacity: "min(calc(var(--hero-layer) + 0.22), 0.95)" }}>
@@ -321,12 +348,14 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                     </g>
                   </g>
                 ))}
-              <g
-                className="transition-opacity duration-700"
-                style={{ opacity: pinned ? "min(calc(var(--hero-layer-pinned) + 0.1), 1)" : 0 }}
-              >
-                <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.5} />
-              </g>
+              {mounted && (
+                <g
+                  className="transition-opacity duration-700"
+                  style={{ opacity: pinned ? "min(calc(var(--hero-layer-pinned) + 0.1), 1)" : 0 }}
+                >
+                  <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.5} />
+                </g>
+              )}
             </svg>
             </div>
           </div>
@@ -372,7 +401,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
           preserveAspectRatio="xMidYMid slice"
           className="absolute inset-0 h-full w-full"
         >
-          {!pinned &&
+          {mounted && !pinned &&
             GROUPS.map((grp, gi) => (
               <g key={`bg-grp-${gi}`} className={`lens-fade${gi + 1}`}>
                 <g style={{ opacity: "var(--hero-layer)" }}>
@@ -398,12 +427,14 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
           preserveAspectRatio="xMidYMid slice"
           className="absolute inset-0 h-full w-full"
         >
-          <g
-            className="transition-opacity duration-700"
-            style={{ opacity: pinned ? "var(--hero-layer-pinned)" : 0 }}
-          >
-            <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.5} />
-          </g>
+          {mounted && (
+            <g
+              className="transition-opacity duration-700"
+              style={{ opacity: pinned ? "var(--hero-layer-pinned)" : 0 }}
+            >
+              <LayerPaths paths={layers[shown].bg} lineWidth={1} lineOpacity={0.5} />
+            </g>
+          )}
           {/* No geographic marker/parcel here: on desktop the loupe sits on
               (or drifts near: the crop and the layout use different
               coordinate spaces) the very spot it magnifies, so anything
@@ -467,7 +498,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                     every engine. */}
                 <div className="absolute inset-0 z-[1] [clip-path:circle(50%)]">
                 <svg viewBox="0 0 900 900" className="h-full w-full">
-                  {pinned ? (
+                  {mounted && (pinned ? (
                     <g>
                       {pinned === "zoning" && (
                         <path
@@ -499,7 +530,7 @@ export function HeroShowcase({ data, children }: { data: HeroDemoData; children:
                         ))}
                       </g>
                     ))
-                  )}
+                  ))}
                   {/* selected lot: the amber outline every report map carries */}
                   <path
                     d={parcelLoupe}

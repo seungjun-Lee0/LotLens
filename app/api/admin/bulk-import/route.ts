@@ -12,9 +12,11 @@ import { generateReportForQuery } from "@/lib/pipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// A big paste can take minutes; give the stream room. (Serverless caps this
-// lower in prod — the stream still delivers every line it finished in time.)
-export const maxDuration = 800;
+// Vercel Hobby caps serverless functions at 300 s. At ~7 s per address
+// that bounds one run to roughly 40 addresses — the NDJSON stream still
+// delivers every line that finished in time, so a bigger paste just needs
+// a second run for the remainder.
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   const user = await getSessionUser();

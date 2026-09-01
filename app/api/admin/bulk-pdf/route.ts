@@ -15,8 +15,10 @@ import { renderReportPdf } from "@/lib/render-report-pdf";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// A ZIP of many reports can take minutes (each PDF is ~10-30 s cold).
-export const maxDuration = 800;
+// Vercel Hobby caps serverless functions at 300 s. Warm renders run ~4-5 s
+// per report, so the 60-report batch cap below fits; a cold batch that
+// can't finish in time should be split client-side.
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   const user = await getSessionUser();

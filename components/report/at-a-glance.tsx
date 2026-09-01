@@ -1,15 +1,16 @@
 import { Check, Info, TriangleAlert } from "lucide-react";
 
+import { ClampText } from "@/components/report/clamp-text";
+
 import { formatAuAddress, stripAddressPrefix } from "@/lib/format-address";
 import { MODULE_META } from "@/lib/module-meta";
 import {
   isFlagged,
-  isInformational,
   RISK_RANK,
   RISK_STYLE,
   riskOf,
 } from "@/lib/risk-style";
-import { ESSENTIAL_MODULES } from "@/lib/db";
+import { GOOD_TO_KNOW_MODULES } from "@/lib/db";
 import type { ReportPayload } from "@/lib/pipeline";
 
 // Brisbane CBD GPO (approx). Used for the "distance to CBD" stat in the
@@ -70,15 +71,23 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
         RISK_RANK[riskOf(a.riskLevel, a.hasConsideration)]
       );
     });
-  // Facts, not warnings: own lane so they neither raise an alarm nor get
-  // buried in "clear" (they have real content; see the body sections).
+  // Facts, not warnings: a fixed set of "Good to know" modules (zone,
+  // schools, transport, local plan) that always carry real content, so they
+  // neither raise an alarm nor get buried in "clear".
   const info = modules.filter(
-    (m) => isInformational(m.riskLevel, m.hasConsideration) && !isFailed(m),
+    (m) => GOOD_TO_KNOW_MODULES.has(m.module) && !isFlagged(m.riskLevel, m.hasConsideration) && !isFailed(m),
   );
-  // Essential hazard checks that came back clear get their own full "No
-  // issues found" section in the body, so they leave the compact strip.
+  // Every check that passed — including the core hazard checks that came back
+  // clear — belongs in the At-a-glance "Checked & clear" list. This is the
+  // summary layer (like the attention rows, it mirrors the body, where those
+  // hazard checks also keep a full "No considerations identified" section);
+  // leaving a clear flood/bushfire out of the summary entirely would make it
+  // vanish from the punchline view. Only the Good to know facts sit elsewhere.
   const clear = modules.filter(
-    (m) => !m.hasConsideration && !isFailed(m) && !ESSENTIAL_MODULES.has(m.module),
+    (m) =>
+      !isFlagged(m.riskLevel, m.hasConsideration) &&
+      !isFailed(m) &&
+      !GOOD_TO_KNOW_MODULES.has(m.module),
   );
   // Denominator for "N of M checks": informational modules never fail this
   // test, so counting them would make the ratio permanently unreachable.
@@ -168,9 +177,9 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                             Source mapping was unavailable at report time. Run the check again to complete verification.
                           </div>
                         ) : summary ? (
-                          <div className="line-clamp-2 text-[12px] leading-snug text-muted-foreground sm:text-[12.5px]">
+                          <ClampText className="text-[12px] leading-snug text-muted-foreground sm:text-[12.5px]">
                             {summary}
-                          </div>
+                          </ClampText>
                         ) : (
                           <div className="truncate text-[11px] text-muted-foreground">
                             {meta.sourceLabel}
@@ -178,19 +187,19 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                         )}
                       </div>
                       <div
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] sm:gap-2 sm:px-3 sm:text-[11px] sm:tracking-[0.14em]"
+                        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold uppercase leading-none tracking-[0.12em] sm:h-8 sm:gap-2 sm:px-2.5 sm:text-[11px] sm:tracking-[0.14em]"
                         style={{
                           background: `color-mix(in oklab, ${tint} 14%, transparent)`,
                           color: tint,
                         }}
                       >
                         <span
-                          className="flex size-4 items-center justify-center rounded-full"
+                          className="flex size-4 shrink-0 items-center justify-center rounded-full sm:size-[18px]"
                           style={{ background: tint, color: "white" }}
                         >
-                          <TriangleAlert className="size-2.5" strokeWidth={3.5} />
+                          <TriangleAlert className="size-2.5 sm:size-3" strokeWidth={3} />
                         </span>
-                        <span className="hidden sm:inline">
+                        <span className="hidden pr-0.5 leading-none sm:inline">
                           {failed ? "Pending" : RISK_STYLE[level].label}
                         </span>
                       </div>
@@ -217,19 +226,31 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                   return (
                     <li
                       key={m.module}
-                      className="flex items-center gap-2.5 rounded-xl border border-border/40 bg-background/30 px-3 py-2"
+                      className="flex items-start gap-3 rounded-2xl border border-border/40 bg-background/30 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3"
                     >
-                      <Icon className="size-3.5 shrink-0" style={{ color: meta.tint }} />
-                      <span className="shrink-0 text-[12.5px] font-medium">
-                        {meta.name}
-                      </span>
-                      {summary && (
-                        <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
-                          {summary}
-                        </span>
-                      )}
+                      {/* Same structure as the attention rows above (icon box +
+                          stacked name/summary) so the two lists align. */}
+                      <div
+                        className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl sm:size-9"
+                        style={{
+                          background: `color-mix(in oklab, ${meta.tint} 14%, transparent)`,
+                          color: meta.tint,
+                        }}
+                      >
+                        <Icon className="size-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[14px] font-semibold tracking-tight sm:text-[15px]">
+                          {meta.name}
+                        </div>
+                        {summary && (
+                          <ClampText className="mt-0.5 text-[12px] leading-snug text-muted-foreground sm:text-[12.5px]">
+                            {summary}
+                          </ClampText>
+                        )}
+                      </div>
                       <Info
-                        className="size-3.5 shrink-0"
+                        className="mt-1 size-4 shrink-0"
                         strokeWidth={2.5}
                         style={{ color: RISK_STYLE.informational.cssVar }}
                       />

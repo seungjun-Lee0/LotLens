@@ -15,10 +15,13 @@ import { Download, Loader2 } from "lucide-react";
 export function DownloadPdfButton({
   reportId,
   filename,
+  iconOnly = false,
 }: {
   reportId: string;
   /** Falls back to the Content-Disposition name the route already sets. */
   filename?: string;
+  /** Round icon-only button (matches the floating FAB): no label text. */
+  iconOnly?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +79,26 @@ export function DownloadPdfButton({
     }
   }
 
+  if (iconOnly) {
+    return (
+      <button
+        type="button"
+        onClick={download}
+        disabled={busy}
+        aria-busy={busy}
+        aria-label={busy ? "Preparing PDF…" : "Download PDF"}
+        title={error ?? (busy ? "Preparing PDF…" : "Download PDF")}
+        className="glass-strong flex size-12 items-center justify-center rounded-full text-foreground shadow-xl transition hover:brightness-105 active:scale-95 disabled:cursor-progress disabled:opacity-70"
+      >
+        {busy ? (
+          <Loader2 className="size-5 animate-spin" />
+        ) : (
+          <Download className="size-5" />
+        )}
+      </button>
+    );
+  }
+
   return (
     <div className="flex flex-col items-start gap-1 sm:items-end">
       <button
@@ -83,7 +106,7 @@ export function DownloadPdfButton({
         onClick={download}
         disabled={busy}
         aria-busy={busy}
-        className="glass inline-flex h-10 shrink-0 items-center gap-2 self-start rounded-full px-4 text-[13px] font-medium text-foreground/80 transition hover:text-foreground disabled:cursor-progress disabled:opacity-70 sm:self-end sm:text-[13.5px]"
+        className="glass inline-flex h-10 shrink-0 items-center gap-2 self-start whitespace-nowrap rounded-full px-4 text-[13px] font-medium text-foreground/80 transition hover:text-foreground disabled:cursor-progress disabled:opacity-70 sm:self-end sm:text-[13.5px]"
       >
         {busy ? (
           <Loader2 className="size-4 animate-spin" />

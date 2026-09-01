@@ -14,8 +14,8 @@ import { UnlockButton } from "@/components/report/unlock-button";
 import { getSessionUser, isAdmin } from "@/lib/auth";
 import { formatAuAddress } from "@/lib/format-address";
 import { loadReportPayload } from "@/lib/pipeline";
-import { isFlagged, isInformational, RISK_RANK, riskOf } from "@/lib/risk-style";
-import { ESSENTIAL_MODULES, type Module } from "@/lib/db";
+import { isFlagged, RISK_RANK, riskOf } from "@/lib/risk-style";
+import { ESSENTIAL_MODULES, GOOD_TO_KNOW_MODULES, type Module } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -74,21 +74,35 @@ export default async function ReportPage({
   const attentionModules = paid
     ? modules.filter((m) => isFlagged(m.riskLevel, m.hasConsideration) || isFailed(m))
     : modules.filter((m) => m.module === PREVIEW_MODULE);
+  // "Good to know" is a fixed set of fact modules (zone, schools, transport,
+  // local plan) — always a full section.
   const infoModules = paid
     ? modules.filter(
-        (m) => isInformational(m.riskLevel, m.hasConsideration) && !isFailed(m),
+        (m) =>
+          GOOD_TO_KNOW_MODULES.has(m.module) &&
+          !isFlagged(m.riskLevel, m.hasConsideration) &&
+          !isFailed(m),
       )
     : [];
-  // Essential hazard checks that came back clear keep a full "No issues
-  // found" section; every other clear check collapses into the strip.
+  // Core hazard checks that came back clear keep a full "No considerations
+  // identified" section (flood, bushfire, coastal, …); the minor no-finding
+  // checks (stormwater, steep land, acid sulfate, mining) collapse into the
+  // "Checked & clear" strip instead.
   const essentialClearModules = paid
     ? modules.filter(
-        (m) => ESSENTIAL_MODULES.has(m.module) && !m.hasConsideration && !isFailed(m),
+        (m) =>
+          ESSENTIAL_MODULES.has(m.module) &&
+          !isFlagged(m.riskLevel, m.hasConsideration) &&
+          !isFailed(m),
       )
     : [];
   const clearModules = paid
     ? modules.filter(
-        (m) => !m.hasConsideration && !isFailed(m) && !ESSENTIAL_MODULES.has(m.module),
+        (m) =>
+          !isFlagged(m.riskLevel, m.hasConsideration) &&
+          !isFailed(m) &&
+          !GOOD_TO_KNOW_MODULES.has(m.module) &&
+          !ESSENTIAL_MODULES.has(m.module),
       )
     : [];
   const flaggedBySeverity = modules
@@ -141,7 +155,7 @@ export default async function ReportPage({
             />
           ))}
 
-          {/* Essential hazard checks that came back clear keep their own full
+          {/* Core hazard checks that came back clear keep their own full
               section (each carries its "No considerations identified" status),
               so no separate heading is needed. */}
           {paid &&
@@ -156,10 +170,6 @@ export default async function ReportPage({
                 lotLines={parcelLines}
               />
             ))}
-
-          {paid && (
-            <NextSteps rows={flaggedBySeverity} narrative={report.narrative} />
-          )}
 
           {paid && infoModules.length > 0 && (
             <>
@@ -189,6 +199,12 @@ export default async function ReportPage({
 
           {paid && (
             <ClearModules rows={clearModules} narrative={report.narrative} />
+          )}
+
+          {/* Next steps last: the action checklist reads as the closing
+              takeaway, after all the module detail. */}
+          {paid && (
+            <NextSteps rows={flaggedBySeverity} narrative={report.narrative} />
           )}
 
           {!paid && (
@@ -228,10 +244,10 @@ export default async function ReportPage({
           )}
         </div>
 
-        {/* Disclaimer */}
+        {/* Disclaimer — same width as the report content above it. */}
         <section
           id="disclaimer"
-          className="mx-auto max-w-3xl rounded-3xl border border-border/60 bg-card/60 p-5 text-center text-[12.5px] leading-relaxed text-muted-foreground backdrop-blur-sm sm:p-6 sm:text-[13px]"
+          className="rounded-3xl border border-border/60 bg-card/60 p-5 text-center text-[12.5px] leading-relaxed text-muted-foreground backdrop-blur-sm sm:p-6 sm:text-[13px]"
         >
           <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-foreground/80 sm:text-[11px]">
             Disclaimer
@@ -244,15 +260,22 @@ export default async function ReportPage({
           full sections to make scrolling a chore. */}
       {paid && (
         <ModuleNav
-          // Every module that rendered a section, in body order: the nav
-          // has to reach the informational ones too or "jump to Zoning"
-          // silently does nothing.
-          items={[...attentionModules, ...infoModules].map((m) => ({
+          // Every module that rendered a FULL section (map + detail box), in
+          // body order: attention, then the core hazard checks that came back
+          // clear ("No considerations identified" sections), then the Good to
+          // know facts. The Checked & clear strip is pills only — no section
+          // to jump to — so it's excluded.
+          items={[
+            ...attentionModules,
+            ...essentialClearModules,
+            ...infoModules,
+          ].map((m) => ({
             module: m.module,
             riskLevel: m.riskLevel,
             hasConsideration: m.hasConsideration,
             failed: isFailed(m),
           }))}
+          action={<DownloadPdfButton reportId={report.id} iconOnly />}
         />
       )}
 

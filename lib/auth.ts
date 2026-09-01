@@ -3,6 +3,7 @@
 // small (signup/login/logout/session) and this keeps us off beta-adapter
 // churn. Server-only.
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
@@ -119,8 +120,12 @@ function toSessionUser(row: UserRow): SessionUser {
   };
 }
 
-/** Resolve the current user from the session cookie. Null on any failure. */
-export async function getSessionUser(): Promise<SessionUser | null> {
+/** Resolve the current user from the session cookie. Null on any failure.
+ * Wrapped in React cache(): a page render calls this from the header, the
+ * page body and admin gates, and each call was a separate users-table
+ * round-trip. cache() dedupes to one query per request; outside a React
+ * request context it just calls through uncached. */
+export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   try {
     const store = await cookies();
     const token = store.get(SESSION_COOKIE)?.value;
@@ -141,7 +146,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   } catch {
     return null;
   }
-}
+});
 
 /** True when the user's paid plan is currently good for quota unlocks. */
 export function isActiveSubscriber(user: SessionUser | null): boolean {

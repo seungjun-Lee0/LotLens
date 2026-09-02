@@ -250,7 +250,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-teal)",
     tintHex: APPLE_HEX.teal,
     icon: ScrollText,
-    sourceLabel: "BCC high-voltage overlay + QSpatial cadastre (NOT title search)",
+    sourceLabel: "High-voltage easement overlays + QSpatial cadastre (NOT title search)",
     thingsToKnow: [
       "An easement gives another party rights over part of the land, commonly for drainage, utilities or access. It can limit permanent structures and must remain accessible for its stated purpose.",
       "The position of an easement is only part of the answer. Its beneficiary, terms and building restrictions are recorded in the title documents.",
@@ -348,7 +348,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-blue)",
     tintHex: APPLE_HEX.blue,
     icon: Waves,
-    sourceLabel: "Brisbane City Council · Stormwater assets (existing)",
+    sourceLabel: "Council stormwater assets (existing)",
     thingsToKnow: [
       "Public stormwater assets can cross private land and affect where structures, pools or excavation can be placed. Approval may be required for work over or near an asset.",
       "Public mains and private property drainage have different implications. The property-specific result distinguishes them where ownership information is available.",
@@ -388,7 +388,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-indigo)",
     tintHex: APPLE_HEX.indigo,
     icon: Map,
-    sourceLabel: "Brisbane City Council · City Plan 2014 neighbourhood plans",
+    sourceLabel: "Council planning scheme · local/neighbourhood plans",
     thingsToKnow: [
       "A local or neighbourhood plan adds area-specific controls to the underlying zone. It can change building height, density, land use or built-form requirements.",
       "Properties in the same zone can have different development outcomes when they fall in different plan areas or precincts. Read both layers together.",

@@ -118,6 +118,17 @@ function sourcesFromRaw(raw: RawAttrs): string[] {
   return list.map((s) => (typeof s.url === "string" ? s.url : "")).filter(Boolean);
 }
 
+/** The source this row was ACTUALLY fetched from ("FloodCheck Queensland",
+ * "BCC Flood Awareness Map", "Queensland Bushfire Prone Area"…). Narrative
+ * sentences must speak from this name: the stubs were written in the
+ * Brisbane-only era and hardcoded "BCC", which became false provenance the
+ * moment other councils and statewide layers arrived (a Logan report was
+ * citing "the BCC bushfire overlay" for state QFD data). */
+function srcName(input: GenerateModuleNarrativeInput): string {
+  const s = input.councilData.source_name;
+  return typeof s === "string" && s.length > 0 ? s : "the source mapping";
+}
+
 function asArr<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
@@ -133,8 +144,7 @@ function renderStubFlooding(
   if (risk === "none" && historic.length === 0) {
     return {
       summary: `No flooding consideration was identified at ${input.address}.`,
-      detail:
-        "Brisbane City Council's Flood Awareness Mapping does not place this address inside any creek, river, or storm tide flood polygon, and the property is not within the 2011 or 2022 historic flood extents we checked.",
+      detail: `${srcName(input)} does not place this address inside any flood polygon, and the property is not within any historic flood extent we checked.`,
       questions_to_ask: [
         "Ask the seller about any localised drainage issues. Public overlays can miss yard-scale ponding.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -158,10 +168,10 @@ function renderStubFlooding(
       : " No historic flood extent matched.";
 
   return {
-    summary: `${input.address} carries ${riskWord} per BCC Flood Awareness Mapping.${
+    summary: `${input.address} carries ${riskWord} per ${srcName(input)}.${
       historicLabel.length > 0 ? ` Historic floods: ${historicLabel.join(", ")}.` : ""
     }`,
-    detail: `Brisbane City Council classifies this property as "${raw.riskLevel}" on the combined creek / river / storm tide overlay.${historicSentence}\n\nFlood risk affects insurability, build form (raised floor levels), and resale.`,
+    detail: `${srcName(input)} classifies this property as "${raw.riskLevel}" on its flood risk mapping.${historicSentence}\n\nFlood risk affects insurability, build form (raised floor levels), and resale.`,
     questions_to_ask: [
       "What habitable floor level does the property currently sit at, vs the defined flood event level?",
       "Has the property been physically flooded in recent events? Request photos and insurance claim history.",
@@ -179,8 +189,7 @@ function renderStubOverlandFlow(
   if (risk === "none") {
     return {
       summary: `No overland flow consideration was identified at ${input.address}.`,
-      detail:
-        "Brisbane City Council's Overland Flow mapping does not place this address inside any polygon. The lot is unlikely to be affected by mapped stormwater run-off.",
+      detail: `${srcName(input)} does not place this address inside any overland flow polygon. The lot is unlikely to be affected by mapped stormwater run-off.`,
       questions_to_ask: [
         "Ask about local drainage problems anyway. Overland flow models can miss yard-scale ponding.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -189,8 +198,8 @@ function renderStubOverlandFlow(
     };
   }
   return {
-    summary: `${input.address} carries ${risk} overland flow risk per BCC mapping.`,
-    detail: `Brisbane City Council classifies this property as "${risk}" on the Overland Flow overlay. Building or extending may require specific drainage measures so stormwater can pass through the lot safely.`,
+    summary: `${input.address} carries ${risk} overland flow risk per ${srcName(input)}.`,
+    detail: `${srcName(input)} classifies this property as "${risk}" for overland flow. Building or extending may require specific drainage measures so stormwater can pass through the lot safely.`,
     questions_to_ask: [
       "Are there visible drainage marks, gullies or yard erosion from past storms?",
       "Have any extensions on this lot needed Council overland-flow assessment?",
@@ -208,8 +217,7 @@ function renderStubStormTide(
   if (risk === "none") {
     return {
       summary: `No storm tide consideration was identified at ${input.address}.`,
-      detail:
-        "Brisbane City Council's Storm Tide mapping does not place this address inside any polygon. The lot is unlikely to be exposed to coastal storm-tide inundation as currently modelled.",
+      detail: `${srcName(input)} does not place this address inside any storm tide polygon. The lot is unlikely to be exposed to coastal storm-tide inundation as currently modelled.`,
       questions_to_ask: [
         "If the property is near the bay, ask about historic king tide / east-coast low events anyway.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -218,8 +226,8 @@ function renderStubStormTide(
     };
   }
   return {
-    summary: `${input.address} sits in a ${risk} storm tide area per BCC mapping.`,
-    detail: `Brisbane City Council classifies this property as "${risk}" on the Storm Tide overlay.\n\nHabitable floor levels, building envelope resilience, and certain materials may be regulated. Insurance premiums for coastal storm-exposed properties can be materially higher.`,
+    summary: `${input.address} sits in a ${risk} storm tide area per ${srcName(input)}.`,
+    detail: `${srcName(input)} classifies this property as "${risk}" for storm tide inundation.\n\nHabitable floor levels, building envelope resilience, and certain materials may be regulated. Insurance premiums for coastal storm-exposed properties can be materially higher.`,
     questions_to_ask: [
       "What is the habitable floor level versus the defined storm tide event level?",
       "Has insurance been quoted with explicit storm tide / cyclone coverage?",
@@ -237,8 +245,7 @@ function renderStubVegetation(
   if (!cat) {
     return {
       summary: `No biodiversity overlay applies to ${input.address}.`,
-      detail:
-        "BCC's Biodiversity areas overlay does not cover this address. Standard tree-removal and landscaping rules still apply (Natural Assets Local Law can catch individual significant trees even outside the overlay).",
+      detail: `${srcName(input)} does not map protected vegetation on this address. Standard tree-removal and landscaping rules still apply — council tree-protection local laws can catch individual significant trees even outside mapped areas.`,
       questions_to_ask: [
         "Is there a large or old tree on the lot that might trigger Natural Assets Local Law protections?",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -247,8 +254,8 @@ function renderStubVegetation(
     };
   }
   return {
-    summary: `${input.address} is mapped as "${cat}" on the BCC Biodiversity areas overlay.`,
-    detail: `The property sits inside a "${cat}" polygon under BCC's City Plan 2014. Council assessment is required before clearing protected vegetation, and building envelopes may be constrained by the overlay's vegetation rules.`,
+    summary: `${input.address} is mapped as "${cat}" on ${srcName(input)}.`,
+    detail: `The property sits inside a "${cat}" area on ${srcName(input)}. Assessment can be required before clearing protected vegetation, and building envelopes may be constrained by the mapping's vegetation rules.`,
     questions_to_ask: [
       "What native species are on the lot, and are any protected at the state level?",
       "Are there existing approved disturbance areas (driveway, building envelope, fire trail)?",
@@ -267,8 +274,7 @@ function renderStubFloodPlanning(
   if (!river && !creek) {
     return {
       summary: `No statutory flood planning overlay applies to ${input.address}.`,
-      detail:
-        "Neither the Brisbane River flood planning area nor the Creek/waterway planning area covers this address. Future building work won't be gated by the planning flood overlay.",
+      detail: `No flood planning area covers this address on ${srcName(input)}. Future building work won't be gated by the planning flood overlay.`,
       questions_to_ask: DISCLAIMER_FALLBACK_QUESTIONS,
       sources: sourcesFromRaw(raw),
     };
@@ -276,7 +282,7 @@ function renderStubFloodPlanning(
   const areas = [river, creek].filter((x): x is string => Boolean(x));
   return {
     summary: `${input.address} sits in ${areas.join(" + ")}.`,
-    detail: `Brisbane City Council's statutory flood planning overlay applies: ${areas.join(" + ")}.\n\nThe numbered suffix (1 strictest, 4 mildest) determines minimum habitable floor levels, fill volumes, and excluded structures for any new build or extension. This is the legally binding control, distinct from the awareness-mapping risk indicator.`,
+    detail: `The statutory flood planning overlay applies (${srcName(input)}): ${areas.join(" + ")}.\n\nThe numbered suffix (1 strictest, 4 mildest) determines minimum habitable floor levels, fill volumes, and excluded structures for any new build or extension. This is the legally binding control, distinct from the awareness-mapping risk indicator.`,
     questions_to_ask: [
       "What habitable floor level will any new build / extension need to be raised to?",
       "Are there fill, excavation or excluded-structure limits that affect the build envelope?",
@@ -294,18 +300,17 @@ function renderStubBushfire(
   if (!cat) {
     return {
       summary: `No bushfire overlay applies to ${input.address}.`,
-      detail:
-        "The address does not fall inside any polygon of BCC's City Plan 2014 Bushfire overlay (which captures medium and high hazard areas plus their buffers).",
+      detail: `${srcName(input)} does not map this address inside a bushfire prone area or its buffer.`,
       questions_to_ask: [
-        "Confirm with QFD if the property is on the statewide Bushfire Prone Area mapping. BCC's overlay is council-scope, and the state map can be wider.",
+        "Council planning schemes can map bushfire hazard differently to the state layer. Check the local scheme's bushfire overlay too.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
       ],
       sources: sourcesFromRaw(raw),
     };
   }
   return {
-    summary: `${input.address} is mapped as "${cat}" on the BCC bushfire overlay.`,
-    detail: `The property sits inside a "${cat}" polygon under BCC's City Plan 2014. This classification triggers planning-scheme provisions affecting new builds, vegetation management, and access, and may affect insurance premiums.`,
+    summary: `${input.address} is mapped as "${cat}" on ${srcName(input)}.`,
+    detail: `The property sits inside a "${cat}" area on ${srcName(input)}. This classification can trigger planning provisions affecting new builds, vegetation management, and access, and may affect insurance premiums.`,
     questions_to_ask: [
       "What asset-protection-zone (vegetation clearance) is required for this hazard class?",
       "Is the existing dwelling compliant with BAL (Bushfire Attack Level) construction standards?",
@@ -326,16 +331,15 @@ function renderStubZoning(
   if (!zoneCode && !lvl1) {
     return {
       summary: `Zoning could not be resolved for ${input.address}.`,
-      detail:
-        "The BCC City Plan 2014 zoning layer returned no polygon for this point. This is unusual for a Brisbane LGA address; check the address text and re-run.",
+      detail: `${srcName(input)} returned no zone for this point. Check the address text and re-run.`,
       questions_to_ask: DISCLAIMER_FALLBACK_QUESTIONS,
       sources: sourcesFromRaw(raw),
     };
   }
   const specific = lvl2 ?? zonePrecinct ?? zoneCode ?? lvl1;
   return {
-    summary: `Zoned ${specific} under BCC City Plan 2014.`,
-    detail: `Specific zone: ${lvl2 ?? "not stated"}. Top-level zone: ${lvl1 ?? "not stated"}. Precinct: ${zonePrecinct ?? "not stated"} (${zoneCode ?? "no code"}).\n\nZoning governs what can be built, run as a business, or subdivided on the lot. Brisbane's Centre, Mixed use, and residential zones each carry different precinct overlays, so check the specific zone and precinct description against your intended use.`,
+    summary: `Zoned ${specific} (${srcName(input)}).`,
+    detail: `Specific zone: ${lvl2 ?? "not stated"}. Top-level zone: ${lvl1 ?? "not stated"}. Precinct: ${zonePrecinct ?? "not stated"} (${zoneCode ?? "no code"}).\n\nZoning governs what can be built, run as a business, or subdivided on the lot. Zone and precinct names differ per planning scheme, so check the specific zone description against your intended use.`,
     questions_to_ask: [
       "What is the maximum height / GFA / site cover under this zone?",
       "Is a granny flat / dual occupancy permitted as code-assessable or impact-assessable?",
@@ -354,7 +358,7 @@ function renderStubHeritage(
     return {
       summary: `No heritage or character overlay applies to ${input.address}.`,
       detail:
-        "BCC's State heritage area, Local heritage area, Traditional building character and Dwelling house character overlays all return no polygons for this address. Renovation, demolition and building-form controls tied to those overlays do not apply.",
+        "No state heritage entry or council heritage/character overlay polygon covers this address. Renovation, demolition and building-form controls tied to those overlays do not apply.",
       questions_to_ask: [
         "Even with no overlay, individual pre-1947 dwellings can attract Council interest. Confirm the house's construction year.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -375,7 +379,7 @@ function renderStubHeritage(
     .join("; ");
   return {
     summary: `${input.address} is captured by ${types.join(" + ")} overlay${types.length > 1 ? "s" : ""}.`,
-    detail: `Entries: ${desc}.\n\nState or local heritage listing typically requires development approval for any external work and may block demolition. Traditional building character protection (pre-1947) restricts demolition and constrains alterations to street-facing form. The Dwelling house character overlay instead imposes height and form controls on houses (including small lots), so new builds and extensions can need extra assessment. Confirm the exact controls with BCC eplan.`,
+    detail: `Entries: ${desc}.\n\nState or local heritage listing typically requires development approval for any external work and may block demolition. Traditional building character protection (pre-1947) restricts demolition and constrains alterations to street-facing form. The Dwelling house character overlay instead imposes height and form controls on houses (including small lots), so new builds and extensions can need extra assessment. Confirm the exact controls with the council's planning scheme mapping.`,
     questions_to_ask: [
       "What demolition / external alteration approvals will be needed?",
       "If buying to renovate, what design constraints apply to the street-facing facade?",
@@ -406,7 +410,7 @@ function renderStubNoise(
   const parts = [t, a].filter((x): x is string => Boolean(x));
   return {
     summary: `${input.address} sits in ${parts.join(" + ")}.`,
-    detail: `Brisbane noise overlay flags this property: ${parts.join(" + ")}.\n\nNew construction will trigger acoustic-attenuation requirements: rated glazing, denser walls, restrictions on habitable rooms facing the source. Practical felt noise depends on prevailing wind, time of day, and traffic mix.`,
+    detail: `${srcName(input)} flags this property: ${parts.join(" + ")}.\n\nNew construction will trigger acoustic-attenuation requirements: rated glazing, denser walls, restrictions on habitable rooms facing the source. Practical felt noise depends on prevailing wind, time of day, and traffic mix.`,
     questions_to_ask: [
       "What rated windows and walls would a new build require here?",
       "Is the noise mostly road, rail, or aircraft? Solutions differ.",
@@ -425,7 +429,7 @@ function renderStubSchools(
     return {
       summary: `No state school catchment was matched for ${input.address}.`,
       detail:
-        "The QLD Department of Education catchment layer returned no polygons for this address. That's unusual. Confirm the address sits inside Brisbane LGA and re-run.",
+        "The QLD Department of Education catchment layer returned no polygons for this address. That's unusual for a residential address; check the address text and re-run.",
       questions_to_ask: DISCLAIMER_FALLBACK_QUESTIONS,
       sources: sourcesFromRaw(raw),
     };
@@ -466,7 +470,7 @@ function renderStubEasements(
   if (!hv && !cadastral) {
     return {
       summary: `No registered easement polygons cover ${input.address}.`,
-      detail: `Neither BCC's high-voltage powerline overlay nor the QSpatial DCDB easement-parcel layer places a polygon on this address. ${scope}`,
+      detail: `Neither the high-voltage powerline overlay we check nor the QSpatial DCDB easement-parcel layer places a polygon on this address. ${scope}`,
       questions_to_ask: [
         "Order a QLD Title Search anyway. The polygon coverage misses very narrow or recently registered easements, and only the title shows the legal terms.",
         ...DISCLAIMER_FALLBACK_QUESTIONS,
@@ -852,7 +856,7 @@ function renderStubTransport(
 
   return {
     summary: `Nearest public transport at ${input.address}: ${nearest.kind.toLowerCase()}${nearest.name ? ` at ${nearest.name}` : ""}, about ${nearest.distanceM} m away.`,
-    detail: `Within the search radius: ${list}.\n\nDistances are straight-line, so the real walk is longer wherever hills, a river or a dead-end street get in the way: in parts of Brisbane that difference is substantial. Frequency matters more than proximity: a stop on a turn-up-and-go line is worth considerably more than a closer one served a few times a day.`,
+    detail: `Within the search radius: ${list}.\n\nDistances are straight-line, so the real walk is longer wherever hills, a river or a dead-end street get in the way: in hilly or riverside suburbs that difference is substantial. Frequency matters more than proximity: a stop on a turn-up-and-go line is worth considerably more than a closer one served a few times a day.`,
     questions_to_ask: [
       "Which routes actually serve the nearest stop, and how frequent are they at peak and on weekends?",
       "Walk the route to the stop before you buy: check the gradient, the crossings and how it feels after dark.",
@@ -892,7 +896,7 @@ function renderStubWaterSewer(
     return {
       summary: `No Urban Utilities main crosses ${input.address}.`,
       detail:
-        "The water and sewer network runs in the surrounding street rather than through the lot, so building over a main is not a constraint here. Any service connection on the lot is this property's own line to the network and carries no build-over obligation.\n\nThat leaves the back yard free of the buried-infrastructure problem that catches out a lot of Brisbane extensions.",
+        "The water and sewer network runs in the surrounding street rather than through the lot, so building over a main is not a constraint here. Any service connection on the lot is this property's own line to the network and carries no build-over obligation.\n\nThat leaves the back yard free of the buried-infrastructure problem that catches out a lot of extensions.",
       questions_to_ask: [
         "Confirm the connection points before designing anything that changes where services enter the site.",
       ],

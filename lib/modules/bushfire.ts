@@ -55,6 +55,17 @@ const HAZARD_CLASS = "Bushfire prone area";
 const BUFFER_CLASS = "Potential impact buffer";
 // z14 tiles are ~2.4 km wide with 0.15 m resolution: plenty for a lot.
 const TILE_ZOOM = 14;
+/**
+ * The awareness tiles' buffer layer is NOT the SPP's 100 m potential
+ * impact buffer: it is a much wider public-awareness band (verified at
+ * Springwood: a lot 365 m from the nearest hazard polygon still sat
+ * inside it, while the official BPA viewer showed nothing near the lot).
+ * Flagging that band as a risk reads as a false positive against the
+ * official map, so a buffer-only hit only counts when the lot is within
+ * this many metres of an actual hazard polygon - the SPP buffer is 100 m;
+ * the margin absorbs tile simplification.
+ */
+const BUFFER_MAX_HAZARD_DIST_M = 120;
 
 export type BushfireSource = { name: string; url: string; layer: string };
 
@@ -194,6 +205,75 @@ function samplePoints(lat: number, lng: number, lot?: Geometry | null): [number,
   return pts;
 }
 
+/** Point-to-segment distance in tile units. */
+function segDist(
+  px: number,
+  py: number,
+  a: TilePoint,
+  b: TilePoint,
+): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
+  return Math.hypot(px - (a.x + t * dx), py - (a.y + t * dy));
+}
+
+/**
+ * Minimum distance (metres) from the sample points to any HAZARD polygon
+ * edge, searched across the 3x3 tile block around the property. Used to
+ * decide whether a buffer-only hit is a genuine ~100 m impact buffer or
+ * just the wide awareness band (see BUFFER_MAX_HAZARD_DIST_M). Returns
+ * Infinity when no hazard geometry exists within the block (~7 km).
+ */
+async function minHazardDistanceM(
+  service: string,
+  lat: number,
+  lng: number,
+  points: [number, number][],
+): Promise<number> {
+  const { xf, yf } = tileFrac(lat, lng, TILE_ZOOM);
+  const cx = Math.floor(xf);
+  const cy = Math.floor(yf);
+  const tiles = await Promise.all(
+    [-1, 0, 1].flatMap((dx) =>
+      [-1, 0, 1].map(async (dy) => ({
+        x: cx + dx,
+        y: cy + dy,
+        tile: await fetchTile(service, TILE_ZOOM, cx + dx, cy + dy).catch(() => null),
+      })),
+    ),
+  );
+  let best = Infinity;
+  for (const { x, y, tile } of tiles) {
+    if (!tile) continue;
+    const layer = tile.layers[HAZARD_LAYER];
+    if (!layer) continue;
+    for (let i = 0; i < layer.length; i++) {
+      const feature = layer.feature(i);
+      const rings = feature.loadGeometry();
+      const mPerUnit =
+        ((40075016.686 / 2 ** TILE_ZOOM) * Math.cos((lat * Math.PI) / 180)) /
+        feature.extent;
+      for (const [plng, plat] of points) {
+        const f = tileFrac(plat, plng, TILE_ZOOM);
+        const px = (f.xf - x) * feature.extent;
+        const py = (f.yf - y) * feature.extent;
+        for (const ring of rings) {
+          for (let k = 0, j = ring.length - 1; k < ring.length; j = k++) {
+            const d = segDist(px, py, ring[j], ring[k]) * mPerUnit;
+            if (d < best) best = d;
+          }
+          // Inside the polygon = distance zero; the caller treats that as
+          // a hazard hit anyway, but be exact for points near edges.
+          if (pointInRings(px, py, [ring])) return 0;
+        }
+      }
+    }
+  }
+  return best;
+}
+
 async function fetchBushfireFromTiles(
   lat: number,
   lng: number,
@@ -291,19 +371,40 @@ async function fetchBushfireFromTiles(
     }
   }
 
-  const hazardCategory = hazardHit ? HAZARD_CLASS : bufferHit ? BUFFER_CLASS : null;
+  // Buffer-only hits are only real when the lot is actually near a hazard
+  // polygon: the awareness tiles' buffer band extends hundreds of metres
+  // past the SPP's 100 m impact buffer and flags lots the official BPA
+  // viewer shows as clear.
+  let effectiveBufferHit = bufferHit;
+  if (bufferHit && !hazardHit) {
+    const dist = await minHazardDistanceM(
+      service,
+      lat,
+      lng,
+      samplePoints(lat, lng, lot),
+    );
+    effectiveBufferHit = dist <= BUFFER_MAX_HAZARD_DIST_M;
+  }
+
+  const hazardCategory = hazardHit ? HAZARD_CLASS : effectiveBufferHit ? BUFFER_CLASS : null;
   const riskLevel = classifyHazard(hazardCategory);
   const hits: Feature<Geometry | null, GeoJsonProperties>[] = [];
   if (hazardHit) hits.push({ type: "Feature", geometry: null, properties: { class: HAZARD_CLASS } });
-  if (bufferHit) hits.push({ type: "Feature", geometry: null, properties: { class: BUFFER_CLASS } });
+  if (effectiveBufferHit) hits.push({ type: "Feature", geometry: null, properties: { class: BUFFER_CLASS } });
 
   const fc: FeatureCollection<Geometry | null, GeoJsonProperties> = {
     type: "FeatureCollection",
     features: hits,
   };
+  // When the buffer hit was dismissed as awareness-band noise, keep it off
+  // the MAP too - painting a band over the whole frame while the narrative
+  // says "clear" reads as a contradiction. Hazard polygons stay: bushland
+  // at the frame's edge is honest context.
   const ctx: FeatureCollection<Geometry, GeoJsonProperties> = {
     type: "FeatureCollection",
-    features: ctxFeatures,
+    features: effectiveBufferHit
+      ? ctxFeatures
+      : ctxFeatures.filter((f) => f.properties?.class !== BUFFER_CLASS),
   };
 
   return {

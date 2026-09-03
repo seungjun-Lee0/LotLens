@@ -118,17 +118,25 @@ export async function fetchMiningData(
     (t) =>
       /granted/i.test(t.status ?? "") && /mining lease|mineral development/i.test(t.type ?? ""),
   );
-  const anyGranted = tenements.some((t) => /granted/i.test(t.status ?? ""));
+  // Granted tenure that ISN'T pure exploration (mining claims, quarry
+  // authorities…) keeps a medium consideration. Granted exploration
+  // permits (EPM/EPC) do NOT: they blanket whole districts, authorise no
+  // surface mining, and grading them as a warning flags half of regional
+  // Queensland - the buyer checks GeoResGlobe, sees nothing on their lot,
+  // and stops trusting the report.
+  const grantedNonExploration = tenements.some(
+    (t) =>
+      /granted/i.test(t.status ?? "") && !/exploration/i.test(t.type ?? ""),
+  );
 
   // A quarry footprint or granted mining lease over the lot is a serious
-  // flag; a separation buffer or granted exploration permit is a medium
-  // consideration. Ungranted tenure (applications, lapsed permits) is
-  // informational: exploration applications blanket whole regions and
-  // authorise nothing on the surface, so a severity there is noise.
+  // flag; a separation buffer or other granted (non-exploration) tenure is
+  // a medium consideration. Exploration permits and ungranted applications
+  // are informational only.
   const riskLevel: RiskLevel =
     inKraResourceArea || grantedLease
       ? "high"
-      : inKraSeparationArea || anyGranted
+      : inKraSeparationArea || grantedNonExploration
         ? "medium"
         : tenements.length > 0
           ? "informational"

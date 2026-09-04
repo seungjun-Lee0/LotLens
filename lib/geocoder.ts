@@ -426,6 +426,9 @@ async function searchTextGoogle(
     }>;
   };
   // locationBias is a bias, not a filter: enforce the QLD bbox ourselves.
+  // The bbox alone is not enough — its rectangle overlaps northern NSW
+  // (Tweed Heads passed it), so the formatted address must not name
+  // another state either.
   const hit = (body.places ?? []).find((p) => {
     const lat = p.location?.latitude;
     const lng = p.location?.longitude;
@@ -435,7 +438,8 @@ async function searchTextGoogle(
       lat >= BBOX.latMin &&
       lat <= BBOX.latMax &&
       lng >= BBOX.lonMin &&
-      lng <= BBOX.lonMax
+      lng <= BBOX.lonMax &&
+      !namesOtherState(p.formattedAddress ?? "")
     );
   });
   if (!hit) return null;
@@ -466,6 +470,26 @@ const GOOGLE_KEY = () => process.env.GOOGLE_GEOCODING_API_KEY ?? "";
 
 const TOKEN_STOPWORDS = new Set(["qld", "queensland", "australia", "the"]);
 
+/**
+ * The query (or a provider result) names another Australian state.
+ *
+ * Hard gate: LotLens is QLD-only, and the failure mode without this was
+ * WORSE than a miss — "123 Collins Street, Melbourne VIC" quietly
+ * fuzzy-matched to "123 Melbourne Street, South Brisbane" and produced a
+ * report for the wrong property, and Tweed Heads (NSW) slipped through
+ * the QLD bbox check because the bbox rectangle overlaps northern NSW.
+ *
+ * Word "Victoria" is deliberately NOT matched (Victoria Point and Victoria
+ * Street are common in QLD); the VIC/TAS/ACT abbreviations only count in a
+ * state-like position (followed by a postcode, a comma, or the end).
+ */
+const OTHER_STATE_RE =
+  /\b(nsw|n\.s\.w|new south wales|tasmania|northern territory|western australia|south australia)\b|\b(vic|tas|act)\b\s*(?=\d{4}\b|,|$)/i;
+
+function namesOtherState(s: string): boolean {
+  return OTHER_STATE_RE.test(s);
+}
+
 function queryTokens(query: string): string[] {
   return (query.toLowerCase().match(/[a-z]{3,}/g) ?? []).filter(
     (t) => !TOKEN_STOPWORDS.has(t),
@@ -487,6 +511,8 @@ function looksLikeStreetAddress(query: string): boolean {
 
 export async function suggestAddresses(query: string): Promise<Suggestion[]> {
   if (query.trim().length < 3) return [];
+  // Another state named outright: no suggestions beat an honest empty list.
+  if (namesOtherState(query)) return [];
   const key = GOOGLE_KEY();
   if (key) {
     try {
@@ -532,6 +558,9 @@ export async function suggestAddresses(query: string): Promise<Suggestion[]> {
 }
 
 export async function geocodeAddress(query: string): Promise<GeocodeHit | null> {
+  // Another state named outright: reject before any provider gets the
+  // chance to fuzzy-match it onto an unrelated QLD address.
+  if (namesOtherState(query)) return null;
   const key = GOOGLE_KEY();
 
   // Provider order is deliberate: the QLD locator owns ADDRESSES, Google
@@ -607,7 +636,20 @@ export async function geocodeAddress(query: string): Promise<GeocodeHit | null> 
     }
   }
   try {
-    return await geocodeNominatim(query);
+    const nom = await geocodeNominatim(query);
+    if (!nom || namesOtherState(nom.displayName)) return null;
+    // Last-resort OSM fuzzy matches must mention every meaningful word
+    // typed: "Bondi Beach" resolving to "Bondi Avenue, Mermaid Beach" is
+    // a wrong answer dressed as a hit; an honest miss beats it.
+    const tokens = queryTokens(query);
+    if (
+      !looksLikeStreetAddress(query) &&
+      tokens.length > 0 &&
+      !coversTokens(nom.displayName, tokens)
+    ) {
+      return null;
+    }
+    return nom;
   } catch {
     return null;
   }

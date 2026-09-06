@@ -28,6 +28,7 @@
 import type { Feature, Geometry } from "geojson";
 
 import { queryArcGIS } from "@/lib/arcgis";
+import { councilOf, type CouncilId } from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
 import { unavailableForLga, type Region } from "@/lib/region";
 
@@ -49,6 +50,7 @@ const PUBLIC_OWNERS = [
   "BRISBANE CITY COUNCIL",
   "IPSWICH CITY COUNCIL",
   "REDLAND CITY COUNCIL",
+  "LOGAN CITY COUNCIL",
   "DEPT OF TRANSPORT & MAIN ROADS",
   "STATE GOVERNMENT",
   "FEDERAL GOVERNMENT",
@@ -107,19 +109,67 @@ function toAssets(
 ): StormwaterAsset[] {
   return fc.features.map((f) => {
     const a = (f.properties ?? {}) as Record<string, unknown>;
-    const owner = str(a.OWNER);
+    // Two field vocabularies: BCC (OWNER/ASSETID/DIAMETER "600 MM") and
+    // Logan (Owner/Asset_ID/Diameter_mm numeric).
+    const owner = str(a.OWNER) ?? str(a.Owner);
+    const dmm = num(a.Diameter_mm);
     return {
       kind,
-      assetId: str(a.ASSETID),
-      pipeType: str(a.PIPETYPE),
+      assetId: str(a.ASSETID) ?? str(a.Asset_ID),
+      pipeType: str(a.PIPETYPE) ?? str(a.Culvert_Use),
       owner,
-      diameter: str(a.DIAMETER),
-      material: str(a.MATERIAL_ABB) ?? str(a.PREDOMINANTMATERIAL),
+      diameter: str(a.DIAMETER) ?? (dmm && dmm > 0 ? `${dmm} MM` : null),
+      material: str(a.MATERIAL_ABB) ?? str(a.PREDOMINANTMATERIAL) ?? str(a.Material),
       averageDepth: num(a.AVERAGEDEPTH) ?? num(a.DEPTH),
       public: isPublicOwner(owner),
     };
   });
 }
+
+// ── Per-council asset endpoints ─────────────────────────────────────────
+//
+// Same result shape everywhere; councils differ in which layers exist and
+// what their fields are called. `gully` is optional (Logan folds gullies
+// into Pits). ArcGIS 400s on unknown outFields, so lists are per-council.
+type StormwaterCouncil = {
+  pipe: string;
+  manhole: string;
+  gully: string | null;
+  endStructure: string;
+  pipeFields: string;
+  structureFields: string;
+  endStructureFields: string;
+  sourceName: string;
+  docUrl: string;
+};
+
+const LOGAN_SW =
+  "https://services5.arcgis.com/ZUCWDRj8F77Xo351/arcgis/rest/services/LCC_Stormwater_Infrastructure/FeatureServer";
+
+const STORMWATER_COUNCILS: Partial<Record<CouncilId, StormwaterCouncil>> = {
+  brisbane: {
+    pipe: PIPE,
+    manhole: MANHOLE,
+    gully: GULLY,
+    endStructure: END_STRUCTURE,
+    pipeFields: "ASSETID,SUBTYPECD,PIPETYPE,OWNER,DIAMETER,MATERIAL_ABB,AVERAGEDEPTH,STATUS",
+    structureFields: "ASSETID,SUBTYPECD,OWNER,DIAMETER,STATUS",
+    endStructureFields: "ASSETID,SUBTYPECD,OWNER,DEPTH,PREDOMINANTMATERIAL,STATUS",
+    sourceName: "Brisbane City Council: Stormwater assets (existing)",
+    docUrl: BCC_STORMWATER_DOC,
+  },
+  logan: {
+    pipe: `${LOGAN_SW}/15/query`, // Drains (polyline network)
+    manhole: `${LOGAN_SW}/12/query`, // Pits
+    gully: null,
+    endStructure: `${LOGAN_SW}/11/query`, // Headwalls
+    pipeFields: "Asset_ID,Owner,Culvert_Use,Diameter_mm,Material",
+    structureFields: "Asset_ID,Owner",
+    endStructureFields: "Asset_ID,Owner,Type",
+    sourceName: "Logan City Council: Stormwater infrastructure",
+    docUrl: "https://www.logan.qld.gov.au/planning-and-development",
+  },
+};
 
 export async function fetchStormwaterData(
   lat: number,
@@ -127,10 +177,11 @@ export async function fetchStormwaterData(
   region?: Region,
   lot?: Geometry | null,
 ): Promise<StormwaterResult> {
-  // Councils each publish their own asset network (or don't). Brisbane's
-  // is the open one; other LGAs land as adapters.
-  const isBrisbane = region?.isBrisbane ?? true;
-  if (!isBrisbane) {
+  // Councils each publish their own asset network (or don't): resolved
+  // through the per-council endpoint table above.
+  const councilId = region ? councilOf(region) : "brisbane";
+  const council = councilId ? STORMWATER_COUNCILS[councilId] : undefined;
+  if (!council) {
     return {
       riskLevel: "none",
       assets: [],
@@ -169,22 +220,21 @@ export async function fetchStormwaterData(
     bufferDegrees: 0.0025,
     maxAllowableOffset: 0.00003,
   };
-  // Field lists differ per layer and ArcGIS 400s on an unknown name rather
-  // than ignoring it: end structures have no DIAMETER, they have DEPTH and
-  // PREDOMINANTMATERIAL instead.
-  const pipeFields = "ASSETID,SUBTYPECD,PIPETYPE,OWNER,DIAMETER,MATERIAL_ABB,AVERAGEDEPTH,STATUS";
-  const structureFields = "ASSETID,SUBTYPECD,OWNER,DIAMETER,STATUS";
-  const endStructureFields = "ASSETID,SUBTYPECD,OWNER,DEPTH,PREDOMINANTMATERIAL,STATUS";
+  const { pipeFields, structureFields, endStructureFields } = council;
 
   const [pipe, manhole, gully, endStruct, pipeCtx, manholeCtx, gullyCtx] =
     await Promise.all([
-      queryArcGIS(PIPE, { ...onLot, outFields: pipeFields }),
-      queryArcGIS(MANHOLE, { ...onLot, outFields: structureFields }),
-      queryArcGIS(GULLY, { ...onLot, outFields: structureFields }),
-      queryArcGIS(END_STRUCTURE, { ...onLot, outFields: endStructureFields }),
-      queryArcGIS(PIPE, { ...nearby, outFields: "ASSETID,PIPETYPE,OWNER,DIAMETER" }),
-      queryArcGIS(MANHOLE, { ...nearby, outFields: "ASSETID,OWNER" }),
-      queryArcGIS(GULLY, { ...nearby, outFields: "ASSETID,OWNER" }),
+      queryArcGIS(council.pipe, { ...onLot, outFields: pipeFields }),
+      queryArcGIS(council.manhole, { ...onLot, outFields: structureFields }),
+      council.gully
+        ? queryArcGIS(council.gully, { ...onLot, outFields: structureFields })
+        : Promise.resolve(EMPTY_FC as never),
+      queryArcGIS(council.endStructure, { ...onLot, outFields: endStructureFields }),
+      queryArcGIS(council.pipe, { ...nearby, outFields: pipeFields }),
+      queryArcGIS(council.manhole, { ...nearby, outFields: structureFields }),
+      council.gully
+        ? queryArcGIS(council.gully, { ...nearby, outFields: structureFields })
+        : Promise.resolve(EMPTY_FC as never),
     ]);
 
   const assets = [
@@ -224,9 +274,9 @@ export async function fetchStormwaterData(
     hasConsideration: riskLevel !== "none",
     sources: [
       {
-        name: "Brisbane City Council: Stormwater assets (existing)",
-        url: BCC_STORMWATER_DOC,
-        layer: PIPE,
+        name: council.sourceName,
+        url: council.docUrl,
+        layer: council.pipe,
       },
     ],
     raw: { pipe, manhole, gully, endStructure: endStruct },

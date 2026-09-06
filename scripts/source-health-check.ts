@@ -54,6 +54,7 @@ const COUNCIL_POINTS: Record<CouncilId, { lat: number; lng: number }> = {
   moreton_bay: { lat: -27.2019, lng: 152.9587 },     // Narangba
   sunshine_coast: { lat: -26.6564, lng: 153.091 },   // Maroochydore
   redland: { lat: -27.5266, lng: 153.2626 },         // Cleveland
+  logan: { lat: -27.6286, lng: 153.1358 },           // Springwood
 };
 
 const IMAGERY =

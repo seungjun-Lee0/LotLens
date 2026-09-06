@@ -41,6 +41,15 @@ export type QueryArcGISParams = {
    */
   maxAllowableOffset?: number;
   /**
+   * SQL attribute filter sent alongside the spatial filter. Lets one layer
+   * back several adapters: Logan's Property Report layer is a per-lot
+   * polygon carrying EVERY overlay as flag columns, so the flood adapter
+   * queries it with `OM_0504A=1 OR …` while steep queries `OM_0801…`.
+   * Without a where, a per-lot layer matches EVERY address (the lot always
+   * intersects itself) and a flag-less lot would still count as a hit.
+   */
+  where?: string;
+  /**
    * GeoJSON Polygon/MultiPolygon in EPSG:4326: the cadastre lot. When set,
    * the query runs as an esriGeometryPolygon intersect against this shape
    * instead of the point/envelope, so "consideration applies" means
@@ -157,6 +166,7 @@ export async function queryArcGIS(
           spatialReference: { wkid },
         };
   const search = new URLSearchParams({
+    ...(params.where ? { where: params.where } : {}),
     f: "geojson",
     geometry: JSON.stringify(geom),
     geometryType: rings

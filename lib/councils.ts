@@ -19,7 +19,8 @@ export type CouncilId =
   | "gold_coast"
   | "moreton_bay"
   | "sunshine_coast"
-  | "redland";
+  | "redland"
+  | "logan";
 
 /** Match the DCDB `shire_name` to a council adapter id. */
 export function councilFromLga(lga: string | null | undefined): CouncilId | null {
@@ -30,6 +31,7 @@ export function councilFromLga(lga: string | null | undefined): CouncilId | null
   if (s.includes("moreton bay")) return "moreton_bay";
   if (s.includes("sunshine coast")) return "sunshine_coast";
   if (s.includes("redland")) return "redland";
+  if (s.includes("logan")) return "logan";
   return null;
 }
 
@@ -48,6 +50,13 @@ export type OverlayAdapter = {
   /** Candidate property names for the classification label: first
    * non-empty string wins. Defaults cover the common council schemas. */
   labelFields?: string[];
+  /** Attribute filter for layers that back several adapters (Logan's
+   * per-lot Property Report carries every overlay as flag columns). */
+  where?: string;
+  /** Point-query buffer override (degrees). Per-lot layers need a tiny
+   * buffer: the default ~50 m envelope would pull the NEIGHBOUR'S lot
+   * polygon in and flag an address with its neighbour's overlay. */
+  pointBuffer?: number;
 };
 
 const DEFAULT_LABEL_FIELDS = [
@@ -131,8 +140,9 @@ export async function queryOverlayAdapter(
       inSR: 4326,
       outFields: "*",
       returnGeometry: false,
-      bufferDegrees: 0.00045,
+      bufferDegrees: adapter.pointBuffer ?? 0.00045,
       lotPolygon: lot,
+      where: adapter.where,
     }),
     queryWithRetry(adapter.url, {
       geometry: point,
@@ -142,6 +152,7 @@ export async function queryOverlayAdapter(
       returnGeometry: true,
       bufferDegrees: 0.0025,
       maxAllowableOffset: 0.00003,
+      where: adapter.where,
     }),
   ]);
   return { point: hit, context: ctx, label: overlayLabel(hit, adapter.labelFields) };
@@ -173,6 +184,20 @@ const SCC_ORG = "YQyt7djuXN7rQyg4";
 const MBRC_ORG = "152ojN3Ts9H3cdtl";
 const GC_ORG = "lnVW0dLI3fvST2hd";
 const REDLAND = "https://gis.redland.qld.gov.au/arcgis/rest/services/planning/rps/MapServer";
+
+// Logan publishes ONE per-lot "Property Report" polygon layer carrying
+// every LPS2015 overlay as a flag column (OM_0504A=1 …) with a matching
+// self-describing text column (OM_Text_0504A = "OM - 05.04 - High flood
+// risk area"). Adapters share the layer and differ only in `where` +
+// labelFields. pointBuffer is ~2 m because the features ARE lot polygons:
+// the default ~50 m point envelope would pull the neighbour's lot in.
+const LOGAN_PR =
+  "https://services5.arcgis.com/ZUCWDRj8F77Xo351/arcgis/rest/services/Property_Report_LPS2015/FeatureServer/0/query";
+const LOGAN_DOC =
+  "https://www.logan.qld.gov.au/planning-and-development/logan-planning-scheme-2015";
+const LOGAN_POINT_BUFFER = 0.00002;
+const loganWhere = (codes: string[]) => codes.map((c) => `OM_${c}=1`).join(" OR ");
+const loganLabels = (codes: string[]) => codes.map((c) => `OM_Text_${c}`);
 
 // NOTE: Brisbane zoning stays in lib/modules/zoning.ts (its polygon doubles
 // as the parcel fallback and it has extra precinct handling).
@@ -225,6 +250,18 @@ export const ZONING_ADAPTERS: Partial<Record<CouncilId, ZoningAdapter>> = {
       lvl2Zone: str(p.SUBAREADESC) !== str(p.ZONEDESC) ? str(p.SUBAREADESC) : null,
     }),
   },
+  logan: {
+    url: LOGAN_PR,
+    outFields: "Zone,Precinct",
+    sourceName: "Logan City Council: Logan Planning Scheme 2015 Zoning",
+    docUrl: LOGAN_DOC,
+    parse: (p) => ({
+      zoneCode: null,
+      zonePrecinct: str(p.Precinct) ? `${p.Zone} - ${p.Precinct}` : str(p.Zone),
+      lvl1Zone: str(p.Zone),
+      lvl2Zone: str(p.Precinct),
+    }),
+  },
 };
 
 // ── Flood adapters (detailed council flood risk bands) ──────────────────
@@ -255,6 +292,14 @@ export const FLOOD_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter>> = {
     sourceName: "Redland City Council: Flood Prone, Storm Tide and Drainage Constrained Land",
     docUrl: "https://www.redland.qld.gov.au/info/20292/redland_city_plan",
     labelFields: ["CLASS"],
+  },
+  logan: {
+    url: LOGAN_PR,
+    sourceName: "Logan City Council: LPS2015 Flood Hazard Overlay",
+    docUrl: LOGAN_DOC,
+    where: loganWhere(["0504A", "0504B", "0504C", "0504D", "0502A", "0501A", "0501B", "0503A"]),
+    labelFields: loganLabels(["0504A", "0504B", "0504C", "0504D", "0502A", "0501A", "0501B", "0503A"]),
+    pointBuffer: LOGAN_POINT_BUFFER,
   },
 };
 
@@ -301,6 +346,16 @@ export const NOISE_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter[]>> = {
       labelFields: ["CLASS"],
     },
   ],
+  logan: [
+    {
+      url: LOGAN_PR,
+      sourceName: "Logan City Council: LPS2015 Transport Noise Corridor Overlay",
+      docUrl: LOGAN_DOC,
+      where: loganWhere(["1200A", "1200B", "1200C"]),
+      labelFields: loganLabels(["1200A", "1200B", "1200C"]),
+      pointBuffer: LOGAN_POINT_BUFFER,
+    },
+  ],
 };
 
 // ── Landslide / steep land adapters ──────────────────────────────────────
@@ -328,5 +383,13 @@ export const STEEP_ADAPTERS: Partial<Record<CouncilId, OverlayAdapter>> = {
     sourceName: "Redland City Council: Landslide Hazard Overlay",
     docUrl: "https://www.redland.qld.gov.au/info/20292/redland_city_plan",
     labelFields: ["CLASS"],
+  },
+  logan: {
+    url: LOGAN_PR,
+    sourceName: "Logan City Council: LPS2015 Landslide Hazard Overlay",
+    docUrl: LOGAN_DOC,
+    where: loganWhere(["0801A", "0801B", "0801C", "0801D"]),
+    labelFields: loganLabels(["0801D", "0801C", "0801B", "0801A"]),
+    pointBuffer: LOGAN_POINT_BUFFER,
   },
 };

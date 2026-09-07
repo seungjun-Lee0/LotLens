@@ -25,6 +25,7 @@ import { fetchLocalPlansData } from "@/lib/modules/local-plans";
 import { fetchMiningData } from "@/lib/modules/mining";
 import { fetchNoiseData } from "@/lib/modules/noise";
 import { fetchOverlandFlowData } from "@/lib/modules/overland-flow";
+import { fetchPowerData } from "@/lib/modules/power";
 import { fetchSchoolsData } from "@/lib/modules/schools";
 import { fetchSteepLandData } from "@/lib/modules/steep-land";
 import { fetchStormTideData } from "@/lib/modules/storm-tide";
@@ -43,6 +44,7 @@ import {
   getDb,
   ENVIRONMENT_ENABLED,
   MODULE_ORDER,
+  POWER_ENABLED,
   WATER_SEWER_ENABLED,
   type CouncilDataRow,
   type Module,
@@ -249,6 +251,10 @@ export async function fetchOverlaysForAddress(
   // task running whose result nothing reads.
   if (WATER_SEWER_ENABLED) {
     tasks.set("water_sewer", settle("water_sewer", fetchWaterSewerData(addr.lat, addr.lng, region, lot)));
+  }
+  // Dark until Energex confirms commercial reuse terms: see POWER_ENABLED.
+  if (POWER_ENABLED) {
+    tasks.set("power", settle("power", fetchPowerData(addr.lat, addr.lng, region, lot)));
   }
   tasks.set("local_plans", settle("local_plans", fetchLocalPlansData(addr.lat, addr.lng, region, lot)));
   // Transport is point-based: "what's near the front door", not "what

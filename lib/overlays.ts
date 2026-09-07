@@ -670,9 +670,10 @@ function zoningColor(props: Record<string, unknown>): Classified {
 // public/private split has to survive into the legend, because only the
 // public assets carry a build-over obligation.
 function stormwaterColor(props: Record<string, unknown>): Classified {
-  const owner = String(props.OWNER ?? "").toUpperCase();
+  // BCC fields (OWNER/PIPETYPE) or Logan fields (Owner/Culvert_Use).
+  const owner = String(props.OWNER ?? props.Owner ?? "").toUpperCase();
   const isPrivate = owner === "PRIVATE" || owner === "UNKNOWN" || owner === "";
-  const type = String(props.PIPETYPE ?? "").toLowerCase();
+  const type = String(props.PIPETYPE ?? props.Culvert_Use ?? "").toLowerCase();
   if (isPrivate)
     return {
       fillColor: DEVELO_HEX.swPrivatePipe,
@@ -962,6 +963,25 @@ export function extractOverlays(
       const service = line(DEVELO_HEX.uuService, "Service connection");
       pushFC(out, i.sewerService, service);
       pushFC(out, i.waterService, service);
+      return out;
+    }
+    case "power": {
+      const i = inner as Record<string, unknown>;
+      // Lines coloured by voltage class (kind/klass tagged by the
+      // fetcher); substations as points.
+      pushFC(out, i.lines, (props) => {
+        const klass = String(props.klass ?? "");
+        const kind = String(props.kind ?? "Powerline");
+        if (klass === "subtransmission")
+          return { fillColor: DEVELO_HEX.easementHV, legendLabel: kind };
+        if (klass === "hv")
+          return { fillColor: DEVELO_HEX.fireBuffer, legendLabel: kind };
+        return { fillColor: DEVELO_HEX.swPrivatePipe, legendLabel: kind };
+      });
+      pushFC(out, i.substations, (props) => ({
+        fillColor: DEVELO_HEX.heritageState,
+        legendLabel: String(props.kind ?? "Substation"),
+      }));
       return out;
     }
     case "local_plans": {

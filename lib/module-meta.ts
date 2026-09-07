@@ -7,7 +7,7 @@
 // two stay in sync.
 
 import type { LucideIcon } from "lucide-react";
-import { CloudRain, Droplets, Flame, GraduationCap, Landmark, LayoutGrid, Leaf, Map, Mountain, PawPrint, ScrollText, TrainFront, TrendingUp, Volume2, Waves, Wind } from "lucide-react";
+import { CloudRain, Droplets, Flame, GraduationCap, Landmark, LayoutGrid, Leaf, Map, Mountain, PawPrint, ScrollText, TrainFront, TrendingUp, Volume2, Waves, Wind, Zap } from "lucide-react";
 
 import type { Module } from "@/lib/db";
 
@@ -379,6 +379,26 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
       { label: "Water main",          color: D.stormMedium,      colorHex: D.stormMedium },
       { label: "Sewer manhole",       color: D.heritageState,    colorHex: D.heritageState },
       { label: "Service connection",  color: D.stormLow,         colorHex: D.stormLow },
+    ],
+  },
+
+  power: {
+    name: "Power",
+    question: "Do power lines cross the property?",
+    tint: "var(--apple-yellow)",
+    tintHex: APPLE_HEX.yellow,
+    icon: Zap,
+    sourceLabel: "Energex network extract (licence pending)",
+    thingsToKnow: [
+      "Power lines (overhead or underground) transmit electricity from the network to properties. A sub-transmission line (33kV and above) crossing a lot usually rides an easement and constrains building height and placement beneath it.",
+      "Even an 11kV street feeder spanning a corner of the lot matters to pools, sheds and two-storey extensions - clearance rules apply to anything built near it.",
+    ],
+    note: "Network alignments are an indicative extract, not a survey. Confirm easements on title and ask the distributor for clearances before designing near lines.",
+    legend: [
+      { label: "Sub-transmission (33kV+)", color: D.easementHV,    colorHex: D.easementHV },
+      { label: "11kV feeder",              color: D.fireBuffer,    colorHex: D.fireBuffer },
+      { label: "Low-voltage line",         color: D.floodLow,      colorHex: D.floodLow },
+      { label: "Substation",               color: D.heritageState, colorHex: D.heritageState },
     ],
   },
 

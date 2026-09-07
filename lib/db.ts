@@ -32,6 +32,7 @@ export type Module =
   | "mining"
   | "stormwater"
   | "water_sewer"
+  | "power"
   | "schools"
   | "transport"
   | "local_plans"
@@ -51,6 +52,22 @@ export type Module =
  * to `false` and reports the guarded branches as dead code.
  */
 export const WATER_SEWER_ENABLED: boolean = false;
+
+/**
+ * Power (Energex electricity network) is built and tested but switched off.
+ *
+ * The blocker is legal, not technical: Energex's public network extract is
+ * published under an explicitly NON-COMMERCIAL licence (no commercial use,
+ * no derivative products, mandatory "©Energex Limited 2019" notice), and a
+ * paid report is squarely commercial. Flip this to true only once Energex
+ * (gisdata@energyq.com.au) confirms an alternative licence in writing.
+ * Regional QLD's Ergon series on data.qld.gov.au is openly licensed and
+ * can extend the module beyond SEQ once the Energex side is resolved.
+ *
+ * The annotation is load-bearing: without it TypeScript narrows the type
+ * to `false` and reports the guarded branches as dead code.
+ */
+export const POWER_ENABLED: boolean = false;
 
 /**
  * Environment (koala habitat + MSES wildlife) is built and tested but
@@ -125,6 +142,7 @@ export const ESSENTIAL_MODULES = new Set<Module>([
   "easements",
   "stormwater",
   "water_sewer",
+  "power",
   "noise",
   "steep_land",
 ]);
@@ -147,6 +165,8 @@ export const MODULE_ORDER: Module[] = [
   // from the order = absent from the report, the fetch fan-out and the
   // council_data row-count freshness check, all from the one flag.
   ...(WATER_SEWER_ENABLED ? (["water_sewer"] as Module[]) : []),
+  // Same dark-module pattern, gated on the Energex licence.
+  ...(POWER_ENABLED ? (["power"] as Module[]) : []),
   "noise",
   "steep_land",
   "acid_sulfate",

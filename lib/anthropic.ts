@@ -64,6 +64,7 @@ export async function generateModuleNarrative(
     case "mining":         return renderStubMining(input);
     case "stormwater":     return renderStubStormwater(input);
     case "water_sewer":    return renderStubWaterSewer(input);
+    case "power":          return renderStubPower(input);
     case "local_plans":    return renderStubLocalPlans(input);
     case "transport":      return renderStubTransport(input);
     case "schools":        return renderStubSchools(input);
@@ -860,6 +861,45 @@ function renderStubTransport(
     questions_to_ask: [
       "Which routes actually serve the nearest stop, and how frequent are they at peak and on weekends?",
       "Walk the route to the stop before you buy: check the gradient, the crossings and how it feels after dark.",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubPower(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const assets = asArr<{ kind: string; klass: string }>(raw.assets);
+  const subTrans = raw.hasSubTransmissionOnLot === true;
+  const hv = raw.hasHvOnLot === true;
+  if (assets.length === 0) {
+    return {
+      summary: `No electricity network assets cross ${input.address}.`,
+      detail: `${srcName(input)} maps no lines or substations on the lot itself. The street network serving the property carries no build-over obligation on this land.`,
+      questions_to_ask: [
+        "Confirm the service connection point and whether it is overhead or underground.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+  const kinds = [...new Set(assets.map((a) => a.kind))].join(", ");
+  return {
+    summary: subTrans
+      ? `A sub-transmission power line crosses ${input.address}.`
+      : hv
+        ? `An 11kV feeder crosses ${input.address}.`
+        : `${input.address} has low-voltage network equipment on the lot.`,
+    detail: `${srcName(input)} maps on this lot: ${kinds}.\n\n${
+      subTrans
+        ? "Sub-transmission lines almost always ride an easement: building height and placement beneath the line are constrained, and the distributor's clearance rules apply. Check the title for the easement and factor it into any design."
+        : "Clearance rules apply to anything built near network assets: confirm requirements with the distributor before designing a pool, shed or extension nearby."
+    }`,
+    questions_to_ask: [
+      "Is there a registered easement for the line on the title?",
+      "What clearance does the distributor require for structures near this asset?",
+      "Has any past building work needed distributor approval?",
     ],
     sources: sourcesFromRaw(raw),
   };

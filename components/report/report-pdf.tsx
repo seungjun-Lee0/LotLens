@@ -648,6 +648,25 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       });
       return rows;
     }
+    case "power": {
+      const rows: { key: string; val: string }[] = [];
+      const assets = asArr<RawAttrs>(raw.assets);
+      const kinds = [...new Set(assets.map((a) => String(a.kind ?? "")))].filter(Boolean);
+      rows.push({
+        key: "On the lot",
+        val: kinds.length === 0 ? "No network assets on the lot" : kinds.slice(0, 4).join(", "),
+      });
+      rows.push({
+        key: "Easement risk",
+        val:
+          raw.hasSubTransmissionOnLot === true
+            ? "Sub-transmission line: check title for easement"
+            : raw.hasHvOnLot === true
+              ? "11kV feeder: clearance rules apply"
+              : "Not triggered by mapped assets",
+      });
+      return rows;
+    }
     case "water_sewer": {
       const rows: { key: string; val: string }[] = [];
       const assets = asArr<RawAttrs>(raw.assets);

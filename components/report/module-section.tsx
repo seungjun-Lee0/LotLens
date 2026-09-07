@@ -383,6 +383,28 @@ function ModuleFacts({
         </dl>
       );
     }
+    case "power": {
+      const assets = Array.isArray(raw.assets)
+        ? (raw.assets as { kind: string; klass: string }[])
+        : [];
+      const kinds = [...new Set(assets.map((a) => a.kind))];
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">On the lot</dt>
+          <dd className="font-medium">
+            {assets.length === 0 ? "No network assets on the lot" : kinds.slice(0, 4).join(", ")}
+          </dd>
+          <dt className="text-muted-foreground">Easement risk</dt>
+          <dd className="font-medium">
+            {raw.hasSubTransmissionOnLot === true
+              ? "Sub-transmission line: check title for easement"
+              : raw.hasHvOnLot === true
+                ? "11kV feeder: clearance rules apply"
+                : "Not triggered by mapped assets"}
+          </dd>
+        </dl>
+      );
+    }
     case "water_sewer": {
       const assets = Array.isArray(raw.assets)
         ? (raw.assets as {

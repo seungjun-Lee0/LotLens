@@ -79,6 +79,10 @@ const MODULE_CARDS: Record<Module, { blurb: string; hex: string }> = {
     blurb: "Sewer and water mains crossing the lot, and the building restrictions they carry.",
     hex: "#a21caf",
   },
+  power: {
+    blurb: "Power lines and substations on or near the lot, and the easements they ride.",
+    hex: "#f59e0b",
+  },
   noise: {
     blurb: "Transport corridor and aircraft noise overlays.",
     hex: "#f59e0b",

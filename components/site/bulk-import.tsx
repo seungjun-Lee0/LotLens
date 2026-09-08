@@ -13,6 +13,8 @@ import {
   FileArchive,
 } from "lucide-react";
 
+import { downloadBulkPdfZip, triggerDownload } from "@/lib/bulk-pdf-client";
+
 type Row = {
   address: string;
   status: "pending" | "ok" | "error";
@@ -132,9 +134,9 @@ export function BulkImport() {
     abortRef.current?.abort();
   }
 
-  // Bundle every successfully-generated report's PDF into one ZIP. Streams
-  // NDJSON progress (a live "N / total" render counter) then a final line
-  // carrying the base64 ZIP, which we turn into a download.
+  // Bundle every successfully-generated report's PDF into one ZIP. The
+  // stream protocol + chunk decoding live in lib/bulk-pdf-client (shared
+  // with the "My reports" multi-select download).
   async function downloadZip() {
     if (okReportIds.length === 0 || zipBusy) return;
     // Drop any previously built ZIP so we don't leak object URLs.
@@ -146,89 +148,17 @@ export function BulkImport() {
     const ac = new AbortController();
     zipAbortRef.current = ac;
     try {
-      const res = await fetch("/api/admin/bulk-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reportIds: okReportIds }),
+      const out = await downloadBulkPdfZip({
+        endpoint: "/api/admin/bulk-pdf",
+        reportIds: okReportIds,
         signal: ac.signal,
+        onProgress: setZip,
       });
-      if (!res.ok || !res.body) {
-        const msg = await res.text().catch(() => "");
-        throw new Error(`request failed (${res.status}) ${msg}`);
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      let doneCount = 0;
-      // The ZIP arrives as base64 chunks (zip-start → many zip-chunk →
-      // zip-end) so the server never holds the whole archive in memory.
-      let zipName = "lotlens-reports.zip";
-      // Decode each base64 chunk to bytes AS IT ARRIVES and keep the small
-      // Uint8Array pieces. Joining every chunk into one ~170 MB base64
-      // string and running a single atob + per-byte Uint8Array.from over
-      // ~130 MB froze the tab on a 40-report batch; a Blob built from an
-      // array of small chunks streams to disk instead. (Server flushes each
-      // chunk on a 3-byte boundary, so each decodes independently.)
-      const zipParts: Uint8Array[] = [];
-      for (;;) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const l of lines) {
-          if (!l.trim()) continue;
-          const evt = JSON.parse(l) as
-            | { type: "start"; total: number }
-            | { type: "result"; ok: boolean }
-            | { type: "zipping"; count: number }
-            | { type: "zip-start"; count: number; filename: string }
-            | { type: "zip-chunk"; data: string }
-            | { type: "zip-end" }
-            | { type: "error"; error: string };
-          if (evt.type === "result") {
-            doneCount += 1;
-            setZip({
-              phase: "rendering",
-              done: doneCount,
-              total: okReportIds.length,
-            });
-          } else if (evt.type === "zipping") {
-            setZip({ phase: "zipping", count: evt.count });
-          } else if (evt.type === "error") {
-            throw new Error(evt.error);
-          } else if (evt.type === "zip-start") {
-            zipName = evt.filename;
-          } else if (evt.type === "zip-chunk") {
-            const bin = atob(evt.data);
-            const bytes = new Uint8Array(bin.length);
-            for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
-            zipParts.push(bytes);
-          } else if (evt.type === "zip-end") {
-            // Blob from the array of decoded chunks — no giant string.
-            const url = URL.createObjectURL(
-              new Blob(zipParts as BlobPart[], { type: "application/zip" }),
-            );
-            zipUrlRef.current = url;
-            // Best-effort auto-download. Browsers block a second automatic
-            // download from the same page, and a click this long after the
-            // original button press may no longer count as a user gesture —
-            // so we ALSO surface a manual link (phase "ready") that always
-            // works.
-            try {
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = zipName;
-              document.body.appendChild(a);
-              a.click();
-              a.remove();
-            } catch {
-              /* manual link below is the guaranteed path */
-            }
-            setZip({ phase: "ready", url, filename: zipName });
-          }
-        }
-      }
+      zipUrlRef.current = out.url;
+      // Auto-download may be blocked this long after the click; phase
+      // "ready" surfaces a manual link that always works.
+      triggerDownload(out.url, out.filename);
+      setZip({ phase: "ready", url: out.url, filename: out.filename });
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setZip({ phase: "error", message: (err as Error).message });

@@ -10,23 +10,16 @@ import {
 import { NameForm, PasswordForm } from "@/components/site/account-security";
 import { BrandingForm } from "@/components/site/branding-form";
 import { DeleteAccount } from "@/components/site/delete-account";
-import { formatAuAddress } from "@/lib/format-address";
+import { ReportCard } from "@/components/reports/report-card";
 import {
   PLAN_QUOTAS,
   getSessionUser,
   isActiveSubscriber,
 } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { listUserReports } from "@/lib/reports";
 import { SUBSCRIPTION_PLANS } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
-
-type RecentReport = {
-  id: string;
-  generated_at: string;
-  address_text: string;
-  paid_at: string | null;
-};
 
 function GoogleGlyph() {
   return (
@@ -95,16 +88,9 @@ export default async function AccountPage({
       : null;
 
   // Most-recent reports, shown inline so the account page is a hub rather
-  // than a dead link to /reports.
-  const sql = getDb();
-  const recent = (await sql`
-    SELECT r.id, r.generated_at, a.address_text, a.paid_at
-    FROM reports r
-    JOIN addresses a ON a.id = r.address_id
-    WHERE r.user_id = ${user.id}
-    ORDER BY r.generated_at DESC
-    LIMIT 3
-  `) as RecentReport[];
+  // than a dead link to /reports. Same query + card as /reports, so the
+  // risk verdicts match.
+  const { items: recent } = await listUserReports(user.id, { limit: 3 });
 
   return (
     <>
@@ -160,36 +146,8 @@ export default async function AccountPage({
             </div>
             <ul className="flex flex-col divide-y divide-border/50">
               {recent.map((r) => (
-                <li key={r.id}>
-                  <Link
-                    href={`/report/${r.id}`}
-                    className="-mx-2 flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-foreground/5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[14px] font-medium">
-                        {formatAuAddress(r.address_text)}
-                      </div>
-                      <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-                        {new Date(r.generated_at).toLocaleDateString("en-AU", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </div>
-                    </div>
-                    <span
-                      className="shrink-0 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.1em]"
-                      style={{
-                        background: r.paid_at
-                          ? "color-mix(in oklab, var(--apple-green) 14%, transparent)"
-                          : "color-mix(in oklab, var(--apple-blue) 12%, transparent)",
-                        color: r.paid_at ? "var(--apple-green)" : "var(--apple-blue)",
-                      }}
-                    >
-                      {r.paid_at ? "Full" : "Preview"}
-                    </span>
-                    <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-                  </Link>
+                <li key={r.addressId}>
+                  <ReportCard item={r} compact />
                 </li>
               ))}
             </ul>

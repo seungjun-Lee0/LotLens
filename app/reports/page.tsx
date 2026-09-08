@@ -1,39 +1,65 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, FileText } from "lucide-react";
+import { Suspense } from "react";
 
+import { ReportList } from "@/components/reports/report-list";
+import { ReportListSkeleton } from "@/components/reports/report-list-skeleton";
 import { SiteHeader } from "@/components/site/site-header";
-import { getSessionUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
-import { formatAuAddress } from "@/lib/format-address";
+import { getSessionUser, isAdmin } from "@/lib/auth";
+import {
+  listUserReports,
+  parseReportListFilter,
+  type ReportListFilter,
+} from "@/lib/reports";
 
 export const dynamic = "force-dynamic";
 
-type ReportListRow = {
-  id: string;
-  generated_at: string;
-  address_text: string;
-  paid_at: string | null;
-};
+// The list query is the slow part (council_data join). It streams in behind
+// a skeleton, while the auth check above it stays synchronous so a
+// signed-out visitor gets a real 307 rather than a flash of placeholders.
+async function List({
+  userId,
+  q,
+  filter,
+  canDownloadPreviews,
+}: {
+  userId: string;
+  q: string;
+  filter: ReportListFilter;
+  canDownloadPreviews: boolean;
+}) {
+  const page = await listUserReports(userId, { q, filter, limit: 20 });
+  return (
+    <ReportList
+      initial={page}
+      q={q}
+      filter={filter}
+      canDownloadPreviews={canDownloadPreviews}
+    />
+  );
+}
 
-export default async function MyReportsPage() {
+export default async function MyReportsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ q?: string; filter?: string }>;
+}) {
+  const sp = (await searchParams) ?? {};
+  const q = (sp.q ?? "").trim();
+  const filter = parseReportListFilter(sp.filter);
+
   const user = await getSessionUser();
-  if (!user) redirect("/login?next=%2Freports");
-
-  const sql = getDb();
-  const rows = (await sql`
-    SELECT r.id, r.generated_at, a.address_text, a.paid_at
-    FROM reports r
-    JOIN addresses a ON a.id = r.address_id
-    WHERE r.user_id = ${user.id}
-    ORDER BY r.generated_at DESC
-    LIMIT 50
-  `) as ReportListRow[];
+  if (!user) {
+    const next = new URLSearchParams();
+    if (q) next.set("q", q);
+    if (filter !== "all") next.set("filter", filter);
+    const s = next.toString();
+    redirect(`/login?next=${encodeURIComponent(s ? `/reports?${s}` : "/reports")}`);
+  }
 
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 pb-24 pt-12 sm:pt-16">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 pb-24 pt-12 sm:pt-16">
         <header>
           <div className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             My reports
@@ -41,53 +67,21 @@ export default async function MyReportsPage() {
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">
             Reports you&rsquo;ve run
           </h1>
+          <p className="mt-2 text-[13.5px] text-muted-foreground">
+            One card per address, latest run first. Tick unlocked reports to
+            download several PDFs as one ZIP.
+          </p>
         </header>
 
-        {rows.length === 0 ? (
-          <div className="glass flex flex-col items-center gap-3 rounded-3xl px-6 py-12 text-center">
-            <FileText className="size-6 text-muted-foreground" />
-            <p className="text-[14px] text-muted-foreground">
-              No reports yet. Run your first one from the home page.
-            </p>
-            <Link
-              href="/"
-              className="mt-1 inline-flex h-10 items-center gap-2 rounded-full px-5 text-[13.5px] font-medium text-white"
-              style={{
-                background:
-                  "linear-gradient(135deg, var(--apple-blue), color-mix(in oklab, var(--apple-blue) 70%, var(--apple-purple)))",
-              }}
-            >
-              Run a report <ArrowRight className="size-4" />
-            </Link>
-          </div>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {rows.map((r) => (
-              <li key={r.id}>
-                <Link
-                  href={`/report/${r.id}`}
-                  className="glass flex items-center justify-between gap-4 rounded-2xl px-5 py-4 transition hover:bg-foreground/5"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-[14.5px] font-medium">
-                      {formatAuAddress(r.address_text)}
-                    </span>
-                    <span className="mt-0.5 block text-[12px] text-muted-foreground">
-                      {new Date(r.generated_at).toLocaleDateString("en-AU", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                      {" · "}
-                      {r.paid_at ? "Full report" : "Preview"}
-                    </span>
-                  </span>
-                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        {/* key: a new query = a fresh list (local state, selection, cursor). */}
+        <Suspense key={`${q}|${filter}`} fallback={<ReportListSkeleton />}>
+          <List
+            userId={user.id}
+            q={q}
+            filter={filter}
+            canDownloadPreviews={isAdmin(user)}
+          />
+        </Suspense>
       </main>
     </>
   );

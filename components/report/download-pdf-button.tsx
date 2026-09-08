@@ -16,12 +16,15 @@ export function DownloadPdfButton({
   reportId,
   filename,
   iconOnly = false,
+  small = false,
 }: {
   reportId: string;
   /** Falls back to the Content-Disposition name the route already sets. */
   filename?: string;
   /** Round icon-only button (matches the floating FAB): no label text. */
   iconOnly?: boolean;
+  /** With iconOnly: a 36 px list-row button instead of the 48 px FAB. */
+  small?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,12 +91,16 @@ export function DownloadPdfButton({
         aria-busy={busy}
         aria-label={busy ? "Preparing PDF…" : "Download PDF"}
         title={error ?? (busy ? "Preparing PDF…" : "Download PDF")}
-        className="glass-strong flex size-12 items-center justify-center rounded-full text-foreground shadow-xl transition hover:brightness-105 active:scale-95 disabled:cursor-progress disabled:opacity-70"
+        className={
+          small
+            ? "glass flex size-9 items-center justify-center rounded-full text-foreground/80 transition hover:text-foreground active:scale-95 disabled:cursor-progress disabled:opacity-70"
+            : "glass-strong flex size-12 items-center justify-center rounded-full text-foreground shadow-xl transition hover:brightness-105 active:scale-95 disabled:cursor-progress disabled:opacity-70"
+        }
       >
         {busy ? (
-          <Loader2 className="size-5 animate-spin" />
+          <Loader2 className={small ? "size-4 animate-spin" : "size-5 animate-spin"} />
         ) : (
-          <Download className="size-5" />
+          <Download className={small ? "size-4" : "size-5"} />
         )}
       </button>
     );

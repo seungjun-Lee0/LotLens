@@ -16,6 +16,7 @@ import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
 import {
   councilOf,
+  AIRPORT_ADAPTERS,
   NOISE_ADAPTERS,
   overlayLabels,
   queryOverlayAdapter,
@@ -97,10 +98,23 @@ async function fetchCouncilNoise(
   lng: number,
   adapters: OverlayAdapter[],
   lot?: Geometry | null,
+  airport: OverlayAdapter[] = [],
 ): Promise<NoiseResult> {
-  const results = await Promise.all(
-    adapters.map((a) => queryOverlayAdapter(a, lat, lng, lot)),
-  );
+  const [results, airportResults] = await Promise.all([
+    Promise.all(adapters.map((a) => queryOverlayAdapter(a, lat, lng, lot))),
+    Promise.all(airport.map((a) => queryOverlayAdapter(a, lat, lng, lot))),
+  ]);
+  // Airport environs (obstacle limitation surface, wildlife-strike zone):
+  // a height/land-use constraint under the flight path, not a noise
+  // band, so it never raises the grade above informational on its own.
+  const airportLabel =
+    airportResults
+      .flatMap((r, i) => overlayLabels(r.point, airport[i].labelFields))
+      .find((l) => l.length > 0) ?? null;
+  const airportFC = (key: "point" | "context") => ({
+    type: "FeatureCollection" as const,
+    features: airportResults.flatMap((r) => r[key].features),
+  });
   // Worst corridor across every adapter's features: order isn't stable.
   const RANK = RISK_RANK;
   const label = results
@@ -114,16 +128,18 @@ async function fetchCouncilNoise(
     features: results.flatMap((r) => r[key].features),
   });
   const classified = classify(label, null);
-  const riskLevel = classified !== "none" ? classified : label ? "low" : "none";
+  const corridorRisk: RiskLevel = classified !== "none" ? classified : label ? "low" : "none";
+  const riskLevel: RiskLevel =
+    corridorRisk !== "none" ? corridorRisk : airportLabel ? "informational" : "none";
 
   return {
     riskLevel,
     transportCorridor: label,
-    anefCategory: null,
+    anefCategory: airportLabel,
     hasConsideration: riskLevel !== "none",
-    sources: adapters.map((a) => ({ name: a.sourceName, url: a.docUrl, layer: a.url })),
-    raw: { transport: merged("point"), anef: EMPTY_FC },
-    context: { transport: merged("context"), anef: EMPTY_FC },
+    sources: [...adapters, ...airport].map((a) => ({ name: a.sourceName, url: a.docUrl, layer: a.url })),
+    raw: { transport: merged("point"), anef: airportFC("point") },
+    context: { transport: merged("context"), anef: airportFC("context") },
     available: true,
   };
 }
@@ -135,8 +151,11 @@ export async function fetchNoiseData(
   lot?: Geometry | null,
 ): Promise<NoiseResult> {
   if (region && !region.isBrisbane) {
-    const adapters = NOISE_ADAPTERS[councilOf(region) ?? "brisbane"];
-    if (adapters && adapters.length > 0) return fetchCouncilNoise(lat, lng, adapters, lot);
+    const councilId = councilOf(region) ?? "brisbane";
+    const adapters = NOISE_ADAPTERS[councilId];
+    if (adapters && adapters.length > 0) {
+      return fetchCouncilNoise(lat, lng, adapters, lot, AIRPORT_ADAPTERS[councilId] ?? []);
+    }
     return {
       riskLevel: "none",
       transportCorridor: null,
@@ -175,6 +194,7 @@ export async function fetchNoiseData(
     returnGeometry: true,
     bufferDegrees: 0.0025,
     maxAllowableOffset: 0.00003,
+    quantize: true,
   };
 
   const [transport, anef, transportCtx, anefCtx] = await Promise.all([

@@ -22,7 +22,7 @@
 //
 // Source catalogue: https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services
 
-import type { Feature, GeoJsonProperties, Geometry } from "geojson";
+import type { Feature, FeatureCollection, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
 import {
   councilOf,
@@ -105,25 +105,40 @@ function classifyCouncilFlood(label: string | null): RiskLevel {
 async function fetchCouncilFlooding(
   lat: number,
   lng: number,
-  adapter: OverlayAdapter,
+  adapters: OverlayAdapter[],
   lot?: Geometry | null,
 ): Promise<FloodingResult> {
-  const { point, context } = await queryOverlayAdapter(adapter, lat, lng, lot);
+  // A council can split its flood overlay across several layers (Logan
+  // publishes OM-05's six sub-layers separately), so query them together
+  // and merge before grading.
+  const results = await Promise.all(
+    adapters.map((a) => queryOverlayAdapter(a, lat, lng, lot)),
+  );
+  const merge = (
+    list: Array<FeatureCollection<Geometry | null>>,
+  ): FeatureCollection<Geometry | null> => ({
+    type: "FeatureCollection",
+    features: list.flatMap((fc) => fc.features),
+  });
+  const point = merge(results.map((r) => r.point));
+  const context = merge(results.map((r) => r.context));
   // The lot can straddle several flood bands and feature order isn't
   // deterministic: grade every returned band and keep the worst.
   const RANK = RISK_RANK;
-  const label = overlayLabels(point, adapter.labelFields).reduce<string | null>(
-    (worst, l) =>
-      RANK[classifyCouncilFlood(l)] > RANK[classifyCouncilFlood(worst)] ? l : worst,
-    null,
-  );
+  const label = results
+    .flatMap((r, i) => overlayLabels(r.point, adapters[i].labelFields))
+    .reduce<string | null>(
+      (worst, l) =>
+        RANK[classifyCouncilFlood(l)] > RANK[classifyCouncilFlood(worst)] ? l : worst,
+      null,
+    );
   const riskLevel = classifyCouncilFlood(label);
   return {
     riskLevel,
     floodType: label,
     historicEvents: [],
     hasConsideration: riskLevel !== "none",
-    sources: [{ name: adapter.sourceName, url: adapter.docUrl, layer: adapter.url }],
+    sources: adapters.map((a) => ({ name: a.sourceName, url: a.docUrl, layer: a.url })),
     raw: { overall: point, historic2022: EMPTY_FC, historic2011: EMPTY_FC },
     context: { overall: context, historic2022: EMPTY_FC, historic2011: EMPTY_FC },
     available: true,
@@ -180,8 +195,8 @@ export async function fetchFloodingData(
   lot?: Geometry | null,
 ): Promise<FloodingResult> {
   if (region && !region.isBrisbane) {
-    const adapter = FLOOD_ADAPTERS[councilOf(region) ?? "brisbane"];
-    if (adapter) return fetchCouncilFlooding(lat, lng, adapter, lot);
+    const adapters = FLOOD_ADAPTERS[councilOf(region) ?? "brisbane"];
+    if (adapters?.length) return fetchCouncilFlooding(lat, lng, adapters, lot);
     const empty = { overall: EMPTY_FC, historic2022: EMPTY_FC, historic2011: EMPTY_FC };
     return {
       riskLevel: "none",
@@ -232,6 +247,7 @@ export async function fetchFloodingData(
     // Polygon vertex simplification ~10m: invisible at the map zoom we
     // use but keeps the envelope payload to ~10s of KB.
     maxAllowableOffset: 0.00003,
+    quantize: true,
   };
 
   const fieldsOverall = "FLOOD_RISK,FLOOD_TYPE";

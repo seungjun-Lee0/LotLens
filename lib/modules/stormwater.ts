@@ -55,6 +55,12 @@ const PUBLIC_OWNERS = [
   "STATE GOVERNMENT",
   "FEDERAL GOVERNMENT",
   "QLD RAIL",
+  // Townsville's asset register: CITIWATER/CITIWORKS are the council's
+  // own business units; MAIN ROADS is TMR.
+  "CITIWATER",
+  "CITIWORKS",
+  "MAIN ROADS",
+  "CITY OF GOLD COAST",
 ];
 
 function isPublicOwner(owner: string | null): boolean {
@@ -106,21 +112,47 @@ function num(v: unknown): number | null {
 function toAssets(
   fc: { features: Feature<Geometry | null, unknown>[] },
   kind: string,
+  defaultOwner?: string,
 ): StormwaterAsset[] {
   return fc.features.map((f) => {
     const a = (f.properties ?? {}) as Record<string, unknown>;
-    // Two field vocabularies: BCC (OWNER/ASSETID/DIAMETER "600 MM") and
-    // Logan (Owner/Asset_ID/Diameter_mm numeric).
-    const owner = str(a.OWNER) ?? str(a.Owner);
-    const dmm = num(a.Diameter_mm);
+    // Four field vocabularies: BCC (OWNER/ASSETID/DIAMETER "600 MM"),
+    // Logan (Owner/Asset_ID/Diameter_mm numeric), Townsville
+    // (OWNERSHIP/ASSET_NUMBER/PIPE_SIZE numeric) and Gold Coast
+    // (no owner column, SAPOBJECTID/DIAMETER_MM/*_MATERIAL/DEPTH_M).
+    const owner =
+      str(a.OWNER) ?? str(a.Owner) ?? str(a.OWNERSHIP) ?? defaultOwner ?? null;
+    const dmm = num(a.Diameter_mm) ?? num(a.PIPE_SIZE) ?? num(a.DIAMETER_MM);
     return {
       kind,
-      assetId: str(a.ASSETID) ?? str(a.Asset_ID),
-      pipeType: str(a.PIPETYPE) ?? str(a.Culvert_Use),
+      assetId:
+        str(a.ASSETID) ??
+        str(a.Asset_ID) ??
+        str(a.ASSET_NUMBER) ??
+        str(a.REF_NO) ??
+        str(a.SAPOBJECTID),
+      pipeType:
+        str(a.PIPETYPE) ??
+        str(a.Culvert_Use) ??
+        str(a.DESCRIPT) ??
+        str(a.DRAINAGE_PIT_USE) ??
+        str(a.GIS_DESCRIPTION),
       owner,
       diameter: str(a.DIAMETER) ?? (dmm && dmm > 0 ? `${dmm} MM` : null),
-      material: str(a.MATERIAL_ABB) ?? str(a.PREDOMINANTMATERIAL) ?? str(a.Material),
-      averageDepth: num(a.AVERAGEDEPTH) ?? num(a.DEPTH),
+      material:
+        str(a.MATERIAL_ABB) ??
+        str(a.PREDOMINANTMATERIAL) ??
+        str(a.Material) ??
+        str(a.PIPE_MAT) ??
+        str(a.CIRCULAR_PIPE_MATERIAL) ??
+        str(a.BOX_MATERIAL) ??
+        str(a.END_STRUCTURE_MATERIAL),
+      averageDepth:
+        num(a.AVERAGEDEPTH) ??
+        num(a.DEPTH) ??
+        num(a.MH_DEPTH) ??
+        num(a.AVERAGE_DEPTH_M) ??
+        num(a.DEPTH_M),
       public: isPublicOwner(owner),
     };
   });
@@ -132,7 +164,16 @@ function toAssets(
 // what their fields are called. `gully` is optional (Logan folds gullies
 // into Pits). ArcGIS 400s on unknown outFields, so lists are per-council.
 type StormwaterCouncil = {
+  /** Councils that publish ONLY their own asset register carry no OWNER
+   * column (Gold Coast). Naming the owner here keeps those assets on the
+   * public side of the build-over test instead of defaulting to
+   * "private" on a missing field. */
+  defaultOwner?: string;
   pipe: string;
+  /** Second pipe layer where a council splits the network (Townsville's
+   * box culverts live apart from circular pipes). Same field vocabulary. */
+  pipe2?: string;
+  pipe2Fields?: string;
   manhole: string;
   gully: string | null;
   endStructure: string;
@@ -145,6 +186,10 @@ type StormwaterCouncil = {
 
 const LOGAN_SW =
   "https://services5.arcgis.com/ZUCWDRj8F77Xo351/arcgis/rest/services/LCC_Stormwater_Infrastructure/FeatureServer";
+const TCC_SW =
+  "https://services6.arcgis.com/3VCE6mezZtwKJeIR/arcgis/rest/services";
+const GC_SW =
+  "https://services-ap1.arcgis.com/lnVW0dLI3fvST2hd/ArcGIS/rest/services";
 
 const STORMWATER_COUNCILS: Partial<Record<CouncilId, StormwaterCouncil>> = {
   brisbane: {
@@ -168,6 +213,41 @@ const STORMWATER_COUNCILS: Partial<Record<CouncilId, StormwaterCouncil>> = {
     endStructureFields: "Asset_ID,Owner,Type",
     sourceName: "Logan City Council: Stormwater infrastructure",
     docUrl: "https://www.logan.qld.gov.au/planning-and-development",
+  },
+  gold_coast: {
+    // GC publishes its asset register one service per asset class, each
+    // with a single layer whose id is NOT always 0 (the pit view's layer
+    // is 1). No OWNER column: everything here is the city's own network.
+    defaultOwner: "City of Gold Coast",
+    pipe: `${GC_SW}/Stormwater_Drainage_Pipe_View/FeatureServer/0/query`,
+    manhole: `${GC_SW}/Stormwater_Drainage_Pit_view/FeatureServer/1/query`,
+    gully: null,
+    endStructure: `${GC_SW}/Stormwater_End_Structure_view/FeatureServer/0/query`,
+    pipeFields:
+      "OBJECTID,SAPOBJECTID,CLASS,OBJECT_TYPE,DIAMETER_MM,CIRCULAR_PIPE_MATERIAL,BOX_MATERIAL,AVERAGE_DEPTH_M,GIS_DESCRIPTION",
+    structureFields:
+      "OBJECTID,SAPOBJECTID,CLASS,OBJECT_TYPE,DRAINAGE_PIT_USE,DIAMETER_MM,DEPTH_M",
+    endStructureFields:
+      "OBJECTID,SAPOBJECTID,CLASS,OBJECT_TYPE,END_STRUCTURE_MATERIAL,DIAMETER_MM",
+    sourceName: "City of Gold Coast: Stormwater assets",
+    docUrl: "https://www.goldcoast.qld.gov.au/Services/Building-development",
+  },
+  townsville: {
+    // One layer per service on the TCC org (circular pipes carry the
+    // network; box culverts are a separate service, not yet included).
+    pipe: `${TCC_SW}/Asset_StormWater_Stormwater_Pipe_Circular_GDA2020/FeatureServer/78/query`,
+    pipe2: `${TCC_SW}/Asset_StormWater_Stormwater_Pipe_Box_GDA2020/FeatureServer/77/query`,
+    pipe2Fields: "OBJECTID,OWNERSHIP,DESCRIPT,PIPE_MAT",
+    manhole: `${TCC_SW}/Asset_StormWater_Man_Hole_GDA2020/FeatureServer/71/query`,
+    gully: `${TCC_SW}/Asset_StormWater_Pit_GDA2020/FeatureServer/73/query`,
+    endStructure: `${TCC_SW}/Asset_StormWater_End_Structure_GDA2020/FeatureServer/70/query`,
+    // Pipes have no REF_NO/ASSET_NUMBER (those live on structures);
+    // requesting an unknown field 400s the whole query.
+    pipeFields: "OBJECTID,OWNERSHIP,DESCRIPT,PIPE_SIZE,PIPE_MAT",
+    structureFields: "OBJECTID,REF_NO,OWNERSHIP,DESCRIPT,MH_DEPTH",
+    endStructureFields: "OBJECTID,OWNERSHIP,DESCRIPT",
+    sourceName: "Townsville City Council: Stormwater assets",
+    docUrl: "https://www.townsville.qld.gov.au/building-planning-and-projects",
   },
 };
 
@@ -219,10 +299,11 @@ export async function fetchStormwaterData(
     returnGeometry: true,
     bufferDegrees: 0.0025,
     maxAllowableOffset: 0.00003,
+    quantize: true,
   };
   const { pipeFields, structureFields, endStructureFields } = council;
 
-  const [pipe, manhole, gully, endStruct, pipeCtx, manholeCtx, gullyCtx] =
+  const [pipe, manhole, gully, endStruct, pipeCtx, manholeCtx, gullyCtx, pipe2, pipe2Ctx] =
     await Promise.all([
       queryArcGIS(council.pipe, { ...onLot, outFields: pipeFields }),
       queryArcGIS(council.manhole, { ...onLot, outFields: structureFields }),
@@ -235,13 +316,23 @@ export async function fetchStormwaterData(
       council.gully
         ? queryArcGIS(council.gully, { ...nearby, outFields: structureFields })
         : Promise.resolve(EMPTY_FC as never),
+      council.pipe2
+        ? queryArcGIS(council.pipe2, { ...onLot, outFields: council.pipe2Fields ?? pipeFields })
+        : Promise.resolve(EMPTY_FC as never),
+      council.pipe2
+        ? queryArcGIS(council.pipe2, { ...nearby, outFields: council.pipe2Fields ?? pipeFields })
+        : Promise.resolve(EMPTY_FC as never),
     ]);
+  // Fold the secondary pipe layer into the primary FCs so everything
+  // downstream (assets, map painting) sees one pipe network.
+  pipe.features.push(...pipe2.features);
+  pipeCtx.features.push(...pipe2Ctx.features);
 
   const assets = [
-    ...toAssets(pipe, "Pipe"),
-    ...toAssets(manhole, "Manhole"),
-    ...toAssets(gully, "Gully"),
-    ...toAssets(endStruct, "End structure"),
+    ...toAssets(pipe, "Pipe", council.defaultOwner),
+    ...toAssets(manhole, "Manhole", council.defaultOwner),
+    ...toAssets(gully, "Gully", council.defaultOwner),
+    ...toAssets(endStruct, "End structure", council.defaultOwner),
   ];
   const hasPublicAssetOnLot = assets.some((a) => a.public);
   const networkNearby =

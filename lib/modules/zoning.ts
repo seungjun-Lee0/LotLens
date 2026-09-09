@@ -125,6 +125,7 @@ export async function fetchZoningData(
       // Zone polygons follow cadastre lots: smaller than flood/heritage
       // polygons and want sharper boundaries. ~3 m simplification.
       maxAllowableOffset: 0.00003,
+      quantize: true,
     }),
   ]);
   const a = attrs(fc.features[0]);
@@ -163,7 +164,7 @@ async function fetchCouncilZoning(
   adapter: ZoningAdapter,
 ): Promise<ZoningResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
-  const [fc, ctx] = await Promise.all([
+  const [fc, ctx, precinct] = await Promise.all([
     queryArcGIS(adapter.url, {
       geometry: point,
       geometryType: "esriGeometryPoint",
@@ -180,9 +181,25 @@ async function fetchCouncilZoning(
       returnGeometry: true,
       bufferDegrees: 0.0025,
       maxAllowableOffset: 0.00003,
+      quantize: true,
     }),
+    // Councils that split zone and precinct across two layers: the
+    // precinct only ever refines the zone, so a miss here is normal and
+    // must not blank the zone itself.
+    adapter.precinctUrl
+      ? queryArcGIS(adapter.precinctUrl, {
+          geometry: point,
+          geometryType: "esriGeometryPoint",
+          inSR: 4326,
+          outFields: adapter.precinctOutFields ?? "*",
+          returnGeometry: false,
+        }).catch(() => null)
+      : Promise.resolve(null),
   ]);
-  const parsed = adapter.parse(attrs(fc.features[0]));
+  const parsed = adapter.parse({
+    ...attrs(fc.features[0]),
+    ...(precinct ? attrs(precinct.features[0]) : {}),
+  });
   const resolved = Boolean(parsed.zonePrecinct ?? parsed.lvl1Zone ?? parsed.zoneCode);
 
   return {

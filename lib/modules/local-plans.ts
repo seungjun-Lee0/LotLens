@@ -23,9 +23,15 @@
 // reports `informational` so it keeps a full section without raising a
 // warning. Most of Brisbane's inner and middle ring is inside one.
 
-import type { Geometry } from "geojson";
+import type { FeatureCollection, Geometry } from "geojson";
 
 import { queryArcGIS } from "@/lib/arcgis";
+import {
+  councilOf,
+  LOCAL_PLAN_ADAPTERS,
+  queryOverlayAdapter,
+  type LocalPlanAdapter,
+} from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
 import { unavailableForLga, type Region } from "@/lib/region";
 
@@ -71,6 +77,86 @@ function attrs(f: { properties?: unknown } | undefined): Record<string, unknown>
   return (f?.properties ?? {}) as Record<string, unknown>;
 }
 
+/** Non-Brisbane councils: one or two plain polygon layers (plan boundary,
+ * precinct) whose field names the adapter names. No sub-precinct tier
+ * outside BCC, and no code field that every council agrees on, so the
+ * precinct rows carry name + optional code only. */
+async function fetchAdapterLocalPlans(
+  lat: number,
+  lng: number,
+  adapters: LocalPlanAdapter[],
+  lot?: Geometry | null,
+): Promise<LocalPlansResult> {
+  const results = await Promise.all(
+    adapters.map((a) =>
+      queryOverlayAdapter(
+        { url: a.url, sourceName: a.sourceName, docUrl: a.docUrl },
+        lat,
+        lng,
+        lot,
+      ),
+    ),
+  );
+  const merge = (
+    key: "point" | "context",
+    want: (a: LocalPlanAdapter) => boolean,
+  ): FeatureCollection<Geometry | null> => ({
+    type: "FeatureCollection",
+    features: results.flatMap((r, i) =>
+      want(adapters[i]) ? r[key].features : [],
+    ),
+  });
+  const isPrecinct = (a: LocalPlanAdapter) => Boolean(a.precinctFields);
+
+  let planName: string | null = null;
+  const precincts: LocalPlanPrecinct[] = [];
+  const seen = new Set<string>();
+  results.forEach((r, i) => {
+    const a = adapters[i];
+    for (const f of r.point.features) {
+      const props = attrs(f);
+      planName ??= pickField(props, a.planFields);
+      if (!a.precinctFields) continue;
+      const name = pickField(props, a.precinctFields);
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      precincts.push({ name, code: null, subPrecinct: null, subPrecinctCode: null });
+    }
+  });
+
+  const inPlan = planName !== null || precincts.length > 0;
+  return {
+    riskLevel: inPlan ? "informational" : "none",
+    planName,
+    precincts,
+    hasConsideration: inPlan,
+    sources: adapters.map((a) => ({ name: a.sourceName, url: a.docUrl, layer: a.url })),
+    raw: {
+      boundary: merge("point", (a) => !isPrecinct(a)),
+      precinct: merge("point", isPrecinct),
+    },
+    context: {
+      boundary: merge("context", (a) => !isPrecinct(a)),
+      precinct: merge("context", isPrecinct),
+    },
+    available: true,
+    availabilityNote: inPlan
+      ? undefined
+      : "This property sits outside every local plan area in the council's planning scheme.",
+  };
+}
+
+function pickField(
+  props: Record<string, unknown>,
+  fields: string[],
+): string | null {
+  for (const f of fields) {
+    const v = props[f];
+    if (typeof v === "string" && v.trim() !== "") return v;
+  }
+  return null;
+}
+
 export async function fetchLocalPlansData(
   lat: number,
   lng: number,
@@ -81,6 +167,15 @@ export async function fetchLocalPlansData(
   // publish the same idea under different names (local plans, structure
   // plans) on their own services: those land as adapters later.
   const isBrisbane = region?.isBrisbane ?? true;
+  // Logan: the Property Report layer carries the LPS2015 local plan (LP)
+  // and local plan precinct (LP_PREC) per lot. Data only: Logan publishes
+  // no plan-boundary polygons, so the map shows the lot without a plan
+  // outline: the facts and narrative still carry the plan and precinct.
+  const councilId = region ? councilOf(region) : "brisbane";
+  const adapters = (councilId ? LOCAL_PLAN_ADAPTERS[councilId] : undefined) ?? [];
+  if (!isBrisbane && adapters.length > 0) {
+    return fetchAdapterLocalPlans(lat, lng, adapters, lot);
+  }
   if (!isBrisbane) {
     return {
       riskLevel: "none",
@@ -117,6 +212,7 @@ export async function fetchLocalPlansData(
     returnGeometry: true,
     bufferDegrees: 0.0025,
     maxAllowableOffset: 0.00003,
+    quantize: true,
   };
 
   const [boundary, precinct, subPrecinct, boundaryCtx, precinctCtx] =

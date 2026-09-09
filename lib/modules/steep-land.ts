@@ -2,20 +2,25 @@
 //
 // Develo's "Steep Land" page. Landslide hazard is a council planning-scheme
 // matter (there is NO statewide landslide REST layer: verified 2026-07),
-// so this module runs through per-council adapters:
+// so this module runs through per-council adapter LISTS (a council can
+// split its overlay across several layers: Logan publishes one layer per
+// hazard class):
 //   Brisbane        City Plan 2014 Landslide overlay (OVL2_DESC)
+//   Gold Coast      City Plan v13 Landslide Hazard Overlay (SMEC grades)
 //   Moreton Bay     Landslide Hazard Overlay
 //   Sunshine Coast  Landslide Hazard and Steep Land Overlay (slope classes)
 //   Redland         Landslide Hazard Overlay (CLASS)
+//   Logan           OM-08.01 hazard-class polygons (LoganHub, 4 layers)
+//   Noosa           Landslide Hazard Overlay (LABEL)
 //
-// The overlay half of the module is therefore Brisbane + 4. The ELEVATION
+// The ELEVATION
 // half is statewide: Queensland publishes LiDAR contours for the whole
 // state, so every address gets a measured high/low/fall across the lot even
 // where no council overlay exists. That turns "not integrated for this
 // council" from an empty page into a page with the number buyers actually
 // asked for.
 
-import type { Geometry } from "geojson";
+import type { FeatureCollection, Geometry } from "geojson";
 import {
   councilOf,
   overlayLabels,
@@ -69,7 +74,7 @@ export async function fetchSteepLandData(
   // one HAS a brisbane entry, so an unknown LGA must not silently query
   // Brisbane's overlay and report a false "clear".
   const councilId = councilOf(region);
-  const adapter = councilId ? STEEP_ADAPTERS[councilId] : undefined;
+  const adapters = (councilId ? STEEP_ADAPTERS[councilId] : undefined) ?? [];
 
   // Contours are statewide and independent of the overlay, so fetch them
   // for every address: including the ones with no council adapter. A
@@ -77,7 +82,7 @@ export async function fetchSteepLandData(
   // never rejects the whole module.
   const elevationPromise = fetchElevationProfile(lat, lng, lot).catch(() => null);
 
-  if (!adapter) {
+  if (adapters.length === 0) {
     const elevation = await elevationPromise;
     // With elevation in hand the page is no longer empty, so don't mark it
     // unavailable: say plainly that the hazard overlay is the missing
@@ -122,25 +127,36 @@ export async function fetchSteepLandData(
       raw: { overlay: EMPTY_FC, contours: elevation.contours },
       context: { overlay: EMPTY_FC, contours: elevation.contextContours },
       available: true,
-      availabilityNote: `Elevation is measured from statewide ${elevation.interval} contours. Council landslide and steep-land mapping varies by local government area, so confirm the hazard classification through the council's planning scheme mapping.`,
+      availabilityNote: `Elevation from statewide ${elevation.interval} contours. Council landslide mapping: no source information available.`,
     };
   }
 
-  const [{ point, context }, elevation] = await Promise.all([
-    queryOverlayAdapter(adapter, lat, lng, lot),
+  const [results, elevation] = await Promise.all([
+    Promise.all(adapters.map((a) => queryOverlayAdapter(a, lat, lng, lot))),
     elevationPromise,
   ]);
+  const mergeFC = (
+    list: Array<FeatureCollection<Geometry | null>>,
+  ): FeatureCollection<Geometry | null> => ({
+    type: "FeatureCollection",
+    features: list.flatMap((fc) => fc.features),
+  });
+  const point = mergeFC(results.map((r) => r.point));
+  const context = mergeFC(results.map((r) => r.context));
   const hit = point.features.length > 0;
-  // Worst band across all returned features: feature order isn't stable.
-  // (classifySteep(null, true) grades "medium", so rank the null seed -1.)
+  // Worst band across all adapters and features: feature order isn't
+  // stable. (classifySteep(null, true) grades "medium", so rank the null
+  // seed -1.)
   const RANK = RISK_RANK;
-  const label = overlayLabels(point, adapter.labelFields).reduce<string | null>(
-    (worst, l) =>
-      RANK[classifySteep(l, true)] > (worst === null ? -1 : RANK[classifySteep(worst, true)])
-        ? l
-        : worst,
-    null,
-  );
+  const label = results
+    .flatMap((r, i) => overlayLabels(r.point, adapters[i].labelFields))
+    .reduce<string | null>(
+      (worst, l) =>
+        RANK[classifySteep(l, true)] > (worst === null ? -1 : RANK[classifySteep(worst, true)])
+          ? l
+          : worst,
+      null,
+    );
   const overlayRisk = classifySteep(label, hit);
   // The overlay drives severity when it fires. When it doesn't, a measured
   // elevation range still keeps the page worth reading: as a fact.
@@ -153,7 +169,7 @@ export async function fetchSteepLandData(
     elevation,
     hasConsideration: riskLevel !== "none",
     sources: [
-      { name: adapter.sourceName, url: adapter.docUrl, layer: adapter.url },
+      ...adapters.map((a) => ({ name: a.sourceName, url: a.docUrl, layer: a.url })),
       ...(elevation
         ? [
             {

@@ -50,6 +50,10 @@ export type OverlayFeature = Feature<
      * reads as "both". Set fillOpacity 0 alongside — the solid-fill
      * renderers skip it and the hatch pass draws instead. */
     fillPattern?: "hatch";
+    /** Point features with a textLabel render as a small labelled pill
+     * (boundary side lengths) instead of a dot, and are left out of the
+     * legend: the label IS the information. */
+    textLabel?: string;
   }
 >;
 
@@ -133,6 +137,7 @@ export const DEVELO_HEX = {
   vegMSES:        "#ea580c",
   vegBiodiversity: "#84cc16",
   vegCorridor:    "#16a34a",
+  vegNall:        "#d97706",
   // School catchments: two clearly different hues so primary vs secondary
   // read apart, and their overlap (a lot is usually in both) shows as two
   // distinct boundaries rather than one indistinct green wash.
@@ -176,12 +181,14 @@ export const DEVELO_HEX = {
   steep:     "#f59e0b",
 
 
-  // Water & sewer (Urban Utilities)
-  uuGravityMain:  "#a21caf",
-  uuPressureMain: "#db2777",
-  uuWaterMain:    "#06b6d4",
-  uuManhole:      "#7e22ce",
-  uuService:      "#67e8f9",
+  // Water & sewer: Develo's convention, water = blue, sewer = orange, so
+  // the two networks read apart at a glance. Pressure (rising) mains keep
+  // a darker orange: they are the ones you cannot build over at all.
+  uuGravityMain:  "#f97316",
+  uuPressureMain: "#c2410c",
+  uuWaterMain:    "#2aa7e8",
+  uuManhole:      "#ea580c",
+  uuService:      "#93c5fd",
 
   // Stormwater assets
   swPublicPipe:  "#2563eb",
@@ -357,9 +364,16 @@ function pushFC(
 
 function floodingColor(props: Record<string, unknown>) {
   // BCC uses FLOOD_RISK; council adapters use OVL2_DESC / LABEL /
-  // Flood_Risk: accept all and keyword-match.
+  // Flood_Risk / CLASS, and Logan's OM-05 layers use Description:
+  // accept all and keyword-match.
   const label = String(
-    props.FLOOD_RISK ?? props.OVL2_DESC ?? props.LABEL ?? props.Flood_Risk ?? props.CLASS ?? "",
+    props.FLOOD_RISK ??
+      props.OVL2_DESC ??
+      props.LABEL ??
+      props.Flood_Risk ??
+      props.CLASS ??
+      props.Description ??
+      "",
   );
   const r = label.toLowerCase();
   if (r === "high")     return { fillColor: DEVELO_HEX.floodHigh,    legendLabel: "High possibility (5.0% AEP)" };
@@ -385,6 +399,8 @@ function overlandFlowColor(props: Record<string, unknown>) {
   if (r === "medium")   return { fillColor: DEVELO_HEX.overlandMedium,  legendLabel: "Moderate impact" };
   if (r === "low")      return { fillColor: DEVELO_HEX.overlandLow,     legendLabel: "Low impact" };
   if (r === "very low") return { fillColor: DEVELO_HEX.overlandVeryLow, legendLabel: "Very low" };
+  // BCC's "Combined" band: the merged mapped extent with no impact grade.
+  if (r === "combined") return { fillColor: DEVELO_HEX.overlandVeryLow, legendLabel: "Overland flow (mapped extent)" };
   return { fillColor: "#94a3b8", legendLabel: "Overland flow" };
 }
 
@@ -402,22 +418,41 @@ function bushfireColor(props: Record<string, unknown>) {
   // accept both so historical council_data rows still paint.
   const label = String(props.class ?? props.OVL2_DESC ?? "");
   const d = label.toLowerCase();
-  if (d.includes("very high"))        return { fillColor: DEVELO_HEX.fireVeryHigh, legendLabel: "Very high potential intensity" };
-  if (d.includes("high hazard area")) return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "High hazard area" };
-  if (d.includes("high"))             return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "High potential intensity" };
-  if (d.includes("medium"))           return { fillColor: DEVELO_HEX.fireMedium,   legendLabel: "Medium potential intensity" };
+  // Buffers before the intensity words: BCC's "High hazard buffer area"
+  // is the band AROUND a hazard area, not a high-intensity polygon.
   if (d.includes("buffer") || d.includes("impact"))
                                       return { fillColor: DEVELO_HEX.fireBuffer,   legendLabel: "Potential impact buffer" };
+  if (d.includes("very high"))        return { fillColor: DEVELO_HEX.fireVeryHigh, legendLabel: "Very high potential intensity" };
+  if (d.includes("high hazard area")) return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "High hazard area (council)" };
+  if (d.includes("high"))             return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "High potential intensity" };
+  if (d.includes("medium hazard area")) return { fillColor: DEVELO_HEX.fireMedium, legendLabel: "Medium hazard area (council)" };
+  if (d.includes("medium"))           return { fillColor: DEVELO_HEX.fireMedium,   legendLabel: "Medium potential intensity" };
   // QFD awareness vector tiles (fallback source) carry no intensity class.
   if (d.includes("prone"))            return { fillColor: DEVELO_HEX.fireHigh,     legendLabel: "Bushfire prone area" };
   return { fillColor: "#94a3b8", legendLabel: label || "Hazard area" };
 }
 
 function vegetationColor(props: Record<string, unknown>) {
-  const d = String(props.OVL2_DESC ?? "").toLowerCase();
+  // BCC/GC use OVL2_DESC, Sunshine Coast LABEL/HEADING, Redland CLASS,
+  // Logan Ovl2_Desc or Classification.
+  const d = String(
+    props.OVL2_DESC ??
+      props.Ovl2_Desc ??
+      props.LABEL ??
+      props.HEADING ??
+      props.CLASS ??
+      props.Classification ??
+      props.CATEGORY ??
+      "",
+  ).toLowerCase();
   if (d.includes("waterway") || d.includes("wetland"))
     return { fillColor: DEVELO_HEX.vegWaterway,    legendLabel: "Waterway / wetland vegetation" };
-  if (d.includes("matter"))
+  // BCC Natural Assets Local Law: Develo's orange dotted "NALL" wash.
+  if (d.includes("nall") || d.includes("significant native") || d.includes("significant urban"))
+    return { fillColor: DEVELO_HEX.vegNall,        legendLabel: "Protected vegetation (NALL)" };
+  if (d.includes("council vegetation"))
+    return { fillColor: DEVELO_HEX.vegNall,        legendLabel: "Council vegetation (NALL)", fillOpacity: 0.2 };
+  if (d.includes("matter") || d.includes("mses") || d.includes("mnes"))
     return { fillColor: DEVELO_HEX.vegMSES,        legendLabel: "Matters of state interest" };
   if (d.includes("corridor"))
     return { fillColor: DEVELO_HEX.vegCorridor,    legendLabel: "Ecological corridor" };
@@ -425,17 +460,32 @@ function vegetationColor(props: Record<string, unknown>) {
 }
 
 function floodPlanningColor(props: Record<string, unknown>) {
-  const d = String(props.OVL2_DESC ?? "");
+  const d = String(props.OVL2_DESC ?? props.LABEL ?? props.HEADING ?? "");
   const n = parseInt(d.replace(/\D/g, ""), 10);
   if (n === 1) return { fillColor: DEVELO_HEX.floodHigh,    legendLabel: "Planning area 1 - strictest" };
   if (n === 2) return { fillColor: DEVELO_HEX.floodMedium,  legendLabel: "Planning area 2" };
   if (n === 3) return { fillColor: DEVELO_HEX.floodLow,     legendLabel: "Planning area 3" };
   if (n >= 4) return { fillColor: DEVELO_HEX.floodVeryLow, legendLabel: "Planning area 4 - mildest" };
-  return { fillColor: "#94a3b8", legendLabel: d || "Planning area" };
+  // Councils outside Brisbane publish unnumbered statutory areas ("Flood
+  // Assessment Required", "Flood Storage Preservation Area"): paint them
+  // in the flood palette under their own name rather than a grey blank.
+  if (d) return { fillColor: DEVELO_HEX.floodMedium, legendLabel: d };
+  return { fillColor: "#94a3b8", legendLabel: "Planning area" };
 }
 
 function noiseColor(props: Record<string, unknown>) {
-  const d = String(props.OVL2_DESC ?? props.LABEL ?? props.CLASS ?? "");
+  // Noise_Category first: Logan's corridor layers put the gradeable text
+  // ("Local - Category 1 - Roads") there, while their OVL2_DESC is the
+  // generic un-numbered "Transport noise corridor categories".
+  const d = String(
+    props.Noise_Category ?? props.OVL2_DESC ?? props.Ovl2_Desc ?? props.LABEL ?? props.CLASS ?? "",
+  );
+  // Airport environs that are NOT noise: obstacle limitation surfaces
+  // (height caps under the flight path) and wildlife-strike zones. A quiet
+  // wash in its own tint so it never reads as a noise band.
+  if (/obstacle|bird|bat strike|wildlife/i.test(d)) {
+    return { fillColor: "#64748b", legendLabel: d, fillOpacity: 0.14 };
+  }
   const isAnef = /anef/i.test(d);
   if (isAnef) {
     const n = parseInt(d.replace(/\D/g, ""), 10);
@@ -503,7 +553,7 @@ function assColor(props: Record<string, unknown>): Classified {
 
 function steepColor(props: Record<string, unknown>): Classified {
   const label = String(
-    props.OVL2_DESC ?? props.LABEL ?? props.CLASS ?? props.Class ?? "Landslide / steep land",
+    props.OVL2_DESC ?? props.Ovl2_Desc ?? props.LABEL ?? props.CLASS ?? props.Class ?? "Landslide / steep land",
   );
   const s = label.toLowerCase();
   const high = s.includes("high") || s.includes("landslide");
@@ -697,7 +747,11 @@ function localPlanAreaColor(): Classified {
 }
 
 function localPlanPrecinctColor(props: Record<string, unknown>): Classified {
-  const name = String(props.LP_PREC ?? "").trim();
+  // BCC/Moreton Bay LP_PREC, Logan Local_Plan_Precinct, Sunshine Coast
+  // label.
+  const name = String(
+    props.LP_PREC ?? props.Local_Plan_Precinct ?? props.label ?? "",
+  ).trim();
   return {
     fillColor: DEVELO_HEX.planPrecinct,
     legendLabel: name ? `Precinct: ${name}` : "Plan precinct",
@@ -900,6 +954,12 @@ export function extractOverlays(
       const i = inner as Record<string, unknown>;
       pushFC(out, i.river, floodPlanningColor);
       pushFC(out, i.creek, floodPlanningColor);
+      // Unnumbered statutory area: paint it in the overland palette so it
+      // never reads as a river/creek planning tier.
+      pushFC(out, i.overland, () => ({
+        fillColor: DEVELO_HEX.overlandMedium,
+        legendLabel: "Overland flow flood planning area",
+      }));
       return out;
     }
     case "noise": {
@@ -954,10 +1014,10 @@ export function extractOverlays(
         fillColor: color,
         legendLabel: label,
       });
-      pushFC(out, i.gravity, line(DEVELO_HEX.uuGravityMain, "Sewer gravity main"));
-      pushFC(out, i.pressure, line(DEVELO_HEX.uuPressureMain, "Sewer pressure main"));
-      pushFC(out, i.waterMain, line(DEVELO_HEX.uuWaterMain, "Water main"));
-      pushFC(out, i.manhole, line(DEVELO_HEX.uuManhole, "Sewer manhole"));
+      pushFC(out, i.gravity, line(DEVELO_HEX.uuGravityMain, "Sewer pipe"));
+      pushFC(out, i.pressure, line(DEVELO_HEX.uuPressureMain, "Sewer pressure pipe"));
+      pushFC(out, i.waterMain, line(DEVELO_HEX.uuWaterMain, "Water pipe"));
+      pushFC(out, i.manhole, line(DEVELO_HEX.uuManhole, "Sewer maintenance structure"));
       // Both service types share a legend row: they're the property's own
       // connections, and splitting them adds a line without adding meaning.
       const service = line(DEVELO_HEX.uuService, "Service connection");
@@ -1009,5 +1069,50 @@ export function extractOverlays(
       pushFC(out, inner, zoningColor);
       out.sort((a, b) => zoneRank(a.properties.legendLabel) - zoneRank(b.properties.legendLabel));
       return out;
+    case "internet": {
+      const i = inner as Record<string, unknown>;
+      pushFC(out, i.fixedLine, () => ({
+        fillColor: "#0d9488",
+        legendLabel: "nbn fixed line footprint",
+        fillOpacity: 0.18,
+      }));
+      pushFC(out, i.fixedWireless, () => ({
+        fillColor: "#f59e0b",
+        legendLabel: "nbn fixed wireless footprint",
+        fillOpacity: 0.18,
+      }));
+      return out;
+    }
+    case "boundary": {
+      // One label pill per side, at the side's midpoint. The lot outline
+      // itself is the map's property highlight, so nothing else to draw.
+      // A very irregular parcel (strata common property, a battle-axe with
+      // a chamfered handle) can have 20+ sides; label the longest dozen or
+      // the pills bury the map.
+      const i = inner as { edges?: unknown };
+      if (!Array.isArray(i.edges)) return out;
+      const edges = (i.edges as Array<{
+        lengthM: number;
+        midLng: number;
+        midLat: number;
+        approx: boolean;
+      }>)
+        .filter((e) => Number.isFinite(e.lengthM) && Number.isFinite(e.midLng) && Number.isFinite(e.midLat))
+        .sort((a, b) => b.lengthM - a.lengthM)
+        .slice(0, 12);
+      for (const e of edges) {
+        out.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [e.midLng, e.midLat] },
+          properties: {
+            fillColor: "#0f172a",
+            strokeColor: "#0f172a",
+            legendLabel: "Side length",
+            textLabel: `${e.approx ? "~" : ""}${e.lengthM.toFixed(1)}m`,
+          },
+        });
+      }
+      return out;
+    }
   }
 }

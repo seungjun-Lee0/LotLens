@@ -7,7 +7,7 @@
 // two stay in sync.
 
 import type { LucideIcon } from "lucide-react";
-import { CloudRain, Droplets, Flame, GraduationCap, Landmark, LayoutGrid, Leaf, Map, Mountain, PawPrint, ScrollText, TrainFront, TrendingUp, Volume2, Waves, Wind, Zap } from "lucide-react";
+import { CloudRain, Droplets, Flame, GraduationCap, Landmark, LayoutGrid, Leaf, Map, Mountain, PawPrint, Ruler, ScrollText, TrainFront, TrendingUp, Volume2, Waves, Wifi, Wind, Zap } from "lucide-react";
 
 import type { Module } from "@/lib/db";
 
@@ -68,7 +68,7 @@ const D = {
   heritageState: "#0050c0", heritageLocal: "#0070ff", heritageCharacter: "#7d007d",
   heritageDwelling: "#ffa4a4",
   easementHV: "#db2777", easementCadastre: "#a21caf",
-  vegWaterway: "#0284c7", vegMSES: "#ea580c", vegBiodiversity: "#84cc16", vegCorridor: "#16a34a",
+  vegWaterway: "#0284c7", vegMSES: "#ea580c", vegBiodiversity: "#84cc16", vegCorridor: "#16a34a", vegNall: "#d97706",
   catchmentPrimary: "#16a34a", catchmentSecondary: "#4f46e5",
   zoneCentre: "#dc2626", zoneMixed: "#f97316", zoneLowMediumResidential: "#d97706", zoneResidential: "#facc15", zoneOpenSpace: "#16a34a", zoneOther: "#6366f1",
   coastalErosion: "#d97706",
@@ -77,6 +77,7 @@ const D = {
   assShallow: "#b45309", assMapped: "#eab308",
   tenement: "#a855f7", kraResource: "#dc2626", kraSeparation: "#f59e0b",
   steepHigh: "#9a3412", steep: "#f59e0b",
+  uuWaterMain: "#2aa7e8", uuGravityMain: "#f97316", uuPressureMain: "#c2410c", uuManhole: "#ea580c", uuService: "#93c5fd",
 };
 
 export const MODULE_META: Record<Module, ModuleMeta> = {
@@ -119,6 +120,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
       { label: "Planning area 2",             color: D.floodMedium,  colorHex: D.floodMedium },
       { label: "Planning area 3",             color: D.floodLow,     colorHex: D.floodLow },
       { label: "Planning area 4 - mildest",   color: D.floodVeryLow, colorHex: D.floodVeryLow },
+      { label: "Overland flow flood planning area", color: D.overlandMedium, colorHex: D.overlandMedium },
     ],
   },
 
@@ -167,16 +169,17 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-orange)",
     tintHex: APPLE_HEX.orange,
     icon: Flame,
-    sourceLabel: "Queensland Government · Bushfire Prone Area (State Planning Policy)",
+    sourceLabel: "Queensland Government · Bushfire Prone Area (State Planning Policy) + council bushfire overlays",
     thingsToKnow: [
       "Bushfire-prone area mapping considers vegetation, slope and proximity to potential fuel. A mapped property may require a Bushfire Attack Level assessment for new building work.",
       "The result can influence construction materials, defendable space, access and vegetation management. Requirements depend on the site and proposed development.",
     ],
-    note: "This report uses statewide mapping. Council overlays and a site-specific BAL assessment may provide more detailed requirements.",
+    note: "Statewide mapping and the council planning-scheme overlay are both checked where the council publishes one. A site-specific BAL assessment may provide more detailed requirements.",
     legend: [
       { label: "Very high potential intensity", color: D.fireVeryHigh, colorHex: D.fireVeryHigh },
       { label: "High potential intensity",      color: D.fireHigh,     colorHex: D.fireHigh },
       { label: "Medium potential intensity",    color: D.fireMedium,   colorHex: D.fireMedium },
+      { label: "Hazard area (council)",         color: D.fireHigh,     colorHex: D.fireHigh },
       { label: "Potential impact buffer",       color: D.fireBuffer,   colorHex: D.fireBuffer },
     ],
   },
@@ -187,7 +190,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     tint: "var(--apple-green)",
     tintHex: APPLE_HEX.green,
     icon: Leaf,
-    sourceLabel: "QLD Regulated Vegetation Map + council biodiversity overlays",
+    sourceLabel: "QLD Regulated Vegetation Map + council biodiversity and local-law vegetation overlays",
     thingsToKnow: [
       "Vegetation and biodiversity overlays identify areas where clearing, tree removal or habitat disturbance may be regulated. They can affect the location of buildings, driveways and services.",
       "A mapped result does not prohibit all work, but it should be checked before assuming a clear building envelope or removing vegetation.",
@@ -200,6 +203,7 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
       { label: "Waterway / wetland",        color: D.vegWaterway,     colorHex: D.vegWaterway },
       { label: "Biodiversity area",         color: D.vegBiodiversity, colorHex: D.vegBiodiversity },
       { label: "Ecological corridor",       color: D.vegCorridor,     colorHex: D.vegCorridor },
+      { label: "Protected vegetation (NALL)", color: D.vegNall,       colorHex: D.vegNall },
     ],
   },
 
@@ -374,11 +378,11 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     ],
     note: "Mapped alignments and depths are indicative. Obtain current service plans and have relevant assets located before design or excavation.",
     legend: [
-      { label: "Sewer gravity main",  color: D.easementCadastre, colorHex: D.easementCadastre },
-      { label: "Sewer pressure main", color: D.easementHV,       colorHex: D.easementHV },
-      { label: "Water main",          color: D.stormMedium,      colorHex: D.stormMedium },
-      { label: "Sewer manhole",       color: D.heritageState,    colorHex: D.heritageState },
-      { label: "Service connection",  color: D.stormLow,         colorHex: D.stormLow },
+      { label: "Water pipe",                  color: D.uuWaterMain,    colorHex: D.uuWaterMain },
+      { label: "Sewer pipe",                  color: D.uuGravityMain,  colorHex: D.uuGravityMain },
+      { label: "Sewer pressure pipe",         color: D.uuPressureMain, colorHex: D.uuPressureMain },
+      { label: "Sewer maintenance structure", color: D.uuManhole,      colorHex: D.uuManhole },
+      { label: "Service connection",          color: D.uuService,      colorHex: D.uuService },
     ],
   },
 
@@ -417,6 +421,39 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     legend: [
       { label: "Neighbourhood plan area", color: D.zoneOther, colorHex: D.zoneOther },
       { label: "Plan precinct",           color: D.zoneMixed, colorHex: D.zoneMixed },
+    ],
+  },
+
+  boundary: {
+    name: "Boundary",
+    question: "How big is the lot, and how long is each side?",
+    tint: "var(--apple-blue)",
+    tintHex: APPLE_HEX.blue,
+    icon: Ruler,
+    sourceLabel: "Queensland Government Digital Cadastral Database (lot geometry and registered area)",
+    thingsToKnow: [
+      "The lot boundary is the legal extent of the land being bought. Setbacks, site cover, minimum frontage and the position of fences, easements and services are all measured from it, so the side lengths and area decide what can physically fit on the block.",
+      "Fences, retaining walls and driveways are often not on the boundary line. The registered plan of survey, and where needed a licensed surveyor, are the only way to confirm where the boundary actually runs on the ground.",
+    ],
+    note: "Side lengths come from the state cadastral map, not the registered survey plan, and are rounded to 0.1 m. Order a survey plan or a boundary survey before relying on them for design or fencing.",
+    legend: [],
+  },
+
+  internet: {
+    name: "Internet Availability",
+    question: "Which nbn access network serves this address?",
+    tint: "var(--apple-teal)",
+    tintHex: APPLE_HEX.teal,
+    icon: Wifi,
+    sourceLabel: "nbn coverage footprints, March 2024 (Department of Infrastructure, CC BY 4.0)",
+    thingsToKnow: [
+      "The nbn serves each area through one access network: fixed line (fibre, HFC or fibre-to-the-node), fixed wireless from a local tower, or satellite everywhere else. The network type sets the ceiling on the plans and speeds a provider can offer at the address.",
+      "Fixed line areas generally support the fastest plans; fixed wireless is capped lower and depends on line of sight to the tower; satellite carries the highest latency. Whether an individual premises is connected, and on which technology, is only confirmed by an address check with nbn or a provider.",
+    ],
+    note: "Footprint polygons are published by nbn at area level, not per premises, and date from March 2024. Confirm the address-specific technology, connection status and available plans with nbn or your provider before relying on this.",
+    legend: [
+      { label: "nbn fixed line footprint", color: "#0d9488", colorHex: "#0d9488" },
+      { label: "nbn fixed wireless footprint", color: "#f59e0b", colorHex: "#f59e0b" },
     ],
   },
 

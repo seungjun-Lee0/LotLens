@@ -103,6 +103,14 @@ const MODULE_CARDS: Record<Module, { blurb: string; hex: string }> = {
     blurb: "Planning scheme zone, precinct and key development controls.",
     hex: "#6366f1",
   },
+  boundary: {
+    blurb: "Lot area, perimeter and the length of every side, from the state cadastre.",
+    hex: "#0f172a",
+  },
+  internet: {
+    blurb: "Which nbn access network serves the address: fixed line, fixed wireless or satellite.",
+    hex: "#0d9488",
+  },
   local_plans: {
     blurb: "The neighbourhood plan that overrides your zone's height and density rules.",
     hex: "#4f46e5",

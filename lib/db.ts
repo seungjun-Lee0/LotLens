@@ -36,22 +36,26 @@ export type Module =
   | "schools"
   | "transport"
   | "local_plans"
-  | "zoning";
+  | "zoning"
+  | "boundary"
+  | "internet";
 
 /**
- * Water & Sewer (Urban Utilities) is built and tested but switched off.
+ * Water & Sewer runs per-retailer (see RETAILERS in modules/water-sewer):
  *
- * The blocker is legal, not technical: UU's endpoints are public and
- * unauthenticated, but they assert "© Urban Utilities 2019" while leaving
- * licenseInfo as the literal string "This is a place holder for terms and
- * conditions of using QUU Open Data". Every other source in this report is
- * CC BY 4.0, which grants commercial redistribution; UU has granted
- * nothing. Flip this to true only once UU confirms reuse terms in writing.
+ *   Unitywater (Moreton Bay / Sunshine Coast / Noosa): LIVE. Public-access
+ *   layers on the official UW org carry only an accuracy disclaimer, and
+ *   the same series is distributed CC BY 4.0 via the Moreton Bay DataHub.
+ *
+ *   Urban Utilities (Brisbane / Ipswich / Lockyer / Scenic Rim / Somerset):
+ *   BLOCKED. Copyright asserted, licence literally a placeholder - the
+ *   module reports the gap honestly instead of querying, until UU confirms
+ *   terms in writing (licensed flag on the retailer entry).
  *
  * The annotation is load-bearing: without it TypeScript narrows the type
- * to `false` and reports the guarded branches as dead code.
+ * and reports the guarded branches as dead code.
  */
-export const WATER_SEWER_ENABLED: boolean = false;
+export const WATER_SEWER_ENABLED: boolean = true;
 
 /**
  * Power (Energex electricity network) is built and tested but switched off.
@@ -110,6 +114,8 @@ export const ENVIRONMENT_ENABLED: boolean = false;
  * report and the PDF.
  */
 export const GOOD_TO_KNOW_MODULES = new Set<Module>([
+  "boundary",
+  "internet",
   "zoning",
   "schools",
   "transport",
@@ -175,6 +181,11 @@ export const MODULE_ORDER: Module[] = [
   "local_plans",
   "schools",
   "transport",
+  // The lot's own dimensions, from the cadastre polygon already fetched:
+  // a facts page (area, perimeter, side lengths), never a warning.
+  "boundary",
+  // nbn access-network footprint (fixed line / fixed wireless): a fact.
+  "internet",
 ];
 
 /**

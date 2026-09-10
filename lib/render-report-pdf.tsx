@@ -160,6 +160,7 @@ export async function renderReportPdf(
           propertyPolygon: payload.propertyPolygon,
           lotLines: row.module === "zoning" ? payload.parcelLines : null,
           fitPoints: row.module === "transport",
+          tightFrame: row.module === "boundary",
         });
         maps[idx] = { module: row.module, png };
       } catch (err) {

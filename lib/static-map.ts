@@ -17,7 +17,11 @@
 
 import sharp from "sharp";
 
-import { contourCoverageBbox, type OverlayFeature } from "@/lib/overlays";
+import {
+  CONTOUR_LEGEND_LABEL,
+  contourCoverageBbox,
+  type OverlayFeature,
+} from "@/lib/overlays";
 
 // Bound sharp's memory footprint for the bulk workload. The libvips
 // operation cache retains decoded bitmaps between calls — helpful for a
@@ -63,6 +67,7 @@ function frameFor(
   height: number,
   propertyPolygon?: unknown | null,
   extraPoints: number[][] = [],
+  tight = false,
 ): Frame {
   const cx = merX(lng);
   const cy = merY(lat);
@@ -78,6 +83,37 @@ function frameFor(
         needX = Math.max(needX, Math.abs(merX(lon) - cx) * 1.3);
         needY = Math.max(needY, Math.abs(merY(la) - cy) * 1.3);
       }
+    }
+  }
+  // Tight frame (boundary dimensions): the lot itself is the subject, so
+  // centre on the LOT's bounding box (the geocoded pin often sits near a
+  // frontage corner, which would push the far boundary to the edge) and
+  // zoom until the lot fills ~60% of the frame. Floor keeps a tiny lot
+  // from becoming a 20 m blur.
+  if (tight) {
+    let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+    for (const poly of polygonRings(
+      propertyPolygon as { type?: string; coordinates?: unknown } | null,
+    )) {
+      for (const ring of poly) {
+        for (const [lon, la] of ring) {
+          const x = merX(lon), y = merY(la);
+          if (x < xmin) xmin = x;
+          if (x > xmax) xmax = x;
+          if (y < ymin) ymin = y;
+          if (y > ymax) ymax = y;
+        }
+      }
+    }
+    if (Number.isFinite(xmin)) {
+      const lcx = (xmin + xmax) / 2;
+      const lcy = (ymin + ymax) / 2;
+      const halfW = (xmax - xmin) / 2;
+      const halfH = (ymax - ymin) / 2;
+      const z = Math.max(0.25, Math.max(halfW / 0.6 / hw, halfH / 0.6 / hh));
+      hw *= z;
+      hh *= z;
+      return { xmin: lcx - hw, ymin: lcy - hh, xmax: lcx + hw, ymax: lcy + hh };
     }
   }
   // Point markers that must be in frame (transport stops): a tighter
@@ -111,9 +147,21 @@ function getBasePNG(frame: Frame, width: number, height: number): Promise<Buffer
       const url =
         `${QLD_IMAGERY_EXPORT}?bbox=${frame.xmin},${frame.ymin},${frame.xmax},${frame.ymax}` +
         `&bboxSR=3857&imageSR=3857&size=${width},${height}&format=jpeg&transparent=false&f=image`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`QLD imagery export ${res.status}`);
-      return Buffer.from(await res.arrayBuffer());
+      // The QLD ImageServer drops out periodically (the web map carries an
+      // Esri fallback for the same reason); one retry after a beat rescues
+      // most blips without stalling the whole PDF render.
+      let lastErr: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 600 * attempt));
+        try {
+          const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+          if (!res.ok) throw new Error(`QLD imagery export ${res.status}`);
+          return Buffer.from(await res.arrayBuffer());
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      throw lastErr instanceof Error ? lastErr : new Error("QLD imagery export failed");
     })();
     basePromises.set(key, p);
     p.finally(() => basePromises.delete(key)).catch(() => {});
@@ -270,6 +318,7 @@ export async function renderModuleMapPNG({
   propertyPolygon = null,
   lotLines = null,
   fitPoints = false,
+  tightFrame = false,
   width = 1200,
   height = 720,
 }: {
@@ -287,6 +336,9 @@ export async function renderModuleMapPNG({
   /** Widen the frame so overlay POINT features (transport stops) are in
    * view. Off by default: every other module frames the lot. */
   fitPoints?: boolean;
+  /** Frame the lot itself at ~60% of the width (boundary dimensions),
+   * mirroring the web map's tightFrame. */
+  tightFrame?: boolean;
   width?: number;
   height?: number;
 }): Promise<Buffer> {
@@ -297,6 +349,7 @@ export async function renderModuleMapPNG({
   const frame = frameFor(
     lat, lng, width, height, propertyPolygon,
     fitPoints ? nearbyStopPoints(stopPoints, lat, lng) : [],
+    tightFrame,
   );
   const basePromise = getBasePNG(frame, width, height);
 
@@ -320,6 +373,10 @@ export async function renderModuleMapPNG({
   // darkened stroke colour (lib/overlays.ts) at a width that survives the
   // ~0.44× downscale from this 1200 px render to the PDF page.
   const outlines: string[] = [];
+  // Contour lines: terrain context, painted UNDER every polygon fill (the
+  // steep-land map's landslide polygons were lost under the contour mesh
+  // when both sat in `outlines`). Mirrors the web map's overlay-contours.
+  const contours: string[] = [];
   // Diagonal-hatch pattern defs, one per colour actually used (school
   // secondary catchments). Prepended to the svg below.
   const hatchDefs: string[] = [];
@@ -366,40 +423,47 @@ export async function renderModuleMapPNG({
     }
     // LineString features (stormwater pipes, sewer/water mains, contour
     // lines) stroke in their OWN colour, not the darkened outline tint -
-    // for contours the colour IS the elevation. Pushed with the outlines
-    // so they paint above every polygon fill. Width honours the feature's
-    // strokeWidth when set (contours ask for a thin 2): many fine lines
-    // read as terrain, few fat ones read as scribble.
+    // for contours the colour IS the elevation. Pipes and mains go with
+    // the outlines so they paint above every polygon fill; contours go
+    // under (see `contours`). Width honours the feature's strokeWidth when
+    // set (contours ask for a thin 2): many fine lines read as terrain,
+    // few fat ones read as scribble.
     const lineW = (f.properties as { strokeWidth?: number }).strokeWidth ?? 3;
     const lineO = (f.properties as { strokeOpacity?: number }).strokeOpacity ?? 0.95;
+    const lineBucket =
+      f.properties.legendLabel === CONTOUR_LEGEND_LABEL ? contours : outlines;
     for (const line of lineStrings(geom)) {
       const d = lineToPath(line, px);
       if (!d) continue;
-      outlines.push(
+      lineBucket.push(
         `<path d="${d}" fill="none" stroke="${f.properties.fillColor}" stroke-width="${lineW}" stroke-opacity="${lineO}" stroke-linecap="round" stroke-linejoin="round"/>`,
       );
     }
   }
   // Contour coverage veil (mirrors the web map): dim outside the fetched
-  // contour window when the frame extends past it, UNDER the contour lines
-  // so they stay crisp. Gaussian-blurred so the dim FADES in across the
-  // data boundary instead of stopping at a hard seam; the outer rect
-  // extends past the frame so the blur never lightens the frame edges.
-  // Skipped when the data covers the whole frame.
+  // contour window when the frame extends past it. Slotted between the
+  // contours and the polygon fills, so it dims the un-surveyed margin and
+  // not the hazard polygons drawn over it. Gaussian-blurred so the dim
+  // FADES in across the data boundary instead of stopping at a hard seam;
+  // the outer rect extends past the frame so the blur never lightens the
+  // frame edges. Skipped when the data covers the whole frame.
   const cov = contourCoverageBbox(overlays);
+  let veil = "";
   if (cov) {
     const [cx0, cy0] = px(cov.west, cov.north);
     const [cx1, cy1] = px(cov.east, cov.south);
     if (cx0 > 0 || cy0 > 0 || cx1 < width || cy1 < height) {
       const fade = 0.12 * Math.min(cx1 - cx0, cy1 - cy0);
       const m = (2 * fade).toFixed(1);
-      parts.push(
+      veil =
         `<defs><filter id="covblur" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur stdDeviation="${(fade / 2).toFixed(1)}"/></filter></defs>` +
-          `<path d="M-${m} -${m}H${width + 2 * fade}V${height + 2 * fade}H-${m}Z M${cx0.toFixed(1)} ${cy0.toFixed(1)}H${cx1.toFixed(1)}V${cy1.toFixed(1)}H${cx0.toFixed(1)}Z" fill="#0b1220" fill-opacity="0.55" fill-rule="evenodd" filter="url(#covblur)"/>`,
-      );
+        `<path d="M-${m} -${m}H${width + 2 * fade}V${height + 2 * fade}H-${m}Z M${cx0.toFixed(1)} ${cy0.toFixed(1)}H${cx1.toFixed(1)}V${cy1.toFixed(1)}H${cx0.toFixed(1)}Z" fill="#0b1220" fill-opacity="0.55" fill-rule="evenodd" filter="url(#covblur)"/>`;
     }
   }
 
+  // Paint order: contours → coverage veil → polygon fills → outlines +
+  // pipes/mains. `parts` held only the fills up to here.
+  parts.unshift(...contours, ...(veil ? [veil] : []));
   parts.push(...outlines);
 
   // Cadastre lot boundaries: faint white hairlines so zone fills read
@@ -435,6 +499,20 @@ export async function renderModuleMapPNG({
     if (f.geometry?.type !== "Point") continue;
     const [lon, la] = f.geometry.coordinates;
     const [x, y] = px(lon, la);
+    const text = f.properties.textLabel;
+    if (text) {
+      // Label pill (boundary side lengths): dark rounded rect, white text,
+      // centred on the point. Width from a monospace-ish estimate: sharp
+      // rasterises the SVG without a text-measure pass.
+      const fs = 22;
+      const w = text.length * fs * 0.6 + 16;
+      const h = fs + 12;
+      parts.push(
+        `<rect x="${(x - w / 2).toFixed(1)}" y="${(y - h / 2).toFixed(1)}" width="${w.toFixed(1)}" height="${h}" rx="${h / 2}" fill="${f.properties.fillColor}" fill-opacity="0.88" stroke="#ffffff" stroke-opacity="0.9" stroke-width="1.5"/>` +
+          `<text x="${x.toFixed(1)}" y="${(y + fs * 0.36).toFixed(1)}" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="${fs}" font-weight="600" fill="#ffffff">${text}</text>`,
+      );
+      continue;
+    }
     const badge = stopBadgeFragment(f.properties.legendLabel, x, y, 38);
     parts.push(
       badge ??
@@ -593,3 +671,4 @@ export async function renderCoverAerial({
     .jpeg({ quality: 84, mozjpeg: true })
     .toBuffer();
 }
+

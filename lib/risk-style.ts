@@ -63,6 +63,37 @@ export function isFlagged(
   return hasConsideration && !isInformational(riskLevel, hasConsideration);
 }
 
+/**
+ * The module's source layer does not exist / is not integrated for this
+ * LGA (`available: false` from unavailableForLga). NOT a clear result:
+ * nothing was checked, so the report must say "No source information
+ * available" rather than fold it into "Checked & clear" with a green tick.
+ * Distinct from `fetchFailed` (source exists but was unreachable this run).
+ */
+export function isUnavailable(raw: unknown): boolean {
+  return (
+    !!raw &&
+    typeof raw === "object" &&
+    (raw as { available?: unknown }).available === false
+  );
+}
+
+/** Copy for the unavailable state: the same wording on the web pill, the
+ * PDF page and the At-a-glance strip. */
+export const NO_SOURCE_LABEL = "No source information available";
+
+/** True when a narrative or note is just the generic no-source line, so
+ * the section can drop it: the status pill already says it once, and the
+ * summary, "For this property" box and facts panel each echoing it read
+ * as four copies of the same sentence. A SPECIFIC note ("Pipe locations
+ * only: …") is still worth a row. */
+export function isNoSourceText(s: unknown): boolean {
+  return (
+    typeof s === "string" &&
+    s.trim().replace(/\.$/, "").toLowerCase() === NO_SOURCE_LABEL.toLowerCase()
+  );
+}
+
 /** Sort weight, most severe first. Informational is off the ramp. */
 export const RISK_RANK: Record<RiskLevel, number> = {
   high: 4,

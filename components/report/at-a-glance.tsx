@@ -6,6 +6,8 @@ import { formatAuAddress, stripAddressPrefix } from "@/lib/format-address";
 import { MODULE_META } from "@/lib/module-meta";
 import {
   isFlagged,
+  isUnavailable,
+  NO_SOURCE_LABEL,
   RISK_RANK,
   RISK_STYLE,
   riskOf,
@@ -87,7 +89,14 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
     (m) =>
       !isFlagged(m.riskLevel, m.hasConsideration) &&
       !isFailed(m) &&
+      !isUnavailable(m.raw) &&
       !GOOD_TO_KNOW_MODULES.has(m.module),
+  );
+  // Council layers that don't exist for this LGA. Nothing was checked, so
+  // a green tick would be a lie: they get their own strip with the same
+  // wording the module page uses.
+  const unavailable = modules.filter(
+    (m) => isUnavailable(m.raw) && !isFlagged(m.riskLevel, m.hasConsideration) && !isFailed(m),
   );
   // Denominator for "N of M checks": informational modules never fail this
   // test, so counting them would make the ratio permanently unreachable.
@@ -283,6 +292,36 @@ export function AtAGlance({ payload }: { payload: ReportPayload }) {
                         className="size-3.5 shrink-0"
                         strokeWidth={3}
                         style={{ color: "var(--apple-green)" }}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {unavailable.length > 0 && (
+            <div>
+              <div className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                {NO_SOURCE_LABEL} ({unavailable.length})
+              </div>
+              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {unavailable.map((m) => {
+                  const meta = MODULE_META[m.module];
+                  const Icon = meta.icon;
+                  return (
+                    <li
+                      key={m.module}
+                      className="flex items-center gap-2.5 rounded-xl border border-dashed border-border/50 bg-background/20 px-3 py-2"
+                    >
+                      <Icon className="size-3.5 shrink-0" style={{ color: meta.tint }} />
+                      <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-muted-foreground">
+                        {meta.name}
+                      </span>
+                      <Info
+                        className="size-3.5 shrink-0"
+                        strokeWidth={2.5}
+                        style={{ color: RISK_STYLE.informational.cssVar }}
                       />
                     </li>
                   );

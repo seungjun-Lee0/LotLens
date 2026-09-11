@@ -69,6 +69,8 @@ export async function generateModuleNarrative(
     case "transport":      return renderStubTransport(input);
     case "schools":        return renderStubSchools(input);
     case "zoning":         return renderStubZoning(input);
+    case "boundary":       return renderStubBoundary(input);
+    case "internet":       return renderStubInternet(input);
   }
 }
 
@@ -92,15 +94,12 @@ function renderStubUnavailable(
   raw: Record<string, unknown>,
 ): ModuleNarrative {
   const note =
-    typeof raw.availabilityNote === "string"
-      ? raw.availabilityNote
-      : "This overlay is maintained separately by each council and LotLens does not provide the council layer for this location.";
+    typeof raw.availabilityNote === "string" ? raw.availabilityNote : "No source information available.";
   return {
-    summary: `This check requires confirmation through the local council's planning mapping.`,
-    detail: `${note}\n\nNo conclusion is recorded for this check. Ask your conveyancer or planning adviser to confirm it before relying on the report.`,
+    summary: "No source information available.",
+    detail: note,
     questions_to_ask: [
-      "Ask the local council (or check its online planning-scheme mapping) what this overlay shows for the lot.",
-      "Ask your conveyancer to include this check in their searches.",
+      "Confirm this overlay through the council's planning scheme mapping or your conveyancer.",
     ],
     sources: sourcesFromRaw(raw),
   };
@@ -272,7 +271,8 @@ function renderStubFloodPlanning(
   const raw = readRaw(input);
   const river = raw.riverArea as string | null;
   const creek = raw.creekArea as string | null;
-  if (!river && !creek) {
+  const overland = (raw.overlandArea as string | null | undefined) ?? null;
+  if (!river && !creek && !overland) {
     return {
       summary: `No statutory flood planning overlay applies to ${input.address}.`,
       detail: `No flood planning area covers this address on ${srcName(input)}. Future building work won't be gated by the planning flood overlay.`,
@@ -280,7 +280,7 @@ function renderStubFloodPlanning(
       sources: sourcesFromRaw(raw),
     };
   }
-  const areas = [river, creek].filter((x): x is string => Boolean(x));
+  const areas = [river, creek, overland].filter((x): x is string => Boolean(x));
   return {
     summary: `${input.address} sits in ${areas.join(" + ")}.`,
     detail: `The statutory flood planning overlay applies (${srcName(input)}): ${areas.join(" + ")}.\n\nThe numbered suffix (1 strictest, 4 mildest) determines minimum habitable floor levels, fill volumes, and excluded structures for any new build or extension. This is the legally binding control, distinct from the awareness-mapping risk indicator.`,
@@ -374,6 +374,18 @@ function renderStubHeritage(
     dwelling_character: "Dwelling house character",
   };
   const label = (t: string) => typeLabel[t] ?? t;
+  if (entries.every((e) => String(e.type) === "dwelling_character")) {
+    return {
+      summary: `No heritage listing or traditional character protection applies to ${input.address}.`,
+      detail:
+        "The lot sits inside the Dwelling house character overlay (City Plan 2014 Part 9). That is not a heritage listing and does not restrict demolition: it applies height and form controls to new houses and extensions, and stricter design rules where the existing house was built before 1946.",
+      questions_to_ask: [
+        "Was the existing house built before 1946? If so, confirm the dwelling house (character) code applies to any external work.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
   const types = Array.from(new Set(entries.map((e) => label(String(e.type)))));
   const desc = entries
     .map((e) => `${label(String(e.type))} (${e.description ?? "no description"})`)
@@ -467,6 +479,25 @@ function renderStubEasements(
     .map((e) => e.lotplan)
     .filter((s): s is string => typeof s === "string" && s.length > 0);
   const scope = (raw.scopeNote as string | null) ?? "";
+  const adjoiningList = Array.isArray(raw.adjoiningEasements)
+    ? (raw.adjoiningEasements as Array<{ lotplan?: string | null }>)
+    : [];
+
+  if (!hv && !cadastral && adjoiningList.length > 0) {
+    const lots = adjoiningList
+      .map((e) => e.lotplan)
+      .filter((s): s is string => typeof s === "string" && s.length > 0);
+    return {
+      summary: `A registered easement adjoins ${input.address} but does not enter the lot.`,
+      detail: `${adjoiningList.length} easement parcel${adjoiningList.length === 1 ? "" : "s"}${lots.length ? ` (${lots.slice(0, 3).join(", ")})` : ""} share${adjoiningList.length === 1 ? "s" : ""} a boundary with this lot. Nothing is registered over the lot itself, but a drainage or sewer easement along the fence line usually means a pipe runs beside it, and the authority's access and dig rights stop at the boundary. ${scope}`,
+      questions_to_ask: [
+        "What is the adjoining easement for, and does any pipe or cable it serves cross onto this lot?",
+        "Would a boundary fence, retaining wall or pool on this side need the easement holder's consent?",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
 
   if (!hv && !cadastral) {
     return {
@@ -866,6 +897,90 @@ function renderStubTransport(
   };
 }
 
+function renderStubBoundary(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const edges = asArr<{ lengthM: number; approx: boolean }>(raw.edges);
+  const area = typeof raw.areaM2 === "number" ? raw.areaM2 : null;
+  const perimeter = typeof raw.perimeterM === "number" ? raw.perimeterM : null;
+  const fromRegister = raw.areaFromRegister === true;
+  const lotPlan = typeof raw.lotPlan === "string" ? raw.lotPlan : null;
+
+  if (edges.length === 0 || area === null) {
+    return {
+      summary: `Boundary dimensions could not be measured for ${input.address}.`,
+      detail:
+        "No cadastre lot polygon was found at this location, so there is no outline to measure. The registered survey plan from the titles office is the authoritative record of the lot's boundaries and area.",
+      questions_to_ask: [
+        "Ask your conveyancer for the registered survey plan showing the lot's dimensions.",
+        ...DISCLAIMER_FALLBACK_QUESTIONS,
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+
+  const sorted = [...edges].sort((a, b) => b.lengthM - a.lengthM);
+  const longest = sorted[0];
+  const shortest = sorted[sorted.length - 1];
+  const fmt = (e: { lengthM: number; approx: boolean }) =>
+    `${e.approx ? "about " : ""}${e.lengthM.toFixed(1)} m`;
+  const shape =
+    edges.length === 4
+      ? "a four-sided lot"
+      : edges.length < 4
+        ? `a ${edges.length}-sided lot`
+        : `an irregular lot with ${edges.length} measurable sides`;
+  const areaSrc = fromRegister
+    ? "the registered lot area"
+    : "an estimate from the cadastral geometry (no registered area is recorded against this parcel)";
+
+  return {
+    summary: `${input.address} is ${shape} of ${area.toLocaleString()} m² with about ${perimeter?.toFixed(0) ?? "?"} m of boundary${lotPlan ? ` (${lotPlan})` : ""}.`,
+    detail: `Sides run from ${fmt(shortest)} to ${fmt(longest)}. The area is ${areaSrc}.
+
+The cadastral map places boundaries to within roughly half a metre in urban areas, but fences and retaining walls are commonly off the true line and the aerial can itself sit a metre or two from the cadastre. Use the figures for the block's shape and what could fit on it; use the survey plan before designing to the boundary or replacing a fence.`,
+    questions_to_ask: [
+      "Does the registered survey plan agree with these dimensions, and where does the boundary actually run relative to the existing fences?",
+      "Are the setbacks the planning scheme requires achievable on these side lengths for what you intend to build?",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
+function renderStubInternet(
+  input: GenerateModuleNarrativeInput,
+): ModuleNarrative {
+  const raw = readRaw(input);
+  const network = typeof raw.accessNetwork === "string" ? raw.accessNetwork : null;
+  if (!network) {
+    return {
+      summary: `${input.address} sits outside the nbn fixed line and fixed wireless footprints.`,
+      detail:
+        "In the March 2024 footprint data this address is served by neither the fixed line nor the fixed wireless network, which for most such locations means nbn Sky Muster satellite: usable for browsing and streaming, but with the highest latency of the three and lower upload speeds. Some areas outside the footprint are instead served by a non-nbn fibre or wireless provider.\n\nRun an address check with nbn before contract if working from home, video calls or online gaming matter to you.",
+      questions_to_ask: [
+        "Which technology does the nbn address check report for this exact premises, and is it already connected?",
+        "Is there a non-nbn provider (fixed wireless, fibre) serving this street?",
+      ],
+      sources: sourcesFromRaw(raw),
+    };
+  }
+  const fixed = network === "Fixed line";
+  return {
+    summary: `${input.address} is inside the nbn ${network.toLowerCase()} footprint.`,
+    detail: fixed
+      ? "Fixed line means the premises is served by fibre, HFC cable or fibre-to-the-node/curb. Plans up to the fastest tiers are generally available on fibre and HFC; fibre-to-the-node speeds fall with the copper distance to the node, and nbn is progressively upgrading those premises to full fibre on request.\n\nThe footprint does not say which of these applies to this premises, so check the address with nbn or a provider before choosing a plan."
+      : "Fixed wireless means the premises connects to a nearby nbn tower by antenna. Plans are capped below fixed line tiers and real speeds depend on line of sight and how many premises share the cell.\n\nConfirm the address with nbn or a provider: some fixed wireless areas have since been upgraded, and a premises without line of sight to the tower may be served by satellite instead.",
+    questions_to_ask: [
+      "Which nbn technology does the address check report for this premises, and what speed tiers can providers actually sell here?",
+      fixed
+        ? "If it is fibre-to-the-node, is a full-fibre upgrade available for this address?"
+        : "Does the premises have line of sight to the fixed wireless tower, or has it been assessed for satellite?",
+    ],
+    sources: sourcesFromRaw(raw),
+  };
+}
+
 function renderStubPower(
   input: GenerateModuleNarrativeInput,
 ): ModuleNarrative {
@@ -918,10 +1033,14 @@ function renderStubWaterSewer(
   const mains = assets.filter((a) => a.isMain);
   const severe = raw.hasTrunkOrPressureMainOnLot === true;
   const nearby = raw.networkNearby === true;
+  // The retailer differs by LGA (${retailer}, Unitywater, Logan Water,
+  // Townsville Water): the row's source_name is "<retailer>: <network>",
+  // so speak from that rather than a hardcoded name.
+  const retailer = srcName(input).split(":")[0].trim() || "the water retailer";
 
   if (!raw.hasMainOnLot && assets.length === 0 && !nearby) {
     return {
-      summary: `No Urban Utilities water or sewer main is mapped at ${input.address}.`,
+      summary: `No ${retailer} water or sewer main is mapped at ${input.address}.`,
       detail:
         "Neither a sewer main, a water main nor a manhole was found on the lot or in the immediate street.\n\nFor an established suburb that is unusual enough to be worth confirming: an unconnected lot changes what it costs to build, because connecting to the network becomes your expense.",
       questions_to_ask: [
@@ -934,7 +1053,7 @@ function renderStubWaterSewer(
 
   if (!raw.hasMainOnLot) {
     return {
-      summary: `No Urban Utilities main crosses ${input.address}.`,
+      summary: `No ${retailer} main crosses ${input.address}.`,
       detail:
         "The water and sewer network runs in the surrounding street rather than through the lot, so building over a main is not a constraint here. Any service connection on the lot is this property's own line to the network and carries no build-over obligation.\n\nThat leaves the back yard free of the buried-infrastructure problem that catches out a lot of extensions.",
       questions_to_ask: [
@@ -953,14 +1072,14 @@ function renderStubWaterSewer(
     : "main";
 
   return {
-    summary: `An Urban Utilities ${descriptor} crosses ${input.address}.`,
+    summary: `A ${retailer} ${descriptor} crosses ${input.address}.`,
     detail: severe
-      ? `This is a rising main or a trunk-sized gravity main, which is the serious end of this finding. Urban Utilities will generally not permit building over one at all, so the alignment functions as a no-build corridor through the lot: with the setback either side, it can remove most of the usable back yard for building purposes. Relocation is occasionally possible and is expensive.\n\nIf any part of your plan for this property involves building behind the house, resolve this before contract, not after.`
-      : `Building over or near a Urban Utilities main requires their approval, and it is not automatic. A pool, shed, carport, deck, granny flat or rear extension over the alignment can be refused, or approved subject to concrete encasement, piered foundations bridging the main, or relocation at your cost.\n\nNone of this appears on the title, so it is easy to miss before contract: and it binds you once you own the land.`,
+      ? `This is a rising main or a trunk-sized gravity main, which is the serious end of this finding. ${retailer} will generally not permit building over one at all, so the alignment functions as a no-build corridor through the lot: with the setback either side, it can remove most of the usable back yard for building purposes. Relocation is occasionally possible and is expensive.\n\nIf any part of your plan for this property involves building behind the house, resolve this before contract, not after.`
+      : `Building over or near a ${retailer} main requires their approval, and it is not automatic. A pool, shed, carport, deck, granny flat or rear extension over the alignment can be refused, or approved subject to concrete encasement, piered foundations bridging the main, or relocation at your cost.\n\nNone of this appears on the title, so it is easy to miss before contract: and it binds you once you own the land.`,
     questions_to_ask: [
-      "Get the exact alignment and depth from Urban Utilities: the mapped line is indicative and can sit metres from the real pipe.",
+      "Get the exact alignment and depth from ${retailer}: the mapped line is indicative and can sit metres from the real pipe.",
       severe
-        ? "Ask Urban Utilities directly whether anything can be built over this main, and what the setback either side is."
+        ? "Ask ${retailer} directly whether anything can be built over this main, and what the setback either side is."
         : "If you have a build in mind: does it sit over the main or within the clearance zone, and what would encasement or relocation cost?",
       "Have any existing structures been built over the main without approval? That becomes your liability at settlement.",
     ],

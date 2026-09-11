@@ -76,9 +76,15 @@ export type ModuleAvailability = {
   availabilityNote?: string;
 };
 
+// `region`/`what` are kept in the signature so every call site still
+// names what is missing where; the copy itself is deliberately generic.
 export function unavailableForLga(region: Region, what: string): ModuleAvailability {
+  void region;
+  void what;
   return {
     available: false,
-    availabilityNote: `${what} is maintained separately by each council. LotLens does not provide this council layer for ${councilDisplayName(region)}. Confirm the property through the council's planning scheme mapping.`,
+    // One line, Develo-style: the report says the source is absent and
+    // moves on; it does not lecture about why.
+    availabilityNote: "No source information available.",
   };
 }

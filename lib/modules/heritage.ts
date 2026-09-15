@@ -5,34 +5,32 @@
 // fields: placename, place_id, entrydate, status). Works for any QLD
 // address.
 //
-// Brisbane enhancement: when the lot is inside Brisbane LGA we ALSO query
-// the BCC City Plan 2014 Local heritage area + Traditional building
-// character overlays (local heritage listings and pre-1947 character
-// controls are council instruments: other LGAs' equivalents land with
-// their council adapters).
+// Council enhancement: local heritage registers and character controls are
+// council instruments, so they arrive through HERITAGE_ADAPTERS
+// (Brisbane, Gold Coast, Moreton Bay, Sunshine Coast, Redland, Logan).
+// Each adapter declares whether its layer is a listing (`local`, grades
+// high) or a form control (`character`, grades medium).
 
-import type { Feature, GeoJsonProperties, Geometry } from "geojson";
+import type {
+  Feature,
+  FeatureCollection,
+  GeoJsonProperties,
+  Geometry,
+} from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
+import {
+  councilOf,
+  HERITAGE_ADAPTERS,
+  queryOverlayAdapter,
+  type HeritageAdapter,
+} from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
 import type { Region } from "@/lib/region";
 
 const QHR_LAYER =
   "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Boundaries/AdminBoundariesFramework/MapServer/78/query";
-// BCC's published URL contains the typo "Hertiage": keep verbatim.
-const LOCAL_HERITAGE =
-  "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Hertiage_overlay_Local_heritage_area/FeatureServer/0/query";
-const CHARACTER =
-  "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Traditional_building_character_overlay/FeatureServer/0/query";
-// Distinct from the Traditional building character overlay above: the
-// Dwelling house character overlay (City Plan 2014 Part 9) imposes
-// height/form controls on houses (incl. small lots) to protect an area's
-// residential character. Same BCC org, same OVL2_DESC schema.
-const DWELLING_CHARACTER =
-  "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Dwelling_house_character_overlay/FeatureServer/0/query";
 
 const QHR_DOC = "https://qhr.detsi.qld.gov.au/";
-const BCC_HERITAGE_DOC =
-  "https://cityplan.brisbane.qld.gov.au/eplan/property/0/0/Heritage";
 
 export type HeritageEntry = {
   /** "state" = QLD Heritage Register place, "local" = council local
@@ -50,7 +48,9 @@ export type HeritageSource = { name: string; url: string; layer: string };
 
 export type HeritageResult = {
   /** 'high' = on a heritage register (renovation/demo constrained),
-   * 'medium' = character only, 'none' = neither. */
+   * 'medium' = traditional building character (pre-1947 protection),
+   * 'informational' = dwelling house character overlay only (height/form
+   * controls, no listing), 'none' = nothing. */
   riskLevel: RiskLevel;
   entries: HeritageEntry[];
   hasConsideration: boolean;
@@ -59,7 +59,6 @@ export type HeritageResult = {
   context: { state: unknown; local: unknown; character: unknown; dwellingCharacter: unknown };
 };
 
-const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
 
 function attrs(
   f: Feature<Geometry | null, GeoJsonProperties> | undefined,
@@ -67,17 +66,46 @@ function attrs(
   return (f?.properties ?? {}) as Record<string, unknown>;
 }
 
-function bccEntry(
+const pick = (a: Record<string, unknown>, fields: string[]): string | null => {
+  for (const f of fields) {
+    const v = a[f];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  return null;
+};
+
+/** Map one council heritage feature onto an entry. Field names differ per
+ * council (BCC/GC/MBRC use the OVL2_DESC schema, Sunshine Coast LABEL,
+ * Redland CLASS/Significance, Logan Heritage_Reference), so try each
+ * vocabulary in turn rather than assuming one schema. */
+function councilEntry(
   type: HeritageEntry["type"],
   f: Feature<Geometry | null, GeoJsonProperties>,
+  labelFields?: string[],
 ): HeritageEntry {
   const a = attrs(f);
+  const description =
+    pick(a, labelFields ?? []) ??
+    pick(a, [
+      "OVL2_DESC",
+      "Ovl2_Desc",
+      "LABEL",
+      "Heritage_Reference",
+      "Significance",
+      "CLASS",
+    ]);
+  // Some councils put "on a listing" and "next to a listing" in the SAME
+  // layer, separated only by the label (Redland's Significance field
+  // reads "State Significance" or "Adjoining State Significance"). Being
+  // next door triggers assessment of impacts on the neighbour; it does
+  // not list this property, so it must not grade as one.
+  const adjoining = /adjoin|proximity|vicinity/i.test(description ?? "");
   return {
-    type,
-    category: typeof a.CAT_DESC === "string" ? a.CAT_DESC : null,
-    description: typeof a.OVL2_DESC === "string" ? a.OVL2_DESC : null,
-    code: typeof a.OVL2_CAT === "string" ? a.OVL2_CAT : null,
-    notes: typeof a.DESCRIPTION === "string" ? a.DESCRIPTION : null,
+    type: type === "local" && adjoining ? "character" : type,
+    category: pick(a, ["CAT_DESC", "HEADING", "DESCRIPT"]),
+    description,
+    code: pick(a, ["OVL2_CAT", "Heritage_Reference_Code"]),
+    notes: pick(a, ["DESCRIPTION", "PS_Policy_Name", "Description"]),
   };
 }
 
@@ -98,9 +126,7 @@ export async function fetchHeritageData(
   region?: Region,
   lot?: Geometry | null,
 ): Promise<HeritageResult> {
-  const isBrisbane = region?.isBrisbane ?? true;
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
-  const bccFields = "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION";
   const qhrFields = "placename,place_id,entrydate,status";
   const pointParams = (outFields: string) => ({
     geometry: point,
@@ -118,35 +144,64 @@ export async function fetchHeritageData(
     returnGeometry: true,
     bufferDegrees: 0.0025,
     maxAllowableOffset: 0.00003,
+    quantize: true,
   });
 
-  const [
-    state, stateCtx, local, character, dwelling,
-    localCtx, characterCtx, dwellingCtx,
-  ] = await Promise.all([
+  const councilId = region ? councilOf(region) : "brisbane";
+  const adapters: HeritageAdapter[] =
+    (councilId ? HERITAGE_ADAPTERS[councilId] : undefined) ?? [];
+
+  const [state, stateCtx, councilResults] = await Promise.all([
     queryArcGIS(QHR_LAYER, pointParams(qhrFields)),
     queryArcGIS(QHR_LAYER, contextParams(qhrFields)),
-    isBrisbane ? queryArcGIS(LOCAL_HERITAGE, pointParams(bccFields)) : EMPTY_FC,
-    isBrisbane ? queryArcGIS(CHARACTER, pointParams(bccFields)) : EMPTY_FC,
-    isBrisbane ? queryArcGIS(DWELLING_CHARACTER, pointParams(bccFields)) : EMPTY_FC,
-    isBrisbane ? queryArcGIS(LOCAL_HERITAGE, contextParams(bccFields)) : EMPTY_FC,
-    isBrisbane ? queryArcGIS(CHARACTER, contextParams(bccFields)) : EMPTY_FC,
-    isBrisbane ? queryArcGIS(DWELLING_CHARACTER, contextParams(bccFields)) : EMPTY_FC,
+    Promise.all(adapters.map((a) => queryOverlayAdapter(a, lat, lng, lot))),
   ]);
+
+  // The report's raw/context shape predates the adapter table and keeps
+  // one slot per entry kind, so fold each adapter's features into the
+  // slot its entryType names.
+  const bucket = (
+    kind: HeritageEntry["type"],
+    key: "point" | "context",
+  ): FeatureCollection<Geometry | null> => ({
+    type: "FeatureCollection",
+    features: councilResults.flatMap((r, i) =>
+      adapters[i].entryType === kind ? r[key].features : [],
+    ),
+  });
+  const local = bucket("local", "point");
+  const character = bucket("character", "point");
+  const dwelling = bucket("dwelling_character", "point");
+  const localCtx = bucket("local", "context");
+  const characterCtx = bucket("character", "context");
+  const dwellingCtx = bucket("dwelling_character", "context");
 
   const entries: HeritageEntry[] = [
     ...state.features.map(qhrEntry),
-    ...local.features.map((f) => bccEntry("local", f)),
-    ...character.features.map((f) => bccEntry("character", f)),
-    ...dwelling.features.map((f) => bccEntry("dwelling_character", f)),
+    ...councilResults.flatMap((r, i) =>
+      r.point.features.map((f) =>
+        councilEntry(adapters[i].entryType, f, adapters[i].labelFields),
+      ),
+    ),
   ];
   const hasState = entries.some((e) => e.type === "state");
   const hasLocal = entries.some((e) => e.type === "local");
-  const hasCharacter = entries.some(
-    (e) => e.type === "character" || e.type === "dwelling_character",
-  );
+  const hasCharacter = entries.some((e) => e.type === "character");
+  const hasDwellingCharacter = entries.some((e) => e.type === "dwelling_character");
+  // The Dwelling house character overlay blankets most of Brisbane's
+  // low-density suburbs and only bites on a pre-1946 house or a new build
+  // on a small lot: it is not a heritage listing and not a demolition
+  // control, and Develo does not flag it at all. Grading it as a warning
+  // turned 31 of 40 sampled Brisbane lots into "character considerations",
+  // so on its own it is informational: shown, never flagged.
   const riskLevel: RiskLevel =
-    hasState || hasLocal ? "high" : hasCharacter ? "medium" : "none";
+    hasState || hasLocal
+      ? "high"
+      : hasCharacter
+        ? "medium"
+        : hasDwellingCharacter
+          ? "informational"
+          : "none";
 
   const sources: HeritageSource[] = [
     {
@@ -155,25 +210,9 @@ export async function fetchHeritageData(
       layer: QHR_LAYER,
     },
   ];
-  if (isBrisbane) {
-    sources.push(
-      {
-        name: "BCC City Plan 2014: Local heritage area",
-        url: BCC_HERITAGE_DOC,
-        layer: LOCAL_HERITAGE,
-      },
-      {
-        name: "BCC City Plan 2014: Traditional building character overlay",
-        url: BCC_HERITAGE_DOC,
-        layer: CHARACTER,
-      },
-      {
-        name: "BCC City Plan 2014: Dwelling house character overlay",
-        url: BCC_HERITAGE_DOC,
-        layer: DWELLING_CHARACTER,
-      },
-    );
-  }
+  sources.push(
+    ...adapters.map((a) => ({ name: a.sourceName, url: a.docUrl, layer: a.url })),
+  );
 
   return {
     riskLevel,

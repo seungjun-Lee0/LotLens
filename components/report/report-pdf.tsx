@@ -29,6 +29,9 @@ import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
 import {
   isFlagged,
   isInformational,
+  isNoSourceText,
+  isUnavailable,
+  NO_SOURCE_LABEL,
   RISK_RANK,
   RISK_STYLE,
   riskOf,
@@ -135,6 +138,9 @@ function legendItemsFromOverlays(overlays: OverlayFeature[]): { color: string; l
   const seen = new Set<string>();
   const items: { color: string; label: string }[] = [];
   for (const f of overlays) {
+    // Labelled points (boundary side lengths) carry their information on
+    // the map itself: no legend row.
+    if (f.properties.textLabel) continue;
     // Contours share one label across the whole colour ramp, so keying on
     // colour would list "Contour line" once per shade.
     const key =
@@ -280,6 +286,7 @@ const styles = StyleSheet.create({
     color: TEXT_BODY,
     marginBottom: 3,
     lineHeight: 1.4,
+    flexShrink: 0,
   },
 
   // ── "For this property" callout ───────────────────────────────────
@@ -287,6 +294,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingLeft: 10,
     borderLeftWidth: 2,
+    flexShrink: 0,
   },
   forPropertyLabel: {
     fontSize: 7,
@@ -340,9 +348,13 @@ const styles = StyleSheet.create({
   link: { fontSize: 7.5, color: TEXT_MUTED, textDecoration: "none", marginBottom: 1.5 },
 
   // ── Body grid ─────────────────────────────────────────────────────
-  body: { flexDirection: "row", marginTop: 12 },
-  leftCol: { width: "62%", paddingRight: 16 },
-  rightCol: { width: "38%" },
+  // Hard ceiling on the two-column body: a wrap={false} page otherwise
+  // GROWS past A4 when a narrative runs long (Boundary printed at 915 pt),
+  // so the body clips at the footer instead. flexShrink 0 on the columns
+  // keeps paragraph spacing intact; only the tail is lost.
+  body: { flexDirection: "row", marginTop: 12, maxHeight: 328, overflow: "hidden" },
+  leftCol: { width: "62%", paddingRight: 16, flexShrink: 0 },
+  rightCol: { width: "38%", flexShrink: 0 },
 
   // ── At-a-glance bits ──────────────────────────────────────────────
   glanceRow: {
@@ -468,15 +480,12 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
   // Council-overlay modules outside adapted LGAs mark themselves
   // unavailable: one explanatory row instead of module facts.
   if (raw.available === false) {
-    return [
-      {
-        key: "Council confirmation",
-        val:
-          typeof raw.availabilityNote === "string"
-            ? raw.availabilityNote
-            : "LotLens does not provide this council overlay for the property location. Confirm it through the council's planning mapping.",
-      },
-    ];
+    // The generic line is already on the status pill: only a specific
+    // note earns a row.
+    if (typeof raw.availabilityNote !== "string" || isNoSourceText(raw.availabilityNote)) {
+      return [];
+    }
+    return [{ key: "Source", val: raw.availabilityNote }];
   }
   switch (module) {
     case "flooding": {
@@ -496,19 +505,24 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
     case "bushfire": {
       const rows: { key: string; val: string }[] = [];
       if (raw.hazardCategory) rows.push({ key: "Hazard category", val: String(raw.hazardCategory) });
+      if (raw.councilCategory && raw.councilCategory !== raw.hazardCategory)
+        rows.push({ key: "Council overlay", val: String(raw.councilCategory) });
       if (raw.hazardCode) rows.push({ key: "Code", val: String(raw.hazardCode) });
       return rows;
     }
     case "vegetation": {
       const rows: { key: string; val: string }[] = [];
       if (raw.category) rows.push({ key: "Category", val: String(raw.category) });
-      if (raw.code) rows.push({ key: "Code", val: String(raw.code) });
+      // Category X is "exempt": no regulated vegetation, so a bare "X" row
+      // would read as a finding when it is the absence of one.
+      if (raw.code && raw.code !== "X") rows.push({ key: "RVM category", val: String(raw.code) });
       return rows;
     }
     case "flood_planning": {
       const rows: { key: string; val: string }[] = [];
       if (raw.riverArea) rows.push({ key: "River area", val: String(raw.riverArea) });
       if (raw.creekArea) rows.push({ key: "Creek area", val: String(raw.creekArea) });
+      if (raw.overlandArea) rows.push({ key: "Overland flow", val: String(raw.overlandArea) });
       return rows;
     }
     case "noise": {
@@ -551,6 +565,16 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
           e.areaSqm ? `${Math.round(e.areaSqm)} m²` : null,
         ].filter(Boolean);
         rows.push({ key: `Cadastral ${i + 1}`, val: parts.join(" · ") });
+      });
+      const adjoining = asArr<{ lotplan?: string | null; areaSqm?: number | null }>(
+        raw.adjoiningEasements,
+      );
+      adjoining.forEach((e, i) => {
+        const parts = [
+          e.lotplan ?? "Easement parcel",
+          e.areaSqm ? `${Math.round(e.areaSqm)} m²` : null,
+        ].filter(Boolean);
+        rows.push({ key: `Adjoining ${i + 1}`, val: parts.join(" · ") });
       });
       return rows;
     }
@@ -616,6 +640,39 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       if (raw.zonePrecinct) rows.push({ key: "Zone", val: String(raw.zonePrecinct) });
       if (raw.lvl2Zone) rows.push({ key: "Specific", val: String(raw.lvl2Zone) });
       if (raw.lvl1Zone) rows.push({ key: "Family", val: String(raw.lvl1Zone) });
+      return rows;
+    }
+    case "internet": {
+      return [
+        { key: "Access network", val: typeof raw.accessNetwork === "string" ? raw.accessNetwork : "Outside footprints (satellite)" },
+        { key: "Fixed line", val: raw.fixedLine === true ? "In footprint" : "No" },
+        { key: "Fixed wireless", val: raw.fixedWireless === true ? "In footprint" : "No" },
+        { key: "Data vintage", val: "March 2024" },
+      ];
+    }
+    case "boundary": {
+      const rows: { key: string; val: string }[] = [];
+      const edges = asArr<{ lengthM: number; approx: boolean }>(raw.edges);
+      if (typeof raw.areaM2 === "number") {
+        rows.push({
+          key: "Area",
+          val: `${raw.areaM2.toLocaleString()} m²${raw.areaFromRegister === true ? "" : " (estimated)"}`,
+        });
+      }
+      if (typeof raw.perimeterM === "number") {
+        rows.push({ key: "Perimeter", val: `~${raw.perimeterM.toFixed(0)} m` });
+      }
+      if (edges.length > 0) {
+        const sorted = [...edges].sort((a, b) => b.lengthM - a.lengthM);
+        rows.push({
+          key: `${edges.length} sides`,
+          val: sorted
+            .slice(0, 8)
+            .map((e) => `${e.approx ? "~" : ""}${e.lengthM.toFixed(1)} m`)
+            .join(" · ") + (sorted.length > 8 ? " …" : ""),
+        });
+      }
+      if (raw.lotPlan) rows.push({ key: "Lot / plan", val: String(raw.lotPlan) });
       return rows;
     }
     case "stormwater": {
@@ -755,19 +812,26 @@ function ModulePage({
   const questions = (narrative?.questions_to_ask ?? []).slice(0, 4);
   const sources = Array.from(new Set(narrative?.sources ?? [])).slice(0, 4);
   const failed = raw?.fetchFailed === true;
+  const unavailable = isUnavailable(raw);
   // Severity colour rides the SHARED risk scale (lib/risk-style.ts): the
   // same red/orange/gold everywhere, never the module tint, so relative
   // seriousness is readable at a flip-through.
   const level = riskOf(riskLevel, hasConsideration);
-  const info = !failed && isInformational(riskLevel, hasConsideration);
-  const statusColor = failed ? APPLE_HEX.orange : RISK_STYLE[level].hex;
+  const info = !failed && !unavailable && isInformational(riskLevel, hasConsideration);
+  const statusColor = failed
+    ? APPLE_HEX.orange
+    : unavailable
+      ? RISK_STYLE.informational.hex
+      : RISK_STYLE[level].hex;
   const statusLabel = failed
     ? "Verification pending"
-    : info
-      ? "For information"
-      : hasConsideration
-        ? `Considerations · ${RISK_STYLE[level].label}`
-        : "No considerations identified";
+    : unavailable
+      ? NO_SOURCE_LABEL
+      : info
+        ? "For information"
+        : hasConsideration
+          ? `Considerations · ${RISK_STYLE[level].label}`
+          : "No considerations identified";
   // Steep Land gets Develo's elevation legend instead of a swatch list -
   // contours are samples of one continuous variable, not categories.
   const elevationLegend = (raw?.elevation ?? null) as {
@@ -824,7 +888,9 @@ function ModulePage({
         <Text style={styles.sourceLine}>Sources · {meta.sourceLabel}</Text>
       </View>
 
-      {narrative?.summary && <Text style={styles.lead}>{narrative.summary}</Text>}
+      {narrative?.summary && !unavailable && !isNoSourceText(narrative.summary) && (
+        <Text style={[styles.lead, { maxLines: 2, textOverflow: "ellipsis" }]}>{narrative.summary}</Text>
+      )}
 
       {/* Two-column body */}
       <View style={styles.body}>
@@ -834,7 +900,7 @@ function ModulePage({
             <Text key={i} style={styles.para}>{p}</Text>
           ))}
 
-          {narrative?.detail && (
+          {narrative?.detail && !unavailable && !isNoSourceText(narrative.detail) && (
             <View
               style={[
                 styles.forProperty,
@@ -878,7 +944,7 @@ function ModulePage({
 
           <View style={styles.noteWrap}>
             <Text style={styles.noteLabel}>Note · </Text>
-            <Text style={styles.noteText}>{meta.note}</Text>
+            <Text style={[styles.noteText, { maxLines: 3, textOverflow: "ellipsis" }]}>{meta.note}</Text>
           </View>
         </View>
 
@@ -976,7 +1042,7 @@ function ModulePage({
             </Text>
           )}
 
-          {sources.length > 0 && (
+          {sources.length > 0 ? (
             <>
               <View style={{ height: 12 }} />
               <Text style={styles.sectionLabel}>References</Text>
@@ -986,7 +1052,13 @@ function ModulePage({
                 </Text>
               ))}
             </>
-          )}
+          ) : unavailable ? (
+            <>
+              <View style={{ height: 12 }} />
+              <Text style={styles.sectionLabel}>References</Text>
+              <Text style={styles.link}>{NO_SOURCE_LABEL}.</Text>
+            </>
+          ) : null}
         </View>
       </View>
 
@@ -1058,8 +1130,17 @@ function AtAGlancePage({
     (m) =>
       !isFlagged(m.riskLevel, m.hasConsideration) &&
       !pdfIsFailed(m) &&
+      !isUnavailable(m.raw) &&
       !GOOD_TO_KNOW_MODULES.has(m.module) &&
       !ESSENTIAL_MODULES.has(m.module),
+  );
+  // Council layers this LGA doesn't publish: named on the cover under
+  // their own heading, never inside "Checked & clear".
+  const unavailable = modules.filter(
+    (m) =>
+      isUnavailable(m.raw) &&
+      !isFlagged(m.riskLevel, m.hasConsideration) &&
+      !pdfIsFailed(m),
   );
   // "N modules" must exclude the informational ones, or the headline count
   // never reaches zero and the all-clear sentence is unreachable.
@@ -1215,6 +1296,17 @@ function AtAGlancePage({
               </Text>
               <Text style={{ fontSize: 7, color: TEXT_MUTED, marginTop: 3 }}>
                 Nothing found on the lot. Evidence is on the Checked &amp; clear page.
+              </Text>
+            </>
+          )}
+
+          {unavailable.length > 0 && (
+            <>
+              <Text style={[styles.sectionLabel, { marginTop: 12, marginBottom: 3 }]}>
+                {NO_SOURCE_LABEL} ({unavailable.length})
+              </Text>
+              <Text style={{ fontSize: 8, color: TEXT_BODY, lineHeight: 1.6 }}>
+                {unavailable.map((m) => MODULE_META[m.module].name).join("  ·  ")}
               </Text>
             </>
           )}
@@ -1698,9 +1790,12 @@ export function ReportPDF({
   const informational = informationalOrder(modules);
   // Core hazard checks that came back clear keep a full "No considerations
   // identified" page; the minor clear checks collapse into the strip.
+  // An unavailable council layer keeps a full page too: the page carries
+  // the "No source information available" label and the note, where the
+  // evidence strip would list it as checked.
   const essentialClear = modules.filter(
     (m) =>
-      ESSENTIAL_MODULES.has(m.module) &&
+      (ESSENTIAL_MODULES.has(m.module) || isUnavailable(m.raw)) &&
       !isFlagged(m.riskLevel, m.hasConsideration) &&
       !pdfIsFailed(m),
   );
@@ -1708,6 +1803,7 @@ export function ReportPDF({
     (m) =>
       !isFlagged(m.riskLevel, m.hasConsideration) &&
       !pdfIsFailed(m) &&
+      !isUnavailable(m.raw) &&
       !GOOD_TO_KNOW_MODULES.has(m.module) &&
       !ESSENTIAL_MODULES.has(m.module),
   );

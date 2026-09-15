@@ -19,6 +19,7 @@ import {
   queryOverlayAdapter,
 } from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
+import { RISK_RANK } from "@/lib/risk-style";
 import { unavailableForLga, type Region } from "@/lib/region";
 
 const OVERLAND_FLOW =
@@ -117,14 +118,29 @@ export async function fetchOverlandFlowData(
       returnGeometry: true,
       bufferDegrees: 0.0025,
       maxAllowableOffset: 0.00003,
+      quantize: true,
     }),
   ]);
 
-  const a = attrs(fc.features[0]);
-  const riskLevel = normalizeRisk(
-    typeof a.FLOOD_RISK === "string" ? a.FLOOD_RISK : null,
-  );
-  const floodType = typeof a.FLOOD_TYPE === "string" ? a.FLOOD_TYPE : null;
+  // A lot can straddle several bands and ArcGIS feature order is not
+  // stable, so grade every intersecting polygon and keep the worst. BCC
+  // also publishes a "Combined" band (the merged extent with no impact
+  // grade, verified live 2026-09: FLOOD_RISK ∈ Combined/High/Medium/Low):
+  // on its own it still says a mapped overland flow path crosses the lot,
+  // so it grades low rather than vanishing as "none".
+  let riskLevel: RiskLevel = "none";
+  let floodType: string | null = null;
+  for (const f of fc.features) {
+    const a = attrs(f);
+    const band = typeof a.FLOOD_RISK === "string" ? a.FLOOD_RISK.trim() : null;
+    const combined = band?.toLowerCase() === "combined";
+    const level: RiskLevel = combined ? "low" : normalizeRisk(band);
+    if (RISK_RANK[level] > RISK_RANK[riskLevel]) {
+      riskLevel = level;
+      const type = typeof a.FLOOD_TYPE === "string" ? a.FLOOD_TYPE : "Overland flow";
+      floodType = combined ? `${type} (mapped extent, no impact grade)` : type;
+    }
+  }
 
   return {
     riskLevel,

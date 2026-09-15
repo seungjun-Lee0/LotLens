@@ -8,12 +8,25 @@
 //
 // Plus statewide essential habitat (layer 5 of the same service).
 //
-// Brisbane enhancement: inside Brisbane LGA we also query the BCC City
-// Plan 2014 Biodiversity areas overlay (waterway corridors, MSES lines,
-// council biodiversity areas): the layer conveyancers cite for BCC lots.
+// Council enhancement: the council biodiversity instruments conveyancers
+// cite locally, through VEGETATION_ADAPTERS (Brisbane, Gold Coast,
+// Sunshine Coast, Redland, Logan). Brisbane also carries the four Natural
+// Assets Local Law 2003 protected-vegetation layers: the biodiversity
+// overlay alone left most NALL-mapped suburban lots reading "clear".
 
-import type { Feature, GeoJsonProperties, Geometry } from "geojson";
+import type {
+  Feature,
+  FeatureCollection,
+  GeoJsonProperties,
+  Geometry,
+} from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
+import {
+  councilOf,
+  overlayLabels,
+  queryOverlayAdapter,
+  VEGETATION_ADAPTERS,
+} from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
 import type { Region } from "@/lib/region";
 
@@ -21,13 +34,9 @@ const VM =
   "https://spatial-gis.information.qld.gov.au/arcgis/rest/services/Biota/VegetationManagement/MapServer";
 const RVM_ALL = `${VM}/109/query`;
 const ESSENTIAL_HABITAT = `${VM}/5/query`;
-const BCC_BIODIVERSITY =
-  "https://services2.arcgis.com/dEKgZETqwmDAh1rP/ArcGIS/rest/services/Biodiversity_areas_overlay_Biodiversity_areas/FeatureServer/0/query";
 
 const QLD_VEG_DOC =
   "https://www.qld.gov.au/environment/land/management/vegetation/maps";
-const BCC_BIODIVERSITY_DOC =
-  "https://cityplan.brisbane.qld.gov.au/eplan/property/0/0/Biodiversity";
 
 export type VegetationResult = {
   riskLevel: RiskLevel;
@@ -41,7 +50,6 @@ export type VegetationResult = {
   context: { rvm: unknown; essentialHabitat: unknown; council: unknown };
 };
 
-const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
 
 const RVM_LABEL: Record<string, string> = {
   A: "RVM Category A (compliance/offset area)",
@@ -71,13 +79,37 @@ function worstRvmCat(
   return best;
 }
 
+// Council vegetation vocabularies vary widely ("Matters of State
+// Environmental Significance", "MLES - Urban Habitat and Amenity Area",
+// "Primary Vegetation Management Area", "Bushland Habitat"), so grade on
+// what the label asserts, worst tier first.
 function classifyCouncil(desc: string | null): RiskLevel {
   if (!desc) return "none";
   const s = desc.toLowerCase();
+  // State/national significance and waterway or wetland corridors: the
+  // clearing triggers that gate a development application outright.
   if (s.includes("waterway") || s.includes("wetland")) return "high";
+  if (s.includes("mses") || s.includes("mnes")) return "high";
+  if (s.includes("state environmental significance")) return "high";
+  if (s.includes("state significant")) return "high";
   if (s.includes("biodiversity") && s.includes("matter")) return "high";
+  if (s.includes("remnant")) return "high";
+  // Matters of LOCAL significance are mapped city-wide and cover ordinary
+  // suburban blocks: real, but not the same order of constraint. Checked
+  // before the habitat/biodiversity rules below, whose keywords they
+  // also contain ("MLES - Urban Habitat and Amenity Area").
+  if (s.includes("mles") || s.includes("locally significant")) return "low";
+  // BCC Natural Assets Local Law: clearing the mapped vegetation needs a
+  // permit, on any lot. Council-owned vegetation is a neighbour's
+  // constraint more than the buyer's, so it grades lowest.
+  if (s.includes("significant native") || s.includes("significant urban")) return "medium";
+  if (s.includes("council vegetation")) return "low";
+  if (s.includes("koala")) return "medium";
+  if (s.includes("corridor")) return "medium";
+  if (s.includes("vegetation management")) return "medium";
+  if (s.includes("regulated vegetation")) return "medium";
+  if (s.includes("habitat")) return "medium";
   if (s.includes("biodiversity")) return "medium";
-  if (s.includes("ecological corridor")) return "medium";
   return "low";
 }
 
@@ -87,9 +119,7 @@ export async function fetchVegetationData(
   region?: Region,
   lot?: Geometry | null,
 ): Promise<VegetationResult> {
-  const isBrisbane = region?.isBrisbane ?? true;
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
-  const bccFields = "CAT_DESC,OVL_CAT,OVL2_DESC,OVL2_CAT,DESCRIPTION";
   const pointParams = (outFields: string) => ({
     geometry: point,
     geometryType: "esriGeometryPoint" as const,
@@ -107,25 +137,42 @@ export async function fetchVegetationData(
     returnGeometry: true,
     bufferDegrees: 0.0025,
     maxAllowableOffset: 0.00003,
+    quantize: true,
   });
 
-  const [rvm, habitat, council, rvmCtx, habitatCtx, councilCtx] =
-    await Promise.all([
-      queryArcGIS(RVM_ALL, pointParams("rvm_cat")),
-      queryArcGIS(ESSENTIAL_HABITAT, pointParams("*")),
-      isBrisbane ? queryArcGIS(BCC_BIODIVERSITY, pointParams(bccFields)) : EMPTY_FC,
-      queryArcGIS(RVM_ALL, contextParams("rvm_cat")),
-      queryArcGIS(ESSENTIAL_HABITAT, contextParams("*")),
-      isBrisbane
-        ? queryArcGIS(BCC_BIODIVERSITY, contextParams(bccFields))
-        : EMPTY_FC,
-    ]);
+  const councilId = region ? councilOf(region) : "brisbane";
+  const adapters = (councilId ? VEGETATION_ADAPTERS[councilId] : undefined) ?? [];
+
+  const [rvm, habitat, rvmCtx, habitatCtx, councilResults] = await Promise.all([
+    queryArcGIS(RVM_ALL, pointParams("rvm_cat")),
+    queryArcGIS(ESSENTIAL_HABITAT, pointParams("*")),
+    queryArcGIS(RVM_ALL, contextParams("rvm_cat")),
+    queryArcGIS(ESSENTIAL_HABITAT, contextParams("*")),
+    Promise.all(adapters.map((a) => queryOverlayAdapter(a, lat, lng, lot))),
+  ]);
+  const merge = (
+    key: "point" | "context",
+  ): FeatureCollection<Geometry | null> => ({
+    type: "FeatureCollection",
+    features: councilResults.flatMap((r) => r[key].features),
+  });
+  const council = merge("point");
+  const councilCtx = merge("context");
 
   const rvmCat = worstRvmCat(rvm.features);
   const hasEssentialHabitat = habitat.features.length > 0;
-  const councilAttrs = attrs(council.features[0]);
-  const councilDesc =
-    typeof councilAttrs.OVL2_DESC === "string" ? councilAttrs.OVL2_DESC : null;
+  // A lot can sit under several council overlays at once (a koala
+  // corridor inside an MSES area): grade them all and keep the worst.
+  const rank: RiskLevel[] = ["none", "very_low", "low", "medium", "high"];
+  const councilDesc = councilResults
+    .flatMap((r, i) => overlayLabels(r.point, adapters[i].labelFields))
+    .reduce<string | null>(
+      (worst, l) =>
+        rank.indexOf(classifyCouncil(l)) > rank.indexOf(classifyCouncil(worst))
+          ? l
+          : worst,
+      null,
+    );
 
   // Regulated categories A/B → high (clearing assessable), C/R → medium,
   // essential habitat → at least medium, council overlay per its own scale.
@@ -136,7 +183,6 @@ export async function fetchVegetationData(
         ? "medium"
         : "none";
   const councilRisk = classifyCouncil(councilDesc);
-  const rank: RiskLevel[] = ["none", "very_low", "low", "medium", "high"];
   const candidates: RiskLevel[] = [
     rvmRisk,
     councilRisk,
@@ -159,13 +205,9 @@ export async function fetchVegetationData(
       layer: RVM_ALL,
     },
   ];
-  if (isBrisbane) {
-    sources.push({
-      name: "BCC City Plan 2014: Biodiversity areas overlay",
-      url: BCC_BIODIVERSITY_DOC,
-      layer: BCC_BIODIVERSITY,
-    });
-  }
+  sources.push(
+    ...adapters.map((a) => ({ name: a.sourceName, url: a.docUrl, layer: a.url })),
+  );
 
   return {
     riskLevel,

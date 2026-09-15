@@ -31,7 +31,16 @@ import { PbfReader } from "pbf";
 import { VectorTile } from "@mapbox/vector-tile";
 
 import { queryArcGIS } from "@/lib/arcgis";
+import {
+  BUSHFIRE_ADAPTERS,
+  councilOf,
+  overlayLabels,
+  queryOverlayAdapter,
+  type OverlayAdapter,
+} from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
+import type { Region } from "@/lib/region";
+import { RISK_RANK } from "@/lib/risk-style";
 
 const BPA_LAYER =
   "https://utility.arcgis.com/usrsvcs/servers/8ac1ba8eccee472fbd0e7a57bf3ad320/rest/services/Hosted/BPA/FeatureServer/0/query";
@@ -75,6 +84,10 @@ export type BushfireResult = {
   hazardCategory: string | null;
   /** BPA region label, e.g. "South East Queensland". */
   hazardCode: string | null;
+  /** Worst council planning-scheme bushfire overlay class on the lot
+   * (BCC OM-002.3: "Medium hazard area", "Potential impact buffer area"),
+   * null where no council adapter exists or nothing intersects. */
+  councilCategory: string | null;
   hasConsideration: boolean;
   sources: BushfireSource[];
   /** Point-query GeoJSON: drives classification. */
@@ -96,10 +109,12 @@ function attrs(
 function classifyHazard(desc: string | null): RiskLevel {
   if (!desc) return "none";
   const s = desc.toLowerCase();
+  // Buffers first: BCC's "High hazard buffer area" contains "high" but is
+  // the 100 m impact band around a hazard area, not the hazard itself.
+  if (s.includes("buffer") || s.includes("impact")) return "low";
   if (s.includes("very high")) return "high";
   if (s.includes("high")) return "high";
   if (s.includes("medium")) return "medium";
-  if (s.includes("buffer") || s.includes("impact")) return "low";
   return "medium";
 }
 
@@ -107,14 +122,20 @@ function classifyHazard(desc: string | null): RiskLevel {
 function worstFeature(
   features: Feature<Geometry | null, GeoJsonProperties>[],
 ): Feature<Geometry | null, GeoJsonProperties> | undefined {
-  const rank = (f: Feature<Geometry | null, GeoJsonProperties>) => {
-    const c = String(attrs(f).class ?? "").toLowerCase();
-    if (c.includes("very high")) return 4;
-    if (c.includes("high")) return 3;
-    if (c.includes("medium")) return 2;
-    return 1;
-  };
+  const rank = (f: Feature<Geometry | null, GeoJsonProperties>) =>
+    RISK_RANK[classifyHazard(String(attrs(f).class ?? "") || null)];
   return [...features].sort((a, b) => rank(b) - rank(a))[0];
+}
+
+/** Worst label by hazard grade; null when the list is empty. */
+function worstLabel(labels: string[]): string | null {
+  return labels.reduce<string | null>(
+    (worst, l) =>
+      worst === null || RISK_RANK[classifyHazard(l)] > RISK_RANK[classifyHazard(worst)]
+        ? l
+        : worst,
+    null,
+  );
 }
 
 // ── Vector-tile fallback ─────────────────────────────────────────────────
@@ -411,6 +432,7 @@ async function fetchBushfireFromTiles(
     riskLevel,
     hazardCategory,
     hazardCode: null,
+    councilCategory: null,
     hasConsideration: riskLevel !== "none",
     sources: [
       {
@@ -450,6 +472,7 @@ async function fetchBushfireFromFeatureServer(
       returnGeometry: true,
       bufferDegrees: 0.0025,
       maxAllowableOffset: 0.00003,
+      quantize: true,
     }),
   ]);
   const a = attrs(worstFeature(fc.features));
@@ -461,6 +484,7 @@ async function fetchBushfireFromFeatureServer(
     riskLevel,
     hazardCategory,
     hazardCode,
+    councilCategory: null,
     hasConsideration: riskLevel !== "none",
     sources: [
       {
@@ -474,16 +498,73 @@ async function fetchBushfireFromFeatureServer(
   };
 }
 
+// ── Council overlay merge ────────────────────────────────────────────────
+
+type FC = FeatureCollection<Geometry | null, GeoJsonProperties>;
+
+/** Fold the council planning-scheme bushfire overlay into the statewide
+ * result. Council features are re-keyed onto the BPA `class` property so
+ * the map painter and the worst-class ranking treat both sources alike;
+ * `source: "council"` keeps them tellable apart. */
+function mergeCouncilBushfire(
+  state: BushfireResult,
+  adapters: OverlayAdapter[],
+  results: Array<{ point: FC; context: FC }>,
+): BushfireResult {
+  const relabel = (fc: FC, i: number): FC["features"] =>
+    fc.features.map((f) => {
+      const labels = overlayLabels({ type: "FeatureCollection", features: [f] }, adapters[i].labelFields);
+      return {
+        ...f,
+        properties: { ...(f.properties ?? {}), class: labels[0] ?? "Bushfire overlay", source: "council" },
+      };
+    });
+  const councilPoint = results.flatMap((r, i) => relabel(r.point, i));
+  const councilCtx = results.flatMap((r, i) => relabel(r.context, i));
+  const councilCategory = worstLabel(
+    results.flatMap((r, i) => overlayLabels(r.point, adapters[i].labelFields)),
+  );
+  const councilRisk = classifyHazard(councilCategory);
+  const councilWorse = RISK_RANK[councilRisk] > RISK_RANK[state.riskLevel];
+
+  const stateRaw = state.raw as FC;
+  const stateCtx = state.context as FC;
+  return {
+    ...state,
+    // The worse of the two grades the lot; the label follows the grade so
+    // the headline names the layer that actually put the lot in a band.
+    riskLevel: councilWorse ? councilRisk : state.riskLevel,
+    hazardCategory: councilWorse || !state.hazardCategory ? councilCategory : state.hazardCategory,
+    councilCategory,
+    hasConsideration: councilWorse || state.hasConsideration,
+    sources: [
+      ...state.sources,
+      ...adapters.map((a) => ({ name: a.sourceName, url: a.docUrl, layer: a.url })),
+    ],
+    raw: { type: "FeatureCollection", features: [...(stateRaw.features ?? []), ...councilPoint] },
+    context: { type: "FeatureCollection", features: [...(stateCtx.features ?? []), ...councilCtx] },
+  };
+}
+
 export async function fetchBushfireData(
   lat: number,
   lng: number,
   lot?: Geometry | null,
+  region?: Region,
 ): Promise<BushfireResult> {
-  try {
-    return await fetchBushfireFromFeatureServer(lat, lng, lot);
-  } catch {
-    // The proxied FeatureServer breaks whenever QFD's stored credential
-    // lapses: the public awareness vector tiles are the durable path.
-    return await fetchBushfireFromTiles(lat, lng, lot);
-  }
+  // Council overlays sit ON TOP of the statewide layer, never instead of
+  // it: a council may map a hazard band the SPP layer leaves blank (BCC's
+  // OM-002.3 across Fig Tree Pocket), and the reverse also happens.
+  const councilId = region ? councilOf(region) : null;
+  const adapters = (councilId ? BUSHFIRE_ADAPTERS[councilId] : undefined) ?? [];
+  const [state, councilResults] = await Promise.all([
+    fetchBushfireFromFeatureServer(lat, lng, lot).catch(() =>
+      // The proxied FeatureServer breaks whenever QFD's stored credential
+      // lapses: the public awareness vector tiles are the durable path.
+      fetchBushfireFromTiles(lat, lng, lot),
+    ),
+    Promise.all(adapters.map((a) => queryOverlayAdapter(a, lat, lng, lot))),
+  ]);
+  if (adapters.length === 0) return state;
+  return mergeCouncilBushfire(state, adapters, councilResults);
 }

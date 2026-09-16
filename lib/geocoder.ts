@@ -389,9 +389,19 @@ async function suggestGoogle(
 // names at all ("Westfield Chermside, Gympie Road…" prefix-matches a
 // homestead in Longreach). Same API + key as the autocomplete, so no
 // Geocoding API enablement is needed.
+// Google's own address types: a result carrying one of these is a street
+// address, not a business or a street centreline.
+const GOOGLE_ADDRESS_TYPES = new Set(["street_address", "premise", "subpremise"]);
+
 async function searchTextGoogle(
   query: string,
   key: string,
+  opts: {
+    /** Address mode: only accept a street-address result whose formatted
+     * address starts with this street number. Used when the state
+     * register has no point for the number typed (see geocodeAddress). */
+    streetNumber?: string;
+  } = {},
 ): Promise<GeocodeHit | null> {
   const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
@@ -399,7 +409,7 @@ async function searchTextGoogle(
       "Content-Type": "application/json",
       "X-Goog-Api-Key": key,
       "X-Goog-FieldMask":
-        "places.location,places.formattedAddress,places.displayName",
+        "places.location,places.formattedAddress,places.displayName,places.types",
     },
     body: JSON.stringify({
       textQuery: query,
@@ -423,6 +433,7 @@ async function searchTextGoogle(
       location?: { latitude?: number; longitude?: number };
       formattedAddress?: string;
       displayName?: { text?: string };
+      types?: string[];
     }>;
   };
   // locationBias is a bias, not a filter: enforce the QLD bbox ourselves.
@@ -432,15 +443,26 @@ async function searchTextGoogle(
   const hit = (body.places ?? []).find((p) => {
     const lat = p.location?.latitude;
     const lng = p.location?.longitude;
-    return (
-      typeof lat === "number" &&
-      typeof lng === "number" &&
-      lat >= BBOX.latMin &&
-      lat <= BBOX.latMax &&
-      lng >= BBOX.lonMin &&
-      lng <= BBOX.lonMax &&
-      !namesOtherState(p.formattedAddress ?? "")
-    );
+    if (
+      typeof lat !== "number" ||
+      typeof lng !== "number" ||
+      lat < BBOX.latMin ||
+      lat > BBOX.latMax ||
+      lng < BBOX.lonMin ||
+      lng > BBOX.lonMax ||
+      namesOtherState(p.formattedAddress ?? "")
+    ) {
+      return false;
+    }
+    if (opts.streetNumber) {
+      // A business at the number, or the street itself, is not the lot.
+      if (!(p.types ?? []).some((t) => GOOGLE_ADDRESS_TYPES.has(t))) return false;
+      // "50 Macquarie St" or "3/50 Macquarie St": the number typed must be
+      // the address number, not a unit number or a lookalike.
+      const re = new RegExp(`^\\s*(?:[\\w ]*\\d+\\s*/\\s*)?${opts.streetNumber}[a-z]?\\b`, "i");
+      if (!re.test(p.formattedAddress ?? "")) return false;
+    }
+    return true;
   });
   if (!hit) return null;
   const name = hit.displayName?.text ?? "";
@@ -509,6 +531,29 @@ function looksLikeStreetAddress(query: string): boolean {
   return /^\s*\d/.test(query);
 }
 
+/**
+ * Peel a unit designator off the front of an address: "3/50 Macquarie
+ * St", "Unit 3, 50 Macquarie St", "U3/50 …", "Apt 12A / 50 …". The lot a
+ * report is about is the BUILDING's lot, so the geocode runs on the street
+ * address alone; the unit is only kept for the label. Without this the
+ * locator read "3/50 Macquarie Street" as "3 Macquarie Street" and
+ * matched Boonah, 90 km away. "Lot 5 Smith Road" (a rural lot with no
+ * street number) is left alone: the designator only strips when a street
+ * number follows it.
+ */
+function splitUnitPrefix(query: string): { unit: string | null; base: string } {
+  const m =
+    /^\s*(?:(?:unit|u|apt|apartment|flat|shop|suite|lot|villa|townhouse)\s*\.?\s*)?(\d+[a-z]?)\s*(?:\/|,)\s*(?=\d+[a-z]?\s+[a-z])/i.exec(query) ??
+    /^\s*(?:unit|u|apt|apartment|flat|shop|suite|villa|townhouse)\s*\.?\s*(\d+[a-z]?)\s+(?=\d+[a-z]?\s+[a-z])/i.exec(query);
+  if (!m) return { unit: null, base: query };
+  return { unit: m[1].toUpperCase(), base: query.slice(m[0].length).trim() };
+}
+
+/** Put the unit back on a provider's label: "3/50 Macquarie St, …". */
+function withUnit(unit: string | null, label: string): string {
+  return unit ? `${unit}/${label.replace(/^\s*(?:unit\s*)?/i, "")}` : label;
+}
+
 export async function suggestAddresses(query: string): Promise<Suggestion[]> {
   if (query.trim().length < 3) return [];
   // Another state named outright: no suggestions beat an honest empty list.
@@ -523,14 +568,28 @@ export async function suggestAddresses(query: string): Promise<Suggestion[]> {
     }
   }
   const tokens = queryTokens(query);
+  // The locator indexes buildings, not "3/50": suggest on the street
+  // address and re-attach the unit to each label.
+  const { unit, base } = splitUnitPrefix(query);
   let qld: Suggestion[] = [];
   try {
-    qld = await suggestQld(query);
+    // Only numbered-address suggestions take the unit: "3/Macquarie
+    // Street" on a bare street entry is nonsense.
+    qld = (await suggestQld(base)).map((s) =>
+      unit && /^\d/.test(s.primary)
+        ? {
+            ...s,
+            id: `${s.id}#${unit}`,
+            displayName: withUnit(unit, s.displayName),
+            primary: withUnit(unit, s.primary),
+          }
+        : s,
+    );
   } catch (err) {
     console.error("[geocoder] qld locator suggest failed, falling back:", err);
   }
   // Address-shaped queries: trust the locator's own ordering outright.
-  if (looksLikeStreetAddress(query) && qld.length > 0) return qld;
+  if (looksLikeStreetAddress(base) && qld.length > 0) return qld;
   const covering = qld.filter((s) => coversTokens(s.displayName, tokens));
   if (covering.length > 0) {
     // Good matches exist: surface them first, weak prefix-matches after.
@@ -561,6 +620,13 @@ export async function geocodeAddress(query: string): Promise<GeocodeHit | null> 
   // Another state named outright: reject before any provider gets the
   // chance to fuzzy-match it onto an unrelated QLD address.
   if (namesOtherState(query)) return null;
+  // A unit address geocodes as its building's street address; the unit
+  // only rides along on the label.
+  const { unit, base } = splitUnitPrefix(query);
+  if (unit) {
+    const hit = await geocodeAddress(base);
+    return hit ? { ...hit, displayName: withUnit(unit, hit.displayName) } : null;
+  }
   const key = GOOGLE_KEY();
 
   // Provider order is deliberate: the QLD locator owns ADDRESSES, Google
@@ -591,6 +657,22 @@ export async function geocodeAddress(query: string): Promise<GeocodeHit | null> 
       }
     } catch (err) {
       console.error("[geocoder] qld locator geocode failed:", err);
+    }
+    // The state register has no point for that number: the locator fell
+    // back to the street centreline or a named complex on the street
+    // ("50 Macquarie St Teneriffe" → "Macquarie Teneriffe", a different
+    // building 300 m away; "1019 Ann St Newstead" → mid-street). Google
+    // does carry those addresses (the Saratoga complex, the Gasworks
+    // site), so ask it for a STREET-ADDRESS result at that exact number
+    // before settling for the inexact hit. Its rooftop pin is inside the
+    // right lot; only the register's exact points beat it.
+    if (key) {
+      try {
+        const g = await searchTextGoogle(query, key, { streetNumber: streetNum });
+        if (g) return g;
+      } catch {
+        /* fall through */
+      }
     }
     // Inexact (street/complex-level) locator hit is still the best we
     // have for an address-shaped query.

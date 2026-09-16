@@ -11,6 +11,7 @@
 //   how the pipeline decides which council overlay adapter applies.
 
 import type { FeatureCollection, Geometry } from "geojson";
+import polygonClipping from "polygon-clipping";
 import { queryArcGIS } from "@/lib/arcgis";
 
 const PARCEL_LAYER =
@@ -134,6 +135,108 @@ function parcelDistanceSq(f: ParcelFeature, lat: number, lng: number): number {
 const hasLotPlan = (f: ParcelFeature) =>
   !!f.geometry && !!(f.properties as { lotplan?: unknown } | null)?.lotplan;
 
+/** DCDB lot numbers that mean "common property of a community titles
+ * scheme" rather than an individual lot. */
+const COMMON_PROPERTY_LOTS = new Set(["0", "00000"]);
+
+/**
+ * Which of several parcels containing the pin IS the property. A point
+ * in a unit block or a mixed-use site lands on stacked parcels: the base
+ * ground lot, volumetric/strata slices above it, and easement parcels
+ * drawn over it. Higher wins:
+ *   - an easement parcel is never the property (it is somebody's right
+ *     over the property);
+ *   - the ground ("Base") parcel over volumetric/strata slices;
+ *   - a parcel with a registered area over the zero-area fragments the
+ *     DCDB uses for common-property pieces;
+ *   - then the larger area.
+ * Before this the first feature ArcGIS happened to return won, which put
+ * 1019 Ann St on its 612 m² drainage easement instead of the 6,632 m²
+ * site.
+ */
+function parcelRank(f: ParcelFeature): number {
+  if (!hasLotPlan(f)) return -1;
+  const p = (f.properties ?? {}) as Record<string, unknown>;
+  const parcelType = String(p.parcel_typ ?? "");
+  const cover = String(p.cover_typ ?? "");
+  if (/easement/i.test(parcelType) || /easement/i.test(cover)) return 0;
+  let r = 1;
+  if (cover === "Base") r += 4;
+  if ((num(p.lot_area) ?? 0) > 0) r += 2;
+  return r;
+}
+
+function pickParcel(features: ParcelFeature[]): ParcelFeature | undefined {
+  return [...features]
+    .filter((f) => parcelRank(f) > 0)
+    .sort(
+      (a, b) =>
+        parcelRank(b) - parcelRank(a) ||
+        (num((b.properties ?? {}).lot_area) ?? 0) - (num((a.properties ?? {}).lot_area) ?? 0),
+    )[0];
+}
+
+/**
+ * A pin on common property (lot 0 / 00000) is a pin on a unit block or a
+ * strata site: the "property" a buyer means is the whole scheme's ground
+ * footprint, which the DCDB stores as several common-property fragments
+ * (50 Macquarie St Teneriffe: two 00000SP125099 slivers and two 0SP125099
+ * pieces, 713 m² registered between them). Dissolve every base parcel of
+ * the plan into one polygon and carry the registered area.
+ */
+async function expandCommunityTitle(
+  chosen: ParcelFeature,
+  lat: number,
+  lng: number,
+): Promise<ParcelFeature> {
+  const p = (chosen.properties ?? {}) as Record<string, unknown>;
+  const plan = str(p.plan);
+  const lot = str(p.lot);
+  if (!plan || !lot || !COMMON_PROPERTY_LOTS.has(lot)) return chosen;
+  const siblings = await queryArcGIS(PARCEL_LAYER, {
+    geometry: { x: lng, y: lat, spatialReference: 4326 },
+    geometryType: "esriGeometryPoint",
+    inSR: 4326,
+    outFields: "lot,plan,lotplan,lot_area,tenure,parcel_typ,locality,shire_name,cover_typ",
+    returnGeometry: true,
+    bufferDegrees: 0.005, // ~500 m: a scheme's footprint, never a suburb
+    maxAllowableOffset: 0.00001,
+    where: `plan = '${plan.replace(/'/g, "''")}' AND lot IN ('0','00000') AND cover_typ = 'Base'`,
+  });
+  const parts = siblings.features.filter((f) => f.geometry);
+  if (parts.length < 2) return chosen;
+  const polys = parts.flatMap((f) => {
+    const g = f.geometry!;
+    if (g.type === "Polygon") return [g.coordinates as [number, number][][]];
+    if (g.type === "MultiPolygon") return g.coordinates as [number, number][][][];
+    return [];
+  });
+  let union: [number, number][][][];
+  try {
+    // One MultiPolygon holding every fragment: union dissolves shared edges.
+    union = polygonClipping.union(polys as [number, number][][][]);
+  } catch {
+    return chosen;
+  }
+  if (union.length === 0) return chosen;
+  const area = Math.max(
+    ...parts.map((f) => num((f.properties ?? {}).lot_area) ?? 0),
+    num(p.lot_area) ?? 0,
+  );
+  return {
+    geometry:
+      union.length === 1
+        ? { type: "Polygon", coordinates: union[0] }
+        : { type: "MultiPolygon", coordinates: union },
+    properties: {
+      ...p,
+      lot: "0",
+      lotplan: `0${plan}`,
+      lot_area: area > 0 ? area : p.lot_area,
+    },
+  };
+}
+
 function toParcelInfo(f: ParcelFeature): ParcelInfo {
   const p = (f.properties ?? {}) as Record<string, unknown>;
   return {
@@ -158,16 +261,18 @@ export async function fetchPropertyParcel(
       geometry: { x: lng, y: lat, spatialReference: 4326 },
       geometryType: "esriGeometryPoint",
       inSR: 4326,
-      outFields: "lot,plan,lotplan,lot_area,tenure,parcel_typ,locality,shire_name",
+      outFields: "lot,plan,lotplan,lot_area,tenure,parcel_typ,locality,shire_name,cover_typ",
       returnGeometry: true,
       // Tiny simplification: the lot is already a 5–8 vertex rectangle.
       maxAllowableOffset: 0.00001,
     });
     // Road/rail/water reserves come back with null lotplan: prefer a real
-    // lot if the point straddles boundaries.
-    const direct =
-      fc.features.find(hasLotPlan) ?? fc.features.find((x) => !!x.geometry);
-    if (direct && hasLotPlan(direct)) return toParcelInfo(direct);
+    // lot if the point straddles boundaries, and among real lots the one
+    // parcelRank says is the property.
+    const direct = pickParcel(fc.features) ?? fc.features.find((x) => !!x.geometry);
+    if (direct && hasLotPlan(direct)) {
+      return toParcelInfo(await expandCommunityTitle(direct, lat, lng));
+    }
 
     // The pin missed the cadastre (interpolated geocodes drop onto the
     // road; large sites can pin on internal reserves). Search ~40 m out
@@ -178,12 +283,14 @@ export async function fetchPropertyParcel(
       geometry: { x: lng, y: lat, spatialReference: 4326 },
       geometryType: "esriGeometryPoint",
       inSR: 4326,
-      outFields: "lot,plan,lotplan,lot_area,tenure,parcel_typ,locality,shire_name",
+      outFields: "lot,plan,lotplan,lot_area,tenure,parcel_typ,locality,shire_name,cover_typ",
       returnGeometry: true,
       bufferDegrees: 0.00036, // ~40 m
       maxAllowableOffset: 0.00001,
     });
-    const lots = near.features.filter(hasLotPlan);
+    // Easement parcels are excluded here too: the nearest polygon to a
+    // kerb-side pin is often the drainage easement along the frontage.
+    const lots = near.features.filter((f) => parcelRank(f) > 0);
     if (lots.length > 0) {
       lots.sort(
         (a, b) => parcelDistanceSq(a, lat, lng) - parcelDistanceSq(b, lat, lng),
@@ -193,7 +300,7 @@ export async function fetchPropertyParcel(
           (lots[0].properties as { lotplan?: string })?.lotplan
         }`,
       );
-      return toParcelInfo(lots[0]);
+      return toParcelInfo(await expandCommunityTitle(lots[0], lat, lng));
     }
 
     // Nothing real nearby: keep whatever the point hit (reserve) or EMPTY.

@@ -122,11 +122,17 @@ export async function POST(req: Request) {
   let addressText = "Property report";
   try {
     const sql = getDb();
+    // The unlock is per report run (see the webhook): check the run the
+    // buyer is on, and insist it belongs to the address in the body.
     const rows = (await sql`
-      SELECT address_text, paid_at FROM addresses WHERE id = ${parsed.addressId} LIMIT 1
+      SELECT a.address_text, r.paid_at
+      FROM reports r
+      JOIN addresses a ON a.id = r.address_id
+      WHERE r.id = ${parsed.reportId}::uuid AND r.address_id = ${parsed.addressId}::uuid
+      LIMIT 1
     `) as Array<{ address_text: string; paid_at: string | null }>;
     if (rows.length === 0) {
-      return NextResponse.json({ error: "address not found" }, { status: 404 });
+      return NextResponse.json({ error: "report not found" }, { status: 404 });
     }
     if (rows[0].paid_at) {
       // Already paid: short-circuit back to the report page.

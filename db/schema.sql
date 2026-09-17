@@ -108,3 +108,54 @@ create table if not exists report_usage (
 );
 
 create index if not exists report_usage_user_created_idx on report_usage(user_id, created_at);
+
+-- ── Entitlements live on the REPORT, not the address ──────────────────────
+-- addresses is a cache key shared by everyone who searches the same label;
+-- keeping paid_at there let a second user re-search a paid address and read
+-- the full report for free. Each report run now carries its own unlock.
+alter table reports add column if not exists paid_at timestamptz;
+alter table reports add column if not exists stripe_session_id text;
+-- One-off backfill for runs that existed when the unlock moved: honour the
+-- address-level payment for reports generated before the cutover only, so
+-- re-running this file later never grants new runs at an old paid address.
+update reports r
+   set paid_at = a.paid_at
+  from addresses a
+ where a.id = r.address_id
+   and r.paid_at is null
+   and a.paid_at is not null
+   and r.generated_at < timestamptz '2026-09-26 00:00:00+10';
+
+-- ── One row per (address, module) ─────────────────────────────────────────
+-- The overlay writer upserts on this key; before it was delete-then-insert
+-- with no constraint, and two concurrent runs could leave an address with
+-- missing or duplicated modules. Collapse any historical duplicates first
+-- (keep the newest row per key), then pin the invariant.
+delete from council_data c
+ using council_data d
+ where c.address_id = d.address_id
+   and c.module = d.module
+   and (c.retrieved_at, c.id) < (d.retrieved_at, d.id);
+create unique index if not exists council_data_addr_module_uidx on council_data(address_id, module);
+
+-- Every search does an exact lookup on the resolved label.
+create index if not exists addresses_address_text_idx on addresses(address_text);
+
+-- ── Stripe webhook idempotency ────────────────────────────────────────────
+-- Stripe retries deliveries; each event id is handled once.
+create table if not exists stripe_events (
+  id          text primary key,
+  type        text not null,
+  received_at timestamptz not null default now()
+);
+
+-- ── Global rate limiting ──────────────────────────────────────────────────
+-- Token buckets shared across serverless instances (the in-memory limiter
+-- only ever bounded one warm instance). Rows are keyed route:ip and reaped
+-- opportunistically by the limiter itself.
+create table if not exists rate_limits (
+  key     text primary key,
+  tokens  double precision not null,
+  last_ms bigint not null,
+  denied  boolean not null default false
+);

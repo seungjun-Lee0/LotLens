@@ -1,6 +1,6 @@
 // POST /api/checkout/webhook
 //
-// Stripe webhook for Checkout completion. Marks the address paid_at +
+// Stripe webhook for Checkout completion. Marks the report paid_at +
 // stores session id. Also exposed as a public endpoint that the report
 // page can poll (with session_id) as a fallback when the webhook hasn't
 // landed by the time the user is redirected back.
@@ -16,10 +16,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
 
+// The unlock belongs to the REPORT the buyer was looking at, never to the
+// address: addresses are a cache key shared by everyone who searches the
+// same label, so an address-level flag handed the full report to the next
+// stranger who typed it in.
 async function markPaid(session: Stripe.Checkout.Session) {
+  const reportId = session.metadata?.reportId;
   const addressId = session.metadata?.addressId;
-  if (!addressId) {
-    console.warn("[checkout/webhook] no addressId in session metadata", session.id);
+  if (!reportId && !addressId) {
+    console.warn("[checkout/webhook] no reportId/addressId in session metadata", session.id);
     return;
   }
   if (session.payment_status !== "paid") {
@@ -27,12 +32,38 @@ async function markPaid(session: Stripe.Checkout.Session) {
     return;
   }
   const sql = getDb();
+  if (reportId) {
+    await sql`
+      UPDATE reports
+      SET paid_at = COALESCE(paid_at, now()),
+          stripe_session_id = COALESCE(stripe_session_id, ${session.id})
+      WHERE id = ${reportId}::uuid
+    `;
+    return;
+  }
+  // Sessions created before reportId rode in the metadata: unlock the
+  // newest run of that address, which is the one the buyer came from.
   await sql`
-    UPDATE addresses
+    UPDATE reports
     SET paid_at = COALESCE(paid_at, now()),
         stripe_session_id = COALESCE(stripe_session_id, ${session.id})
-    WHERE id = ${addressId}
+    WHERE id = (
+      SELECT id FROM reports WHERE address_id = ${addressId}::uuid
+      ORDER BY generated_at DESC LIMIT 1
+    )
   `;
+}
+
+/** Stripe retries deliveries: claim the event id once, skip replays. */
+async function claimEvent(event: Stripe.Event): Promise<boolean> {
+  if (!event.id) return true; // unsigned dev payloads may carry no id
+  const sql = getDb();
+  const rows = (await sql`
+    INSERT INTO stripe_events (id, type) VALUES (${event.id}, ${event.type})
+    ON CONFLICT (id) DO NOTHING
+    RETURNING id
+  `) as Array<{ id: string }>;
+  return rows.length > 0;
 }
 
 // Newer Stripe API versions expose current_period_end on the subscription
@@ -124,25 +155,40 @@ export async function POST(req: Request) {
   const sig = req.headers.get("stripe-signature");
   const body = await req.text();
 
+  // With a secret configured the signature is mandatory: a missing header
+  // is a forged request, not a reason to fall back. (Before, `secret && sig`
+  // let anyone bypass verification in production by omitting the header.)
+  // Without a secret, only a non-production build accepts raw JSON, for
+  // `stripe trigger …` against localhost; production fails closed.
   let event: Stripe.Event;
-  try {
-    if (secret && sig) {
-      event = stripe.webhooks.constructEvent(body, sig, secret);
-    } else {
-      // Dev convenience: when STRIPE_WEBHOOK_SECRET is not set we accept
-      // raw JSON so local testing via `stripe trigger checkout.session.completed`
-      // still works. NEVER ship to prod without the secret set.
-      event = JSON.parse(body) as Stripe.Event;
+  if (secret) {
+    if (!sig) {
+      return NextResponse.json({ error: "missing stripe-signature" }, { status: 400 });
     }
-  } catch (err) {
-    console.error("[checkout/webhook] signature verify failed:", err);
-    return NextResponse.json(
-      { error: `webhook signature failed: ${(err as Error).message}` },
-      { status: 400 },
-    );
+    try {
+      event = stripe.webhooks.constructEvent(body, sig, secret);
+    } catch (err) {
+      console.error("[checkout/webhook] signature verify failed:", err);
+      return NextResponse.json(
+        { error: `webhook signature failed: ${(err as Error).message}` },
+        { status: 400 },
+      );
+    }
+  } else if (process.env.NODE_ENV === "production") {
+    console.error("[checkout/webhook] STRIPE_WEBHOOK_SECRET is not set in production");
+    return NextResponse.json({ error: "webhook not configured" }, { status: 503 });
+  } else {
+    try {
+      event = JSON.parse(body) as Stripe.Event;
+    } catch (err) {
+      return NextResponse.json({ error: `invalid json: ${(err as Error).message}` }, { status: 400 });
+    }
   }
 
   try {
+    if (!(await claimEvent(event))) {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
     if (event.type === "checkout.session.completed") {
       await handleSessionCompleted(
         stripe,

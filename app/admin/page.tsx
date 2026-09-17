@@ -50,7 +50,7 @@ export default async function AdminPage() {
         (SELECT count(*)::int FROM users)                                            AS total_users,
         (SELECT count(*)::int FROM reports)                                          AS total_reports,
         (SELECT count(*)::int FROM reports WHERE generated_at >= now() - interval '7 days') AS reports_7d,
-        (SELECT count(*)::int FROM addresses WHERE paid_at IS NOT NULL)              AS paid_addresses,
+        (SELECT count(*)::int FROM reports WHERE paid_at IS NOT NULL)                AS paid_addresses,
         (SELECT count(*)::int FROM report_usage)                                     AS credit_unlocks
     `,
     sql`
@@ -68,7 +68,7 @@ export default async function AdminPage() {
       LIMIT 100
     `,
     sql`
-      SELECT r.id, r.generated_at, a.address_text, a.paid_at,
+      SELECT r.id, r.generated_at, a.address_text, r.paid_at,
              u.email AS user_email
       FROM reports r
       JOIN addresses a ON a.id = r.address_id

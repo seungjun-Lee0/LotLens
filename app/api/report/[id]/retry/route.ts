@@ -7,8 +7,9 @@
 
 import { NextResponse } from "next/server";
 
+import { getSessionUser, isAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { retryFailedChecks } from "@/lib/pipeline";
+import { canViewReport, retryFailedChecks } from "@/lib/pipeline";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -20,7 +21,7 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> },
 ) {
   // Same upstream cost as fetch-overlays; retries should be rare.
-  const limited = enforceRateLimit("report-retry", req, { limit: 3, windowSec: 600 });
+  const limited = await enforceRateLimit("report-retry", req, { limit: 3, windowSec: 600 });
   if (limited) return limited;
 
   const { id } = await ctx.params;
@@ -30,6 +31,17 @@ export async function POST(
 
   try {
     const sql = getDb();
+    // A retry re-hits ~100 upstream layers: only the report's owner (or an
+    // admin) may trigger it. Anonymous runs have no owner; their URL is
+    // the credential, same as for viewing.
+    const [ownerRows, viewer] = await Promise.all([
+      sql`SELECT user_id FROM reports WHERE id = ${id}::uuid LIMIT 1`,
+      getSessionUser(),
+    ]);
+    const owner = (ownerRows as Array<{ user_id: string | null }>)[0];
+    if (!owner || !canViewReport({ ownerId: owner.user_id }, viewer, isAdmin(viewer))) {
+      return NextResponse.json({ error: "report not found" }, { status: 404 });
+    }
     // Guard: only reports that actually have a failed row may be re-run
     // from this endpoint (stops it being used as a free "refresh my data"
     // hammer against the council endpoints).

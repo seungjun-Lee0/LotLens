@@ -18,7 +18,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  const limited = enforceRateLimit("account-delete", req, { limit: 5, windowSec: 3600 });
+  const limited = await enforceRateLimit("account-delete", req, { limit: 5, windowSec: 3600 });
   if (limited) return limited;
 
   const user = await getSessionUser();

@@ -14,6 +14,8 @@
 // rewrites. Route handlers and CLI scripts call these directly so we keep
 // HTTP-vs-script behaviour identical.
 
+import { revalidateTag, unstable_cache } from "next/cache";
+
 import { fetchAcidSulfateData } from "@/lib/modules/acid-sulfate";
 import { fetchBushfireData } from "@/lib/modules/bushfire";
 import { fetchEasementsData } from "@/lib/modules/easements";
@@ -34,6 +36,8 @@ import { fetchTransportData } from "@/lib/modules/transport";
 import { fetchWaterSewerData } from "@/lib/modules/water-sewer";
 import { fetchVegetationData } from "@/lib/modules/vegetation";
 import { fetchZoningData } from "@/lib/modules/zoning";
+import { fetchBoundaryData } from "@/lib/modules/boundary";
+import { fetchInternetData } from "@/lib/modules/internet";
 import { slimGeoJson } from "@/lib/geo-slim";
 import { regionFromParcel } from "@/lib/region";
 import { geocodeAddress } from "@/lib/geocoder";
@@ -65,7 +69,6 @@ type Address = {
   address_text: string;
   lat: number;
   lng: number;
-  paid_at?: string | null;
 };
 
 // ── Phase 1: fetch + persist overlays ─────────────────────────────────────
@@ -139,13 +142,18 @@ export async function fetchOverlaysForAddress(
       retrieved_at: string;
       fetch_failed: string | null;
     }>;
-    const allFresh =
-      existing.length === MODULE_ORDER.length &&
-      existing.every(
-        (r) =>
-          r.fetch_failed !== "true" &&
-          Date.now() - new Date(r.retrieved_at).getTime() < FRESH_REUSE_MS,
+    // Every module in the current order must be present and fresh. Keyed
+    // by module rather than by row count so a stale row for a since-
+    // disabled module can neither satisfy nor spoil the check.
+    const byModule = new Map(existing.map((r) => [r.module, r]));
+    const allFresh = MODULE_ORDER.every((m) => {
+      const r = byModule.get(m);
+      return (
+        !!r &&
+        r.fetch_failed !== "true" &&
+        Date.now() - new Date(r.retrieved_at).getTime() < FRESH_REUSE_MS
       );
+    });
     if (allFresh) {
       console.log(
         `[overlays] reusing fresh council_data for ${addressId} (all ${MODULE_ORDER.length} rows < ${FRESH_REUSE_MS / 60_000} min old)`,
@@ -153,16 +161,37 @@ export async function fetchOverlaysForAddress(
       return {
         addressId,
         modules: Object.fromEntries(
-          existing.map((r) => [
-            r.module,
-            { riskLevel: r.risk_level, hasConsideration: r.has_consideration },
-          ]),
+          MODULE_ORDER.map((m) => {
+            const r = byModule.get(m)!;
+            return [m, { riskLevel: r.risk_level, hasConsideration: r.has_consideration }];
+          }),
         ) as FetchOverlaysSummary["modules"],
         failedModules: [],
         elapsedMs: Math.round(performance.now() - t0),
       };
     }
   }
+
+  // Concurrent runs for the same address on this instance (double-submit,
+  // back-button replay) share one fan-out instead of racing each other's
+  // writes. The row-level upsert below covers the cross-instance case.
+  const inflight = inflightFetches.get(addressId);
+  if (inflight) return inflight;
+  const run = runOverlayFetch(addressId, addr, t0).finally(() => {
+    inflightFetches.delete(addressId);
+  });
+  inflightFetches.set(addressId, run);
+  return run;
+}
+
+const inflightFetches = new Map<string, Promise<FetchOverlaysSummary>>();
+
+async function runOverlayFetch(
+  addressId: string,
+  addr: Address,
+  t0: number,
+): Promise<FetchOverlaysSummary> {
+  const sql = getDb();
 
   // Per-module wall time: one summary line per run so slow government
   // layers are identifiable in prod logs without extra tooling.
@@ -225,7 +254,7 @@ export async function fetchOverlaysForAddress(
 
   const tasks = new Map<Module, Promise<Settled>>();
   tasks.set("storm_tide", settle("storm_tide", fetchStormTideData(addr.lat, addr.lng, lot)));
-  tasks.set("bushfire", settle("bushfire", fetchBushfireData(addr.lat, addr.lng, lot)));
+  tasks.set("bushfire", settle("bushfire", fetchBushfireData(addr.lat, addr.lng, lot, region)));
   // Disabled: the koala/MSES fan-out fails wholesale on a single flaky
   // MSES 500. Guarded here as well as in MODULE_ORDER so the flag can never
   // leave a task running whose result nothing reads (see ENVIRONMENT_ENABLED).
@@ -264,6 +293,11 @@ export async function fetchOverlaysForAddress(
   // purposes, and BCC's point-query zone polygon doubles as the parcel
   // fallback for the report's yellow lot outline.
   tasks.set("zoning", settle("zoning", fetchZoningData(addr.lat, addr.lng, region)));
+  // Boundary is arithmetic on the parcel already fetched above: the RAW
+  // polygon, not the inset copy the risk modules classify against, so the
+  // side lengths are the cadastre's own.
+  tasks.set("boundary", settle("boundary", fetchBoundaryData(parcelForRegion)));
+  tasks.set("internet", settle("internet", fetchInternetData(addr.lat, addr.lng, lot)));
 
   const ORDER = MODULE_ORDER;
   const settled = await Promise.all(ORDER.map((m) => tasks.get(m)!));
@@ -317,13 +351,15 @@ export async function fetchOverlaysForAddress(
     };
   });
 
-  // Idempotent replace. Each invocation drops the address's previous rows
-  // and rewrites the full fresh set.
-  await sql`DELETE FROM council_data WHERE address_id = ${addressId}`;
-
-  // One independent single-row insert per module: run them concurrently. Neon's
-  // HTTP driver issues one stateless request per statement (~30 ms), so
-  // sequential would cost ~450 ms; parallel costs one round-trip.
+  // Idempotent upsert on (address_id, module): each module row is replaced
+  // in place, so a run never leaves the address without rows, and two runs
+  // that overlap across instances end with one complete set (the later
+  // write wins per module) instead of one wiping the other's inserts.
+  // Neon's HTTP driver gives every statement its own transaction, which is
+  // why delete-then-insert was never atomic here.
+  //
+  // One independent single-row statement per module, run concurrently:
+  // sequential would cost ~450 ms of round trips; parallel costs one.
   // slimGeoJson caps polygon vertex counts before upload: the Brisbane
   // River flood-planning multipolygon alone is ~7 MB raw, which was
   // costing >10 s of DB write time per report.
@@ -336,9 +372,22 @@ export async function fetchOverlaysForAddress(
         VALUES
           (${addressId}, ${o.module}, ${o.riskLevel}, ${o.hasConsideration},
            ${o.sourceName}, ${o.sourceUrl}, ${JSON.stringify(slimGeoJson(o.raw, { lat: addr.lat, lng: addr.lng }))}::jsonb)
+        ON CONFLICT (address_id, module) DO UPDATE SET
+          risk_level        = EXCLUDED.risk_level,
+          has_consideration = EXCLUDED.has_consideration,
+          source_name       = EXCLUDED.source_name,
+          source_url        = EXCLUDED.source_url,
+          raw_response      = EXCLUDED.raw_response,
+          retrieved_at      = now()
       `,
     ),
   );
+  // Rows for modules no longer in the order (a flag switched off) would
+  // otherwise linger forever.
+  await sql`
+    DELETE FROM council_data
+    WHERE address_id = ${addressId} AND module <> ALL(${ORDER as string[]}::text[])
+  `;
 
   // Persist the parcel / lot-lines / postcode so the report page never has
   // to touch the live cadastre or ABS services. slimGeoJson caps the
@@ -393,7 +442,14 @@ export type ReportModuleRow = {
 };
 
 export type ReportPayload = {
-  report: { id: string; generated_at: string; narrative: ReportNarrative };
+  report: {
+    id: string;
+    generated_at: string;
+    narrative: ReportNarrative;
+    /** User who generated the run; null for anonymous runs, whose URL
+     * is their only credential. Signed-in owners' reports are theirs. */
+    ownerId: string | null;
+  };
   address: Address;
   modules: ReportModuleRow[];
   considerationCount: number;
@@ -415,10 +471,59 @@ export type ReportPayload = {
    * omits it, so this is resolved fresh at load and used for display only.
    * null when the lookup fails. */
   postcode: string | null;
-  /** True if the user has paid for the report. When false the report page
-   * shows Flooding as a free preview and paywalls the other 7 modules. */
+  /** True if this report run is unlocked (one-off purchase or a credit).
+   * When false the report page shows Flooding as a free preview and
+   * paywalls the rest. Lives on the report, not the address. */
   paid: boolean;
 };
+
+/**
+ * May `viewer` open this report? Anonymous runs have no owner, so their
+ * unguessable URL is the credential; a signed-in user's run is theirs alone
+ * (admins see everything). Shared by the page, the PDF and retry routes.
+ */
+export function canViewReport(
+  report: { ownerId: string | null },
+  viewer: { id: string } | null,
+  admin: boolean,
+): boolean {
+  if (admin) return true;
+  if (!report.ownerId) return true;
+  return viewer?.id === report.ownerId;
+}
+
+type CouncilRowSlim = Pick<
+  CouncilDataRow,
+  "module" | "risk_level" | "has_consideration" | "source_name" | "source_url" | "raw_response"
+>;
+
+/** Cache tag for a report's council_data rows: revalidated by a retry. */
+export const reportRowsTag = (reportId: string) => `report-rows:${reportId}`;
+
+/**
+ * A report's council_data rows, from the Data Cache after the first read.
+ * Every page view, PDF render and bulk export used to re-transfer the
+ * whole multi-hundred-KB set from Neon; a generated run is immutable, so
+ * the second reader onward gets it from the edge. An entry the cache
+ * refuses (oversized) simply falls through to the live query.
+ */
+export function loadCouncilRowsCached(reportId: string): Promise<CouncilRowSlim[]> {
+  // Built per call so the tag can carry the report id (unstable_cache's
+  // tags are fixed at definition time); the key parts include it too.
+  return unstable_cache(
+    async (): Promise<CouncilRowSlim[]> => {
+      const sql = getDb();
+      return (await sql`
+        SELECT module, risk_level, has_consideration,
+               source_name, source_url, raw_response
+        FROM council_data
+        WHERE address_id = (SELECT address_id FROM reports WHERE id = ${reportId})
+      `) as CouncilRowSlim[];
+    },
+    ["council-rows", reportId],
+    { revalidate: 60 * 60 * 24 * 30, tags: [reportRowsTag(reportId)] },
+  )();
+}
 
 export async function loadReportPayload(
   reportId: string,
@@ -435,17 +540,14 @@ export async function loadReportPayload(
   // Both queries fire in one round trip: report+address joined, and
   // council_data keyed through a subquery instead of waiting for the
   // report row to come back first. (Was three sequential round trips.)
-  // The multi-MB council_data transfer is this loader's long pole, so it
-  // stays a promise while the address-dependent work below gets going.
-  const dataRowsPromise = sql`
-    SELECT module, risk_level, has_consideration,
-           source_name, source_url, raw_response
-    FROM council_data
-    WHERE address_id = (SELECT address_id FROM reports WHERE id = ${reportId})
-  `;
+  // The council_data transfer is this loader's long pole, so it stays a
+  // promise while the address-dependent work below gets going. It is
+  // also cached: a report's rows never change after generation except
+  // through retryFailedChecks, which revalidates the tag.
+  const dataRowsPromise = loadCouncilRowsCached(reportId);
   const reportRows = await sql`
-    SELECT r.id, r.address_id, r.narrative, r.generated_at,
-           a.address_text, a.lat, a.lng, a.paid_at, a.geo
+    SELECT r.id, r.address_id, r.narrative, r.generated_at, r.paid_at, r.user_id,
+           a.address_text, a.lat, a.lng, a.geo
     FROM reports r
     JOIN addresses a ON a.id = r.address_id
     WHERE r.id = ${reportId}
@@ -460,10 +562,11 @@ export async function loadReportPayload(
     address_id: string;
     narrative: unknown;
     generated_at: string;
+    paid_at: string | null;
+    user_id: string | null;
     address_text: string;
     lat: number;
     lng: number;
-    paid_at: string | null;
     geo: {
       parcel: ParcelInfo | null;
       parcelLines: unknown | null;
@@ -476,7 +579,6 @@ export async function loadReportPayload(
     address_text: joined.address_text,
     lat: joined.lat,
     lng: joined.lng,
-    paid_at: joined.paid_at,
   } as Address;
 
   // Parcel / lot lines / postcode were resolved once at generation time and
@@ -529,11 +631,7 @@ export async function loadReportPayload(
     })().catch(() => {});
   }
 
-  const dataRows = await dataRowsPromise;
-  const rows = dataRows as Pick<
-    CouncilDataRow,
-    "module" | "risk_level" | "has_consideration" | "source_name" | "source_url" | "raw_response"
-  >[];
+  const rows = await dataRowsPromise;
 
   const ordered = MODULE_ORDER;
   const byModule = new Map(rows.map((r) => [r.module as Module, r]));
@@ -575,6 +673,7 @@ export async function loadReportPayload(
       id: report.id,
       generated_at: report.generated_at,
       narrative: (report.narrative ?? {}) as ReportNarrative,
+      ownerId: report.user_id,
     },
     address,
     modules,
@@ -589,7 +688,7 @@ export async function loadReportPayload(
     parcelLines,
     parcel: parcel.polygon ? parcel : null,
     postcode,
-    paid: Boolean(address.paid_at),
+    paid: Boolean(report.paid_at),
   };
 }
 
@@ -640,6 +739,8 @@ export async function retryFailedChecks(reportId: string): Promise<{
     UPDATE reports SET narrative = ${JSON.stringify(narrative)}::jsonb
     WHERE id = ${reportId}
   `;
+  // The cached row set for this report is now stale.
+  revalidateTag(reportRowsTag(reportId), "max");
 
   return { addressId, stillFailing: summary.failedModules };
 }
@@ -681,8 +782,11 @@ async function trySpendCredit(
   await sql`
     INSERT INTO report_usage (user_id, report_id) VALUES (${user.id}, ${reportId})
   `;
+  // The credit unlocks THIS run only (see the checkout webhook for why the
+  // flag no longer lives on the shared address row).
+  void addressId;
   await sql`
-    UPDATE addresses SET paid_at = COALESCE(paid_at, now()) WHERE id = ${addressId}
+    UPDATE reports SET paid_at = COALESCE(paid_at, now()) WHERE id = ${reportId}
   `;
   return { creditsLeft: spent[0].credits, quota, unlocked: true };
 }

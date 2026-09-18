@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getSessionUser } from "@/lib/auth";
+import { verifyFlowToken } from "@/lib/flow-token";
 import { generateReportForAddress } from "@/lib/pipeline";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
@@ -17,12 +18,12 @@ export const dynamic = "force-dynamic";
 // call later doesn't require route surgery.
 export const maxDuration = 60;
 
-const BodySchema = z.object({ addressId: z.string().uuid() });
+const BodySchema = z.object({ addressId: z.string().uuid(), token: z.string().min(1) });
 
 export async function POST(req: Request) {
   // Will call the Anthropic API once Task ④ lands: keep the same ceiling
   // as the fetch pipeline it always follows.
-  const limited = enforceRateLimit("generate-narrative", req, { limit: 5, windowSec: 600 });
+  const limited = await enforceRateLimit("generate-narrative", req, { limit: 5, windowSec: 600 });
   if (limited) return limited;
 
   let parsed: z.infer<typeof BodySchema>;
@@ -33,6 +34,12 @@ export async function POST(req: Request) {
       { error: "invalid body", details: String(err) },
       { status: 400 },
     );
+  }
+  // Same gate as /api/fetch-overlays: the flow token proves the addressId
+  // came from our geocoder, so a replayed UUID cannot mint report rows
+  // (or, for subscribers, spend credits).
+  if (!(await verifyFlowToken(parsed.token, parsed.addressId))) {
+    return NextResponse.json({ error: "invalid or expired flow token" }, { status: 401 });
   }
   try {
     const user = await getSessionUser();

@@ -24,7 +24,7 @@ const GENERIC = {
 
 export async function POST(req: Request) {
   // Email-bombing / enumeration-probing guard: 5 requests per hour per IP.
-  const limited = enforceRateLimit("forgot-password", req, { limit: 5, windowSec: 3600 });
+  const limited = await enforceRateLimit("forgot-password", req, { limit: 5, windowSec: 3600 });
   if (limited) return limited;
 
   let body: z.infer<typeof BodySchema>;

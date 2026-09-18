@@ -19,7 +19,7 @@ const BodySchema = z.object({
 
 export async function POST(req: Request) {
   // Bulk account-creation guard: 5 signups per hour per IP.
-  const limited = enforceRateLimit("signup", req, { limit: 5, windowSec: 3600 });
+  const limited = await enforceRateLimit("signup", req, { limit: 5, windowSec: 3600 });
   if (limited) return limited;
 
   let body: z.infer<typeof BodySchema>;

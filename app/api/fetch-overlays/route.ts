@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { verifyFlowToken } from "@/lib/flow-token";
 import { fetchOverlaysForAddress } from "@/lib/pipeline";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
@@ -15,12 +16,12 @@ export const dynamic = "force-dynamic";
 // 1-3 s; allow a wide safety margin for tile / endpoint slowness.
 export const maxDuration = 60;
 
-const BodySchema = z.object({ addressId: z.string().uuid() });
+const BodySchema = z.object({ addressId: z.string().uuid(), token: z.string().min(1) });
 
 export async function POST(req: Request) {
-  // The most expensive route in the app (~25 upstream ArcGIS calls +
-  // 15 DB writes). 5 runs per 10 min per IP is plenty for a real user.
-  const limited = enforceRateLimit("fetch-overlays", req, { limit: 5, windowSec: 600 });
+  // The most expensive route in the app (~100 upstream ArcGIS calls +
+  // 20 DB writes). 5 runs per 10 min per IP is plenty for a real user.
+  const limited = await enforceRateLimit("fetch-overlays", req, { limit: 5, windowSec: 600 });
   if (limited) return limited;
 
   let parsed: z.infer<typeof BodySchema>;
@@ -31,6 +32,12 @@ export async function POST(req: Request) {
       { error: "invalid body", details: String(err) },
       { status: 400 },
     );
+  }
+  // Anonymous callers are legitimate (single-report paywall), so the gate
+  // is the flow token /api/geocode issued for this addressId, not a
+  // session: a UUID lifted from a report URL cannot start a fan-out.
+  if (!(await verifyFlowToken(parsed.token, parsed.addressId))) {
+    return NextResponse.json({ error: "invalid or expired flow token" }, { status: 401 });
   }
   try {
     const summary = await fetchOverlaysForAddress(parsed.addressId);

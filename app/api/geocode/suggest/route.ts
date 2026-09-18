@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   // Fires per keystroke, so the ceiling is high: 300 per 10 min per IP
   // covers heavy typing while capping scripted autocomplete scraping
   // (which burns paid Google Places quota when that provider is active).
-  const limited = enforceRateLimit("suggest", req, { limit: 300, windowSec: 600 });
+  const limited = await enforceRateLimit("suggest", req, { limit: 300, windowSec: 600 });
   if (limited) return limited;
 
   let parsed: z.infer<typeof BodySchema>;

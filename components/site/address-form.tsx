@@ -245,12 +245,15 @@ export function AddressForm({
       const geoBody = await geo.json();
       if (!geo.ok) throw new Error(geoBody.error ?? "geocoding failed");
       const addressId: string = geoBody.addressId;
+      // Short-lived proof that this addressId came from our geocoder: the
+      // two expensive routes below refuse a bare id.
+      const token: string = geoBody.token;
 
       setStep("overlays");
       const fo = await fetch("/api/fetch-overlays", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addressId }),
+        body: JSON.stringify({ addressId, token }),
       });
       const foBody = await fo.json();
       if (!fo.ok) throw new Error(foBody.error ?? "overlay fetch failed");
@@ -259,7 +262,7 @@ export function AddressForm({
       const gn = await fetch("/api/generate-narrative", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ addressId }),
+        body: JSON.stringify({ addressId, token }),
       });
       const gnBody = await gn.json();
       if (!gn.ok) throw new Error(gnBody.error ?? "narrative generation failed");

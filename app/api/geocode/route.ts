@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getDb } from "@/lib/db";
+import { signFlowToken } from "@/lib/flow-token";
 import { geocodeAddress } from "@/lib/geocoder";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
@@ -22,7 +23,7 @@ const BodySchema = z.object({ address: z.string().min(3).max(300) });
 export async function POST(req: Request) {
   // Full geocodes are one-per-report-flow; 30 per 10 min per IP is ample
   // for a human and stops scripted scraping of the geocoder.
-  const limited = enforceRateLimit("geocode", req, { limit: 30, windowSec: 600 });
+  const limited = await enforceRateLimit("geocode", req, { limit: 30, windowSec: 600 });
   if (limited) return limited;
 
   let parsed: z.infer<typeof BodySchema>;
@@ -85,10 +86,14 @@ export async function POST(req: Request) {
     );
   }
 
+  // The token is what /api/fetch-overlays and /api/generate-narrative
+  // accept in place of a session: it proves this addressId came from
+  // this endpoint moments ago (see lib/flow-token.ts).
   return NextResponse.json({
     addressId,
     lat,
     lng,
     displayName: hit.displayName,
+    token: await signFlowToken(addressId),
   });
 }

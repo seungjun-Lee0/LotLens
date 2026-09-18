@@ -22,7 +22,7 @@ const BodySchema = z.object({
 });
 
 export async function POST(req: Request) {
-  const limited = enforceRateLimit("parcel", req, { limit: 30, windowSec: 600 });
+  const limited = await enforceRateLimit("parcel", req, { limit: 30, windowSec: 600 });
   if (limited) return limited;
 
   let parsed: z.infer<typeof BodySchema>;

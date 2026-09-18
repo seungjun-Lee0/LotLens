@@ -19,7 +19,7 @@ const BodySchema = z.object({
 
 export async function POST(req: Request) {
   // Token brute-force guard: 10 attempts per hour per IP.
-  const limited = enforceRateLimit("reset-password", req, { limit: 10, windowSec: 3600 });
+  const limited = await enforceRateLimit("reset-password", req, { limit: 10, windowSec: 3600 });
   if (limited) return limited;
 
   let body: z.infer<typeof BodySchema>;

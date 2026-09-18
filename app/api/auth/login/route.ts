@@ -17,7 +17,7 @@ const BodySchema = z.object({
 
 export async function POST(req: Request) {
   // Credential-stuffing guard: 10 attempts per 10 minutes per IP.
-  const limited = enforceRateLimit("login", req, { limit: 10, windowSec: 600 });
+  const limited = await enforceRateLimit("login", req, { limit: 10, windowSec: 600 });
   if (limited) return limited;
 
   let body: z.infer<typeof BodySchema>;

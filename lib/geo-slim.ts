@@ -3,23 +3,33 @@
 // Some statutory overlays are enormous: the Brisbane River flood planning
 // area is a ~7 MB multipolygon with thousands of parts tracing the whole
 // river. Storing it verbatim costs seconds of Neon upload per report and
-// again on every read. The report map only ever shows a ~300 m viewport,
-// so around a centre point we can safely:
-//   1. drop multipolygon parts / rings whose bbox is entirely outside a
-//      generous keep-window (±0.02° ≈ 2.2 km),
-//   2. round coordinates to 6 dp (~0.1 m), and
-//   3. decimate any ring with more vertices than MAX_RING_VERTICES
+// again on every read. The report map frames a ~230 m-wide viewport, so
+// around a centre point we can safely:
+//   1. CLIP every polygon to a keep-window (±0.006° ≈ 660 m half-width:
+//      the map frame plus room to drag it), dropping parts entirely
+//      outside it. A true boolean clip (polygon-clipping), not a bbox
+//      filter: a river-length part whose bbox touches the window used to
+//      survive whole, which is how one address stored 6 MB of polygon
+//      the map never drew;
+//   2. drop line parts whose bbox misses the window;
+//   3. round coordinates to 6 dp (~0.1 m), and
+//   4. decimate any ring with more vertices than MAX_RING_VERTICES
 //      (endpoints preserved so rings stay closed).
 //
-// Attributes and structure are untouched: risk classification happens
-// before slimming, this only affects what gets drawn.
+// Points pass through untouched (transport stops sit up to 2 km out and
+// the map frames them). Attributes and structure are untouched: risk
+// classification happens before slimming, this only affects what gets
+// drawn.
+
+import polygonClipping from "polygon-clipping";
 
 const MAX_RING_VERTICES = 1200;
 /** Half-width of the keep-window around the property (degrees). */
-const KEEP_RADIUS_DEG = 0.02;
+const KEEP_RADIUS_DEG = 0.006;
 
 type Position = number[];
 type Bbox = { xMin: number; yMin: number; xMax: number; yMax: number };
+type Ring = [number, number][];
 
 function round(p: Position): Position {
   return p.map((n) => Math.round(n * 1e6) / 1e6);
@@ -37,7 +47,7 @@ function slimRing(ring: Position[]): Position[] {
   return out;
 }
 
-function ringBboxIntersects(ring: Position[], view: Bbox): boolean {
+function ringBbox(ring: Position[]): Bbox {
   let xMin = Infinity, yMin = Infinity, xMax = -Infinity, yMax = -Infinity;
   for (const [x, y] of ring) {
     if (x < xMin) xMin = x;
@@ -45,7 +55,49 @@ function ringBboxIntersects(ring: Position[], view: Bbox): boolean {
     if (y < yMin) yMin = y;
     if (y > yMax) yMax = y;
   }
-  return xMin <= view.xMax && xMax >= view.xMin && yMin <= view.yMax && yMax >= view.yMin;
+  return { xMin, yMin, xMax, yMax };
+}
+
+function bboxIntersects(a: Bbox, view: Bbox): boolean {
+  return a.xMin <= view.xMax && a.xMax >= view.xMin && a.yMin <= view.yMax && a.yMax >= view.yMin;
+}
+
+function bboxWithin(a: Bbox, view: Bbox): boolean {
+  return a.xMin >= view.xMin && a.xMax <= view.xMax && a.yMin >= view.yMin && a.yMax <= view.yMax;
+}
+
+function ringArea(ring: Position[]): number {
+  let s = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    s += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+  }
+  return Math.abs(s) / 2;
+}
+
+/**
+ * Clip one polygon (outer ring + holes) to the window. Three cases, cheap
+ * to expensive: bbox misses → gone; bbox inside → untouched; straddles →
+ * boolean intersection. Rings are ordered largest-first before the clip
+ * because ArcGIS GeoJSON does not reliably put the exterior first and the
+ * library takes ring order literally (a hole listed first would make the
+ * whole part a hole).
+ */
+function clipPolygon(poly: Position[][], view: Bbox): Position[][][] {
+  if (poly.length === 0 || !poly[0]) return [];
+  const outerBox = ringBbox(poly[0]);
+  if (!bboxIntersects(outerBox, view)) return [];
+  if (bboxWithin(outerBox, view)) return [poly];
+  const ordered = [...poly].sort((a, b) => ringArea(b) - ringArea(a)) as Ring[];
+  const window: Ring[] = [[
+    [view.xMin, view.yMin], [view.xMax, view.yMin], [view.xMax, view.yMax], [view.xMin, view.yMax], [view.xMin, view.yMin],
+  ]];
+  try {
+    return polygonClipping.intersection([ordered], [window]) as Position[][][];
+  } catch {
+    // Degenerate input (self-touching rings the library rejects): keep
+    // the bbox-filtered original rather than lose the feature.
+    return [poly];
+  }
 }
 
 type GeometryLike = { type?: unknown; coordinates?: unknown };
@@ -56,27 +108,26 @@ function slimGeometry(geom: GeometryLike, view: Bbox | null): unknown {
   const c = geom.coordinates;
   if (t === "Polygon" && Array.isArray(c)) {
     const rings = c as Position[][];
-    if (view && rings[0] && !ringBboxIntersects(rings[0], view)) return null;
-    return { ...geom, coordinates: rings.map(slimRing) };
+    if (!view) return { ...geom, coordinates: rings.map(slimRing) };
+    const parts = clipPolygon(rings, view);
+    if (parts.length === 0) return null;
+    if (parts.length === 1) return { type: "Polygon", coordinates: parts[0].map(slimRing) };
+    return { type: "MultiPolygon", coordinates: parts.map((p) => p.map(slimRing)) };
   }
   if (t === "MultiPolygon" && Array.isArray(c)) {
-    const polys = (c as Position[][][]).filter(
-      (poly) => !view || (poly[0] && ringBboxIntersects(poly[0], view)),
-    );
-    if (polys.length === 0) return null;
-    return {
-      ...geom,
-      coordinates: polys.map((poly) => poly.map(slimRing)),
-    };
+    const polys = c as Position[][][];
+    const parts = view ? polys.flatMap((poly) => clipPolygon(poly, view)) : polys;
+    if (parts.length === 0) return null;
+    return { ...geom, coordinates: parts.map((poly) => poly.map(slimRing)) };
   }
   if (t === "LineString" && Array.isArray(c)) {
     const line = c as Position[];
-    if (view && !ringBboxIntersects(line, view)) return null;
+    if (view && !bboxIntersects(ringBbox(line), view)) return null;
     return { ...geom, coordinates: slimRing(line) };
   }
   if (t === "MultiLineString" && Array.isArray(c)) {
     const lines = (c as Position[][]).filter(
-      (l) => !view || ringBboxIntersects(l, view),
+      (l) => !view || bboxIntersects(ringBbox(l), view),
     );
     if (lines.length === 0) return null;
     return { ...geom, coordinates: lines.map(slimRing) };

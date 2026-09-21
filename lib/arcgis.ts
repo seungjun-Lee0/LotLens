@@ -58,7 +58,121 @@ export type QueryArcGISParams = {
    * precedence over bufferDegrees. Ignored for non-polygon geometry.
    */
   lotPolygon?: Geometry | null;
+  /**
+   * Ask for quantized JSON instead of GeoJSON: coordinates come back as
+   * integer deltas on a grid of `maxAllowableOffset` (default 3 m) cells
+   * anchored to the query envelope, and are decoded here. Same fidelity as
+   * the GeoJSON path's generalisation, at a quarter of the bytes: the
+   * Brisbane River flood planning area context went from 23 MB / 19 s to
+   * 6 MB / 6 s. Only applies with returnGeometry; a server that rejects
+   * quantization is retried once without it.
+   */
+  quantize?: boolean;
 };
+
+// ── Quantized-JSON decoding ───────────────────────────────────────────────
+
+type EsriTransform = {
+  originPosition?: "upperLeft" | "lowerLeft";
+  scale: [number, number];
+  translate: [number, number];
+};
+type EsriQuantizedFeature = {
+  attributes?: Record<string, unknown>;
+  geometry?: {
+    x?: number;
+    y?: number;
+    points?: number[][];
+    paths?: number[][][];
+    rings?: number[][][];
+  } | null;
+};
+type EsriQuantizedResponse = {
+  geometryType?: string;
+  transform?: EsriTransform;
+  features?: EsriQuantizedFeature[];
+  error?: { code?: number; message?: string; details?: string[] };
+};
+
+const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
+
+/** One quantized part (ring or path): first vertex absolute, rest deltas. */
+function dequantizePart(part: number[][], t: EsriTransform): [number, number][] {
+  const [sx, sy] = t.scale;
+  const [tx, ty] = t.translate;
+  const flip = t.originPosition !== "lowerLeft";
+  const out: [number, number][] = [];
+  let qx = 0;
+  let qy = 0;
+  for (let i = 0; i < part.length; i++) {
+    const [dx, dy] = part[i];
+    if (i === 0) {
+      qx = dx;
+      qy = dy;
+    } else {
+      qx += dx;
+      qy += dy;
+    }
+    out.push([round6(tx + qx * sx), round6(flip ? ty - qy * sy : ty + qy * sy)]);
+  }
+  return out;
+}
+
+function signedArea(ring: [number, number][]): number {
+  let s = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    s += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+  }
+  return s / 2;
+}
+
+/**
+ * Esri rings → GeoJSON. Esri lists exterior rings clockwise and holes
+ * counter-clockwise, holes after their exterior; group on orientation so
+ * a multipart polygon becomes a MultiPolygon rather than N filled rings.
+ */
+function ringsToGeometry(rings: number[][][], t: EsriTransform): Geometry | null {
+  const polys: [number, number][][][] = [];
+  for (const raw of rings) {
+    const ring = dequantizePart(raw, t);
+    if (ring.length < 4) continue;
+    const exterior = signedArea(ring) < 0; // clockwise
+    if (exterior || polys.length === 0) polys.push([ring]);
+    else polys[polys.length - 1].push(ring);
+  }
+  if (polys.length === 0) return null;
+  return polys.length === 1
+    ? { type: "Polygon", coordinates: polys[0] }
+    : { type: "MultiPolygon", coordinates: polys };
+}
+
+function quantizedToGeoJSON(
+  body: EsriQuantizedResponse,
+): FeatureCollection<Geometry | null, GeoJsonProperties> {
+  const t = body.transform;
+  const features = (body.features ?? []).map((f) => {
+    let geometry: Geometry | null = null;
+    const g = f.geometry;
+    if (g && t) {
+      if (g.rings) geometry = ringsToGeometry(g.rings, t);
+      else if (g.paths) {
+        const lines = g.paths.map((p) => dequantizePart(p, t)).filter((l) => l.length >= 2);
+        geometry =
+          lines.length === 0 ? null
+          : lines.length === 1 ? { type: "LineString", coordinates: lines[0] }
+          : { type: "MultiLineString", coordinates: lines };
+      } else if (g.points) {
+        // Multipoint: every point absolute, not delta-encoded.
+        const pts = g.points.map(([qx, qy]) => dequantizePart([[qx, qy]], t)[0]);
+        geometry = { type: "MultiPoint", coordinates: pts };
+      } else if (typeof g.x === "number" && typeof g.y === "number") {
+        geometry = { type: "Point", coordinates: dequantizePart([[g.x, g.y]], t)[0] };
+      }
+    }
+    return { type: "Feature" as const, geometry, properties: f.attributes ?? {} };
+  });
+  return { type: "FeatureCollection", features };
+}
 
 /** GeoJSON Polygon/MultiPolygon → esri rings array, or null if not a polygon. */
 function esriRings(g: Geometry): number[][][] | null {
@@ -146,6 +260,27 @@ export async function queryArcGIS(
   endpoint: string,
   params: QueryArcGISParams,
 ): Promise<FeatureCollection<Geometry | null, GeoJsonProperties>> {
+  if (params.quantize && params.returnGeometry) {
+    try {
+      return await queryArcGISOnce(endpoint, params, true);
+    } catch (err) {
+      // A layer that rejects quantizationParameters answers with an ArcGIS
+      // error (4xx-class, not retried above): ask again the plain way.
+      if (err instanceof ArcGISError && (err.status ?? 0) < 500) {
+        if (DEBUG) console.log("[arcgis] quantized query refused, retrying plain:", endpoint);
+        return queryArcGISOnce(endpoint, params, false);
+      }
+      throw err;
+    }
+  }
+  return queryArcGISOnce(endpoint, params, false);
+}
+
+async function queryArcGISOnce(
+  endpoint: string,
+  params: QueryArcGISParams,
+  quantize: boolean,
+): Promise<FeatureCollection<Geometry | null, GeoJsonProperties>> {
   const sr = params.inSR ?? params.geometry.spatialReference ?? 4326;
   const buf = params.bufferDegrees ?? 0;
   const rings = params.lotPolygon ? esriRings(params.lotPolygon) : null;
@@ -187,6 +322,37 @@ export async function queryArcGIS(
     // The offset is expressed in *output* SR units. We outSR=4326 so the
     // offset is in degrees; ~9e-5 ≈ 10m at Brisbane's latitude.
     search.set("maxAllowableOffset", String(params.maxAllowableOffset));
+  }
+  if (quantize) {
+    // Grid the coordinates on the generalisation tolerance, anchored to
+    // the query's own extent (a polygon query anchors to its bbox).
+    const tolerance = params.maxAllowableOffset ?? 0.00003;
+    let extent: { xmin: number; ymin: number; xmax: number; ymax: number };
+    if (rings) {
+      let xmin = Infinity, ymin = Infinity, xmax = -Infinity, ymax = -Infinity;
+      for (const ring of rings) for (const [x, y] of ring) {
+        if (x < xmin) xmin = x; if (x > xmax) xmax = x;
+        if (y < ymin) ymin = y; if (y > ymax) ymax = y;
+      }
+      extent = { xmin, ymin, xmax, ymax };
+    } else {
+      const b = Math.max(buf, tolerance);
+      extent = {
+        xmin: params.geometry.x - b, ymin: params.geometry.y - b,
+        xmax: params.geometry.x + b, ymax: params.geometry.y + b,
+      };
+    }
+    search.set("f", "json");
+    search.delete("geometryPrecision");
+    search.set(
+      "quantizationParameters",
+      JSON.stringify({
+        mode: "view",
+        originPosition: "upperLeft",
+        tolerance,
+        extent: { ...extent, spatialReference: { wkid: 4326 } },
+      }),
+    );
   }
   const url = `${endpoint}?${search.toString()}`;
   // Polygon queries always go as form POSTs: every ArcGIS server accepts
@@ -272,6 +438,7 @@ export async function queryArcGIS(
   }
   const json = (await res.json()) as
     | FeatureCollection<Geometry | null, GeoJsonProperties>
+    | EsriQuantizedResponse
     | { error?: { code?: number; message?: string; details?: string[] } };
 
   if ("error" in json && json.error) {
@@ -281,6 +448,16 @@ export async function queryArcGIS(
       json.error.code,
       JSON.stringify(json.error.details ?? []),
     );
+  }
+  if (quantize) {
+    const q = json as EsriQuantizedResponse;
+    // A server that ignored quantizationParameters answers with plain
+    // (untransformed) JSON: no `transform` means the coordinates are real
+    // and must not be decoded as deltas. Treat as a refusal.
+    if (!q.transform) {
+      throw new ArcGISError("quantization not applied", endpoint, 400);
+    }
+    return quantizedToGeoJSON(q);
   }
   return json as FeatureCollection<Geometry | null, GeoJsonProperties>;
   } finally {

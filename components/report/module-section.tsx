@@ -13,7 +13,13 @@ import {
 } from "@/lib/overlays";
 import type { ReportModuleRow } from "@/lib/pipeline";
 import { SELECTED_PROPERTY_STYLE } from "@/lib/property-style";
-import { isInformational, RISK_STYLE } from "@/lib/risk-style";
+import {
+  isInformational,
+  isNoSourceText,
+  isUnavailable,
+  NO_SOURCE_LABEL,
+  RISK_STYLE,
+} from "@/lib/risk-style";
 import type { Module, RiskLevel } from "@/lib/db";
 import { prettyUrl } from "@/lib/url";
 
@@ -48,11 +54,14 @@ function ModuleFacts({
   // Council-overlay modules outside adapted LGAs mark themselves
   // unavailable: surface the note instead of module facts.
   if (raw.available === false) {
+    // The generic line is already on the status pill: only a specific
+    // note earns a panel.
+    if (typeof raw.availabilityNote !== "string" || isNoSourceText(raw.availabilityNote)) {
+      return null;
+    }
     return (
       <p className="rounded-xl border border-dashed border-border/70 bg-muted/40 p-3 text-[12.5px] leading-relaxed text-muted-foreground">
-        {typeof raw.availabilityNote === "string"
-          ? raw.availabilityNote
-          : "LotLens does not provide this council overlay for the property location. Confirm it through the council's planning mapping."}
+        {raw.availabilityNote}
       </p>
     );
   }
@@ -95,10 +104,17 @@ function ModuleFacts({
     case "bushfire": {
       const cat = raw.hazardCategory as string | null;
       const code = raw.hazardCode as string | null;
+      const council = (raw.councilCategory as string | null | undefined) ?? null;
       return (
         <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           <dt className="text-muted-foreground">Hazard category</dt>
           <dd className="font-medium">{cat ?? "Not stated"}</dd>
+          {council && council !== cat && (
+            <>
+              <dt className="text-muted-foreground">Council overlay</dt>
+              <dd className="font-medium">{council}</dd>
+            </>
+          )}
           <dt className="text-muted-foreground">Code</dt>
           <dd className="font-mono text-[11px]">{code ?? "Not stated"}</dd>
         </dl>
@@ -124,7 +140,8 @@ function ModuleFacts({
     case "flood_planning": {
       const river = raw.riverArea as string | null;
       const creek = raw.creekArea as string | null;
-      if (!river && !creek) return null;
+      const overland = (raw.overlandArea as string | null | undefined) ?? null;
+      if (!river && !creek && !overland) return null;
       return (
         <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           {river && (
@@ -137,6 +154,12 @@ function ModuleFacts({
             <>
               <dt className="text-muted-foreground">Creek area</dt>
               <dd className="font-medium">{creek}</dd>
+            </>
+          )}
+          {overland && (
+            <>
+              <dt className="text-muted-foreground">Overland flow</dt>
+              <dd className="font-medium">{overland}</dd>
             </>
           )}
         </dl>
@@ -231,10 +254,18 @@ function ModuleFacts({
     }
     case "easements": {
       const desc = raw.description as string | null;
-      const cadastral = (raw.cadastralEasements as
-        | Array<{ lotplan?: string | null; areaSqm?: number | null }>
-        | undefined) ?? [];
-      if (!desc && cadastral.length === 0) return null;
+      type EasementRow = { lotplan?: string | null; areaSqm?: number | null };
+      const cadastral = (raw.cadastralEasements as EasementRow[] | undefined) ?? [];
+      const adjoining = (raw.adjoiningEasements as EasementRow[] | undefined) ?? [];
+      if (!desc && cadastral.length === 0 && adjoining.length === 0) return null;
+      const list = (rows: EasementRow[]) =>
+        rows
+          .map((e) =>
+            e.lotplan
+              ? `${e.lotplan}${e.areaSqm ? ` · ${Math.round(e.areaSqm)} m²` : ""}`
+              : "Easement parcel",
+          )
+          .join(", ");
       return (
         <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           {desc && (
@@ -246,15 +277,13 @@ function ModuleFacts({
           {cadastral.length > 0 && (
             <>
               <dt className="text-muted-foreground">Cadastral parcels</dt>
-              <dd className="font-medium">
-                {cadastral
-                  .map((e) =>
-                    e.lotplan
-                      ? `${e.lotplan}${e.areaSqm ? ` · ${Math.round(e.areaSqm)} m²` : ""}`
-                      : "Easement parcel",
-                  )
-                  .join(", ")}
-              </dd>
+              <dd className="font-medium">{list(cadastral)}</dd>
+            </>
+          )}
+          {adjoining.length > 0 && (
+            <>
+              <dt className="text-muted-foreground">Adjoining the lot</dt>
+              <dd className="font-medium">{list(adjoining)}</dd>
             </>
           )}
         </dl>
@@ -383,6 +412,55 @@ function ModuleFacts({
         </dl>
       );
     }
+    case "internet": {
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">Access network</dt>
+          <dd className="font-medium">{typeof raw.accessNetwork === "string" ? raw.accessNetwork : "Outside footprints (satellite)"}</dd>
+          <dt className="text-muted-foreground">Fixed line</dt>
+          <dd className="font-medium">{raw.fixedLine === true ? "In footprint" : "No"}</dd>
+          <dt className="text-muted-foreground">Fixed wireless</dt>
+          <dd className="font-medium">{raw.fixedWireless === true ? "In footprint" : "No"}</dd>
+          <dt className="text-muted-foreground">Data vintage</dt>
+          <dd className="font-medium">March 2024</dd>
+        </dl>
+      );
+    }
+    case "boundary": {
+      const edges = Array.isArray(raw.edges)
+        ? (raw.edges as { lengthM: number; approx: boolean }[])
+        : [];
+      const area = typeof raw.areaM2 === "number" ? raw.areaM2 : null;
+      const perimeter = typeof raw.perimeterM === "number" ? raw.perimeterM : null;
+      const sorted = [...edges].sort((a, b) => b.lengthM - a.lengthM);
+      return (
+        <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
+          <dt className="text-muted-foreground">Area</dt>
+          <dd className="font-medium">
+            {area === null
+              ? "Not measured"
+              : `${area.toLocaleString()} m²${raw.areaFromRegister === true ? "" : " (estimated)"}`}
+          </dd>
+          <dt className="text-muted-foreground">Perimeter</dt>
+          <dd className="font-medium">{perimeter === null ? "Not measured" : `~${perimeter.toFixed(0)} m`}</dd>
+          <dt className="text-muted-foreground">Sides</dt>
+          <dd className="font-medium">
+            {edges.length === 0
+              ? "Not measured"
+              : sorted
+                  .slice(0, 8)
+                  .map((e) => `${e.approx ? "~" : ""}${e.lengthM.toFixed(1)} m`)
+                  .join(" · ") + (sorted.length > 8 ? " …" : "")}
+          </dd>
+          {typeof raw.lotPlan === "string" && (
+            <>
+              <dt className="text-muted-foreground">Lot / plan</dt>
+              <dd className="font-medium">{raw.lotPlan}</dd>
+            </>
+          )}
+        </dl>
+      );
+    }
     case "power": {
       const assets = Array.isArray(raw.assets)
         ? (raw.assets as { kind: string; klass: string }[])
@@ -437,7 +515,7 @@ function ModuleFacts({
                   a.depthM ? `${a.depthM} m deep` : null,
                 ]
                   .filter(Boolean)
-                  .join(" · ") || "Urban Utilities asset"}
+                  .join(" · ") || "Retailer asset"}
               </dd>
             </Fragment>
           ))}
@@ -446,7 +524,7 @@ function ModuleFacts({
             {severe
               ? "Generally not permitted: trunk or pressure main"
               : raw.hasMainOnLot === true
-                ? "Urban Utilities approval required"
+                ? "Retailer build-over approval required"
                 : "Not triggered by mapped assets"}
           </dd>
         </dl>
@@ -571,11 +649,15 @@ function StatusPill({
   hasConsideration,
   risk,
   failed = false,
+  unavailable = false,
 }: {
   hasConsideration: boolean;
   risk: RiskLevel;
   /** Source unreachable this run: neutral "couldn't check", not green. */
   failed?: boolean;
+  /** No source layer for this LGA: nothing was checked, so never the
+   * green "No considerations identified" tick. */
+  unavailable?: boolean;
 }) {
   // Severity is colour-coded on ONE shared scale (lib/risk-style.ts) -
   // never the module tint, or a heritage "high" and a flooding "low"
@@ -585,12 +667,19 @@ function StatusPill({
   // warnings, so they get the off-ramp grey and an info glyph. Without
   // this branch a school catchment renders as a gold ⚠, which is what
   // this whole lane exists to stop.
-  const info = !failed && isInformational(risk, hasConsideration);
+  const info = !failed && !unavailable && isInformational(risk, hasConsideration);
   const color = failed
     ? "var(--apple-orange)"
-    : RISK_STYLE[hasConsideration ? risk : "none"].cssVar;
-  const Icon = failed || (hasConsideration && !info) ? TriangleAlert : info ? Info : Check;
-  const riskLabel = hasConsideration && !info ? RISK_STYLE[risk].label : "";
+    : unavailable
+      ? RISK_STYLE.informational.cssVar
+      : RISK_STYLE[hasConsideration ? risk : "none"].cssVar;
+  const Icon =
+    failed || (hasConsideration && !info && !unavailable)
+      ? TriangleAlert
+      : info || unavailable
+        ? Info
+        : Check;
+  const riskLabel = hasConsideration && !info && !unavailable ? RISK_STYLE[risk].label : "";
   return (
     <div
       className="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
@@ -607,11 +696,13 @@ function StatusPill({
       </span>
       {failed
         ? "Verification pending"
-        : info
-          ? "For information"
-          : hasConsideration
-            ? `Considerations${riskLabel ? ` · ${riskLabel}` : ""}`
-            : "No considerations identified"}
+        : unavailable
+          ? NO_SOURCE_LABEL
+          : info
+            ? "For information"
+            : hasConsideration
+              ? `Considerations${riskLabel ? ` · ${riskLabel}` : ""}`
+              : "No considerations identified"}
     </div>
   );
 }
@@ -622,6 +713,9 @@ function legendItemsFromOverlays(overlays: OverlayFeature[]): { color: string; l
   const seen = new Set<string>();
   const items: { color: string; label: string }[] = [];
   for (const f of overlays) {
+    // Labelled points (boundary side lengths) carry their information on
+    // the map itself: no legend row.
+    if (f.properties.textLabel) continue;
     // Contours share one label across the whole colour ramp, so keying on
     // colour would list "Contour line" once per shade.
     const key =
@@ -742,11 +836,17 @@ export function ModuleSection({
   lng,
   propertyPolygon = null,
   lotLines = null,
+  reportId = null,
 }: {
   row: ReportModuleRow;
   narrative: ModuleNarrative | undefined;
   lat: number;
   lng: number;
+  /** When set, the map fetches its overlay geometry on demand from
+   * /api/report/[id]/overlays/[module] instead of receiving it inline:
+   * the RSC payload then carries only the legend, not every polygon of
+   * every section. */
+  reportId?: string | null;
   propertyPolygon?: unknown | null;
   lotLines?: unknown | null;
 }) {
@@ -807,8 +907,11 @@ export function ModuleSection({
           lat={lat}
           lng={lng}
           className="h-64 sm:h-80 lg:h-96"
-          overlays={mapOverlays}
-          applicableOverlays={applicableOverlays}
+          overlays={reportId ? [] : mapOverlays}
+          overlaysUrl={reportId ? `/api/report/${reportId}/overlays/${row.module}` : null}
+          // Legend-only features: the property-scoped pass carries labels
+          // without geometry, so this stays small.
+          applicableOverlays={applicableOverlays.map((f) => ({ ...f, geometry: null }))}
           propertyPolygon={propertyPolygon}
           // Lot boundary lines only add value on the zoning map (they make the
           // dissolved zone fill read per-lot). Other modules don't need them.
@@ -818,7 +921,7 @@ export function ModuleSection({
           fitPoints={row.module === "transport"}
           // Contours colour the entire viewport, so a tighter frame keeps
           // the lot legible inside the everywhere-layer.
-          tightFrame={row.module === "steep_land"}
+          tightFrame={row.module === "steep_land" || row.module === "boundary"}
         />
       </div>
 
@@ -829,10 +932,13 @@ export function ModuleSection({
             hasConsideration={row.hasConsideration}
             risk={risk}
             failed={raw?.fetchFailed === true}
+            unavailable={isUnavailable(raw)}
           />
         </div>
 
-        {narrative?.summary && (
+        {/* Unavailable modules: the pill is the whole finding. A stored
+            narrative (even an older, wordier one) would only restate it. */}
+        {narrative?.summary && !isUnavailable(raw) && !isNoSourceText(narrative.summary) && (
           <p
             className="text-[15px] leading-snug text-foreground text-pretty sm:text-[16.5px]"
             style={{ fontWeight: 500 }}
@@ -857,7 +963,7 @@ export function ModuleSection({
                 {p}
               </p>
             ))}
-            {narrative?.detail && (
+            {narrative?.detail && !isUnavailable(raw) && !isNoSourceText(narrative.detail) && (
               <div
                 className="rounded-2xl p-4"
                 style={{
@@ -978,6 +1084,16 @@ export function ModuleSection({
                   </li>
                 ))}
               </ul>
+            </div>
+          ) : isUnavailable(raw) ? (
+            // Say so explicitly rather than dropping the block: an absent
+            // References list reads as an oversight, not as "nothing was
+            // checked".
+            <div className="min-w-0">
+              <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                References
+              </h3>
+              <p className="text-[12.5px] text-muted-foreground">{NO_SOURCE_LABEL}.</p>
             </div>
           ) : null}
         </div>

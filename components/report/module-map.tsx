@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
+// Type-only: the library itself (~230 KB gzip) is imported inside
+// create(), the first time a map section nears the viewport, so the
+// report route's initial JS never carries it and an unpaid visitor who
+// only sees the preview map pays for one map, not the bundle.
+import type maplibregl from "maplibre-gl";
 
 import {
   CONTOUR_LEGEND_LABEL,
@@ -27,6 +30,15 @@ const BASEMAP: "qld" | "mapbox" | "esri" = "qld";
 const QLD_IMAGERY =
   "https://spatial-img.information.qld.gov.au/arcgis/rest/services/Basemaps/LatestStateProgram_AllUsers/ImageServer/exportImage" +
   "?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=512,512&format=jpeg&transparent=false&f=image";
+
+// Live fallback when the QLD ImageServer has one of its outages: after a
+// few failed tile fetches the raster source is swapped to Esri World
+// Imagery in place, so the map degrades to slightly softer satellite
+// instead of a grey void. (The QLD server drops out often enough that the
+// server-side pipeline retries every call to it.)
+const ESRI_IMAGERY =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+const QLD_ERRORS_BEFORE_FALLBACK = 3;
 
 // A small contrast + saturation lift punches the imagery up without touching
 // the overlay polygons or lot lines. Tune these two if it's over/under-cooked.
@@ -116,7 +128,8 @@ export function ModuleMap({
   lng,
   zoom = 16,
   className = "h-44 w-full",
-  overlays = [],
+  overlays: initialOverlays = [],
+  overlaysUrl = null,
   applicableOverlays = [],
   propertyPolygon = null,
   lotLines = null,
@@ -128,8 +141,15 @@ export function ModuleMap({
   zoom?: number;
   /** Tailwind size classes. Default "h-44 w-full". */
   className?: string;
-  /** Module-tagged polygon features. Empty array = pin-only map. */
+  /** Module-tagged polygon features. Empty array = pin-only map. Prefer
+   * `overlaysUrl` for report sections: inline geometry rides the RSC
+   * payload for every section on first paint. */
   overlays?: OverlayFeature[];
+  /** Fetch the overlay features from here when the map is first created
+   * (the section nears the viewport) instead of receiving them inline.
+   * Cached per component instance, so a destroy/re-create on scroll does
+   * not refetch. */
+  overlaysUrl?: string | null;
   /** Property-hit features used for the legend. Nearby context is excluded. */
   applicableOverlays?: OverlayFeature[];
   /** GeoJSON FeatureCollection of nearby cadastre lots, drawn as faint
@@ -157,11 +177,68 @@ export function ModuleMap({
   // only layers actually visible in this frame. A row for an off-screen
   // feature reads as "it's here somewhere" and sends the reader hunting.
   const [viewBox, setViewBox] = useState<ViewBox | null>(null);
+  // Overlay features actually drawn: the inline prop, or whatever
+  // `overlaysUrl` returned once the map was first created. The legend
+  // below the map reads from this too.
+  const [overlays, setOverlays] = useState<OverlayFeature[]>(initialOverlays);
+  const overlaysRef = useRef<OverlayFeature[] | null>(overlaysUrl ? null : initialOverlays);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
-    const map = new maplibregl.Map({
-      container: containerRef.current,
+    const el = containerRef.current;
+    if (!el) return;
+
+    // Each map is a WebGL context and browsers cap those at ~16 per page;
+    // a full report now carries more module sections than that. Mounting
+    // every map at once made the browser drop the OLDEST contexts, which
+    // left those maps blank (white) and threw inside MapLibre. So the map
+    // is created only when its section is near the viewport and torn down
+    // again once it scrolls well away: at most a handful live at a time.
+    // `generation` lets an in-flight create() notice that destroy() (or
+    // unmount) ran while it was awaiting the library or the overlays.
+    let generation = 0;
+    let creating = false;
+    const destroy = () => {
+      generation += 1;
+      creating = false;
+      mapRef.current?.remove();
+      mapRef.current = null;
+      baseFiltersRef.current = [];
+    };
+    const create = async () => {
+    if (mapRef.current || creating) return;
+    creating = true;
+    const gen = generation;
+    // Library and overlay data load together; both are cached after the
+    // first map on the page (module cache / overlaysRef), so a re-create
+    // after scrolling away costs neither.
+    const [{ default: ml }, feats] = await Promise.all([
+      import("maplibre-gl").then(async (m) => {
+        await import("maplibre-gl/dist/maplibre-gl.css");
+        return m;
+      }),
+      (async () => {
+        if (overlaysRef.current) return overlaysRef.current;
+        if (!overlaysUrl) return initialOverlays;
+        try {
+          const res = await fetch(overlaysUrl, { credentials: "same-origin" });
+          if (!res.ok) throw new Error(`overlays ${res.status}`);
+          const body = (await res.json()) as { overlays?: OverlayFeature[] };
+          overlaysRef.current = body.overlays ?? [];
+        } catch (err) {
+          console.warn("[module-map] overlays fetch failed:", (err as Error).message);
+          overlaysRef.current = [];
+        }
+        return overlaysRef.current;
+      })(),
+    ]);
+    if (gen !== generation || !containerRef.current) {
+      creating = false;
+      return; // destroyed or unmounted while loading
+    }
+    const overlays = feats;
+    setOverlays(feats);
+    const map = new ml.Map({
+      container: el,
       center: [lng, lat],
       zoom,
       // The compact control adds an info-button beside the attribution.
@@ -172,11 +249,38 @@ export function ModuleMap({
       style: buildBasemapStyle(),
     });
     mapRef.current = map;
+    creating = false;
 
     // Tapping the map clears any legend isolate — an intuitive "show all"
     // that never fights the user with a timer. (Legend taps hit the HTML
     // overlay, not the canvas, so they don't trigger this.)
     map.on("click", () => setIsolated(null));
+
+    // Basemap resilience: swap to Esri World Imagery after repeated QLD
+    // tile-fetch failures (their ImageServer drops out periodically; the
+    // errors surface as AJAXError "Failed to fetch"). Swapping the tiles
+    // in place keeps every overlay layer and the camera untouched.
+    let qldTileErrors = 0;
+    let basemapSwapped = false;
+    map.on("error", (e) => {
+      if (basemapSwapped) return;
+      const evt = e as { sourceId?: string; error?: Error };
+      const failedFetch =
+        evt.sourceId === "qld" ||
+        /failed to fetch|ajaxerror/i.test(String(evt.error?.message ?? ""));
+      if (!failedFetch) return;
+      qldTileErrors += 1;
+      if (qldTileErrors < QLD_ERRORS_BEFORE_FALLBACK) return;
+      basemapSwapped = true;
+      const src = map.getSource("qld") as maplibregl.RasterTileSource | undefined;
+      if (src?.setTiles) {
+        // Best-effort attribution swap (Esri requires credit); the typed
+        // API has no setter, so write the underlying field directly.
+        (src as unknown as { attribution?: string }).attribution =
+          "Imagery © Esri, Maxar, Earthstar Geographics";
+        src.setTiles([ESRI_IMAGERY]);
+      }
+    });
 
     map.on("load", async () => {
       // Hatch-fill layer ids (one per colour), so the legend isolate can
@@ -195,10 +299,35 @@ export function ModuleMap({
             ),
           },
         });
+        // Contour lines go UNDER every polygon. They are terrain context,
+        // not a finding: on the steep-land map the dense contour mesh over
+        // the landslide polygons made the actual hazard hard to read. Pipes
+        // and mains (the other LineString features) stay above polygons in
+        // overlay-linestrings below.
+        map.addLayer({
+          id: "overlay-contours",
+          type: "line",
+          source: "overlays",
+          filter: [
+            "all",
+            ["==", ["geometry-type"], "LineString"],
+            ["==", ["get", "legendLabel"], CONTOUR_LEGEND_LABEL],
+          ],
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: {
+            "line-color": ["get", "fillColor"],
+            "line-width": ["coalesce", ["get", "strokeWidth"], 2],
+            "line-opacity": ["coalesce", ["get", "strokeOpacity"], 0.95],
+          },
+        });
         map.addLayer({
           id: "overlay-fill",
           type: "fill",
           source: "overlays",
+          // Polygons ONLY. A MapLibre fill layer will happily triangulate a
+          // LineString as if it were a closed ring, which painted the water
+          // and sewer mains as big cyan triangles between pipe runs.
+          filter: ["==", ["geometry-type"], "Polygon"],
           paint: {
             "fill-color": ["get", "fillColor"],
             // Per-feature opacity when set (zoning fills are faint so the
@@ -334,19 +463,28 @@ export function ModuleMap({
                 [cov.west - EXT, cov.south - EXT],
               ],
             });
-            map.addLayer({
-              id: "contour-coverage-veil",
-              type: "raster",
-              source: "contour-coverage",
-              paint: { "raster-opacity": 0.55, "raster-fade-duration": 0 },
-            });
+            // Slotted between the contours and the polygon fills: it dims
+            // the un-surveyed margin, not the hazard polygons drawn over it.
+            map.addLayer(
+              {
+                id: "contour-coverage-veil",
+                type: "raster",
+                source: "contour-coverage",
+                paint: { "raster-opacity": 0.55, "raster-fade-duration": 0 },
+              },
+              "overlay-fill",
+            );
           }
         }
         map.addLayer({
           id: "overlay-linestrings",
           type: "line",
           source: "overlays",
-          filter: ["==", ["geometry-type"], "LineString"],
+          filter: [
+            "all",
+            ["==", ["geometry-type"], "LineString"],
+            ["!=", ["get", "legendLabel"], CONTOUR_LEGEND_LABEL],
+          ],
           layout: {
             "line-join": "round",
             "line-cap": "round",
@@ -436,7 +574,7 @@ export function ModuleMap({
       // half-width keeps the parcel unmistakably the subject (the wider
       // contour fetch window still fills the frame edge to edge).
       const PAD = tightFrame ? 0.0006 : 0.00105; // ~66 m / ~115 m half-width
-      const bounds = new maplibregl.LngLatBounds(
+      const bounds = new ml.LngLatBounds(
         [lng - PAD, lat - PAD],
         [lng + PAD, lat + PAD],
       );
@@ -507,6 +645,23 @@ export function ModuleMap({
               .filter((l) => hasStopIcon(l)),
           ),
         ];
+        // Labelled points (boundary side lengths): an HTML marker pill
+        // per point. The basemap style declares no `glyphs` endpoint, so a
+        // symbol layer would have nothing to draw text with; a DOM marker
+        // needs no font tiles and matches the PDF renderer's pill.
+        for (const f of pointFeats) {
+          const text = f.properties.textLabel;
+          if (!text || f.geometry?.type !== "Point") continue;
+          const el = document.createElement("div");
+          el.textContent = text;
+          el.style.cssText =
+            "padding:2px 8px;border-radius:999px;background:rgba(15,23,42,0.88);" +
+            "color:#fff;font-size:12px;font-weight:600;line-height:1.3;" +
+            "border:1px solid rgba(255,255,255,0.9);white-space:nowrap;pointer-events:none;";
+          new ml.Marker({ element: el, anchor: "center" })
+            .setLngLat(f.geometry.coordinates as [number, number])
+            .addTo(map);
+        }
         map.addLayer({
           id: "overlay-points",
           type: "circle",
@@ -514,6 +669,7 @@ export function ModuleMap({
           filter: [
             "all",
             ["==", ["geometry-type"], "Point"],
+            ["!", ["has", "textLabel"]],
             ["!", ["in", ["get", "legendLabel"], ["literal", iconLabels]]],
           ],
           paint: {
@@ -566,6 +722,7 @@ export function ModuleMap({
       // one layer by AND-ing a legendLabel condition onto it (and restore it
       // on deselect) without re-deriving the geometry-type filters.
       baseFiltersRef.current = [
+        "overlay-contours",
         "overlay-fill",
         ...hatchLayerIds,
         "overlay-line-casing",
@@ -577,10 +734,33 @@ export function ModuleMap({
         .filter((id) => map.getLayer(id))
         .map((id) => [id, map.getFilter(id) ?? null]);
     });
+    };
+
+    // Create within ~1.5 screens of the viewport; destroy only once it is
+    // ~4 screens away. The near margin keeps a map ready before it scrolls
+    // into view, so the reader never sees the blank tile; the far margin
+    // stops a short scroll past a section from throwing its tiles away
+    // and re-fetching every one of them on the way back. Two observers
+    // because one margin cannot express both thresholds.
+    const ioNear = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) if (entry.isIntersecting) void create();
+      },
+      { rootMargin: "150% 0px 150% 0px" },
+    );
+    const ioFar = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) if (!entry.isIntersecting) destroy();
+      },
+      { rootMargin: "400% 0px 400% 0px" },
+    );
+    ioNear.observe(el);
+    ioFar.observe(el);
 
     return () => {
-      map.remove();
-      mapRef.current = null;
+      ioNear.disconnect();
+      ioFar.disconnect();
+      destroy();
     };
     // overlays identity changes are not expected mid-life; the parent passes
     // a stable array per server render. If you start re-rendering with new

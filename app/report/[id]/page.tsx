@@ -12,9 +12,10 @@ import { NextSteps } from "@/components/report/next-steps";
 import { RetryChecks } from "@/components/report/retry-checks";
 import { UnlockButton } from "@/components/report/unlock-button";
 import { getSessionUser, isAdmin } from "@/lib/auth";
+import { heroAerialUrl, heroLotPath } from "@/lib/aerial";
 import { formatAuAddress } from "@/lib/format-address";
-import { loadReportPayload } from "@/lib/pipeline";
-import { isFlagged, RISK_RANK, riskOf } from "@/lib/risk-style";
+import { canViewReport, loadReportPayload } from "@/lib/pipeline";
+import { isFlagged, isUnavailable, RISK_RANK, riskOf } from "@/lib/risk-style";
 import { ESSENTIAL_MODULES, GOOD_TO_KNOW_MODULES, type Module } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export default async function ReportPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ session_id?: string }>;
+  searchParams?: Promise<{ session_id?: string; skin?: string }>;
 }) {
   const { id } = await params;
   const sp = (await searchParams) ?? {};
@@ -49,13 +50,17 @@ export default async function ReportPage({
     }
   }
 
-  const payload = await loadReportPayload(id);
+  const [payload, viewer] = await Promise.all([loadReportPayload(id), getSessionUser()]);
   if (!payload) notFound();
+  const admin = isAdmin(viewer);
+  // A signed-in user's run is theirs: anyone else gets the same 404 as a
+  // missing id, so a leaked link is not a bearer token for a paid report.
+  if (!canViewReport(payload.report, viewer, admin)) notFound();
 
   const { report, address, modules, propertyPolygon, parcelLines } = payload;
   // Admins bypass the paywall outright: full report, no unlock, no
   // credit spend (ADMIN_EMAILS env).
-  const paid = payload.paid || isAdmin(await getSessionUser());
+  const paid = payload.paid || admin;
   const isFailed = (m: (typeof modules)[number]) =>
     !!m.raw &&
     typeof m.raw === "object" &&
@@ -88,10 +93,14 @@ export default async function ReportPage({
   // identified" section (flood, bushfire, coastal, …); the minor no-finding
   // checks (stormwater, steep land, acid sulfate, mining) collapse into the
   // "Checked & clear" strip instead.
+  // A module whose council layer doesn't exist for this LGA also keeps a
+  // full section: the section carries the "No source information
+  // available" pill and the note, where the compact strip would show it
+  // with a green tick as if it had been checked.
   const essentialClearModules = paid
     ? modules.filter(
         (m) =>
-          ESSENTIAL_MODULES.has(m.module) &&
+          (ESSENTIAL_MODULES.has(m.module) || isUnavailable(m.raw)) &&
           !isFlagged(m.riskLevel, m.hasConsideration) &&
           !isFailed(m),
       )
@@ -101,6 +110,7 @@ export default async function ReportPage({
         (m) =>
           !isFlagged(m.riskLevel, m.hasConsideration) &&
           !isFailed(m) &&
+          !isUnavailable(m.raw) &&
           !GOOD_TO_KNOW_MODULES.has(m.module) &&
           !ESSENTIAL_MODULES.has(m.module),
       )
@@ -114,23 +124,112 @@ export default async function ReportPage({
     );
   const lockedCount = paid ? 0 : modules.length - attentionModules.length;
 
+  // "Paper" skin trial (?skin=paper): the report body renders as an ivory
+  // sheet on the dark chrome, with an aerial hero, a display serif for
+  // titles and hairline section breaks instead of stacked cards. Styled
+  // by [data-skin="paper"] rules in globals.css so the default is untouched.
+  const paper = sp.skin === "paper";
+  const displayAddress = formatAuAddress(address.address_text, payload.postcode);
+  const flaggedCount = modules.filter(
+    (m) => isFlagged(m.riskLevel, m.hasConsideration) && !isFailed(m),
+  ).length;
+  const unavailableCount = modules.filter(
+    (m) => isUnavailable(m.raw) && !isFlagged(m.riskLevel, m.hasConsideration),
+  ).length;
+  const clearCount =
+    modules.length - flaggedCount - infoModules.length - unavailableCount - failedCount;
+
   return (
     <>
       <SiteHeader />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 pb-16 pt-8 sm:gap-10 sm:px-6 sm:pb-24 sm:pt-16">
-        {/* Hero band: title + download */}
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-          <div className="min-w-0">
-            <div className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
-              Property Fact Pack
+      <main
+        data-skin={paper ? "paper" : undefined}
+        className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 pb-16 pt-8 sm:gap-10 sm:px-6 sm:pb-24 sm:pt-16"
+      >
+        {paper ? (
+          /* Paper hero: the property's own aerial, desaturated, with the
+             address set in the display serif and the verdict as three
+             large numerals. Reads as a report cover, not an app header. */
+          <header className="report-hero relative overflow-hidden rounded-[28px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={heroAerialUrl(address.lat, address.lng)}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ filter: "grayscale(0.55) contrast(1.05) brightness(0.72)" }}
+            />
+            {/* The lot itself, in the report's selected-property yellow:
+                same frame as the photo, cropped the same way. */}
+            {propertyPolygon ? (
+              <svg
+                className="absolute inset-0 h-full w-full"
+                viewBox="0 0 1600 640"
+                preserveAspectRatio="xMidYMid slice"
+                aria-hidden="true"
+              >
+                <path
+                  d={heroLotPath(propertyPolygon, address.lat, address.lng)}
+                  fill="rgba(250, 204, 21, 0.10)"
+                  stroke="#facc15"
+                  strokeWidth="4"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            ) : null}
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(10,12,16,0.10) 0%, rgba(10,12,16,0.30) 45%, rgba(10,12,16,0.88) 100%)",
+              }}
+            />
+            <div className="relative flex min-h-[420px] flex-col justify-end gap-6 p-6 sm:min-h-[520px] sm:p-12">
+              <div className="flex flex-col gap-3">
+                <div className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-white/70 sm:text-[11px]">
+                  Property Fact Pack · {new Date(report.generated_at).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })}
+                </div>
+                <h1 className="report-display max-w-3xl text-balance text-[2.2rem] leading-[1.02] text-white sm:text-[4.2rem]">
+                  {displayAddress}
+                </h1>
+              </div>
+              <div className="flex flex-wrap items-end justify-between gap-6">
+                <dl className="report-stats flex flex-wrap gap-x-10 gap-y-4 text-white">
+                  <div>
+                    <dt className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-white/60">Needs attention</dt>
+                    <dd className="report-display mt-1 text-[2.6rem] leading-none sm:text-[3.4rem]">{flaggedCount}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-white/60">Checked &amp; clear</dt>
+                    <dd className="report-display mt-1 text-[2.6rem] leading-none sm:text-[3.4rem]">{clearCount}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[10.5px] font-semibold uppercase tracking-[0.2em] text-white/60">Good to know</dt>
+                    <dd className="report-display mt-1 text-[2.6rem] leading-none sm:text-[3.4rem]">{infoModules.length}</dd>
+                  </div>
+                </dl>
+                {paid && (
+                  <div className="report-hero-cta">
+                    <DownloadPdfButton reportId={report.id} />
+                  </div>
+                )}
+              </div>
             </div>
-            <h1 className="mt-2 text-balance text-[1.7rem] font-semibold leading-[1.1] tracking-tight sm:text-5xl">
-              {formatAuAddress(address.address_text, payload.postcode)}
-            </h1>
-          </div>
-          {paid && <DownloadPdfButton reportId={report.id} />}
-        </header>
+          </header>
+        ) : (
+          /* Hero band: title + download */
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+            <div className="min-w-0">
+              <div className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
+                Property Fact Pack
+              </div>
+              <h1 className="mt-2 text-balance text-[1.7rem] font-semibold leading-[1.1] tracking-tight sm:text-5xl">
+                {displayAddress}
+              </h1>
+            </div>
+            {paid && <DownloadPdfButton reportId={report.id} />}
+          </header>
+        )}
 
         {/* Partial-failure banner: some sources were unreachable last run */}
         {failedCount > 0 && (
@@ -152,6 +251,7 @@ export default async function ReportPage({
               lng={address.lng}
               propertyPolygon={propertyPolygon}
               lotLines={parcelLines}
+              reportId={report.id}
             />
           ))}
 
@@ -168,6 +268,7 @@ export default async function ReportPage({
                 lng={address.lng}
                 propertyPolygon={propertyPolygon}
                 lotLines={parcelLines}
+                reportId={report.id}
               />
             ))}
 
@@ -192,6 +293,7 @@ export default async function ReportPage({
                   lng={address.lng}
                   propertyPolygon={propertyPolygon}
                   lotLines={parcelLines}
+                  reportId={report.id}
                 />
               ))}
             </>

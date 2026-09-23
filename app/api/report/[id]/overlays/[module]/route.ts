@@ -44,8 +44,20 @@ export async function GET(
 
   const row = (await loadCouncilRowsCached(id)).find((r) => r.module === module);
   const overlays = row ? extractOverlays(module as Module, row.raw_response) : [];
+  // The zoning map also draws the neighbouring cadastre lot lines (so the
+  // zone fill reads per lot). They were the single largest item left in
+  // the page payload (~75 KB), so they ride along here instead.
+  let lotLines: unknown = null;
+  if (module === "zoning") {
+    const geo = (await sql`
+      SELECT a.geo->'parcelLines' AS lines
+      FROM reports r JOIN addresses a ON a.id = r.address_id
+      WHERE r.id = ${id}::uuid LIMIT 1
+    `) as Array<{ lines: unknown }>;
+    lotLines = geo[0]?.lines ?? null;
+  }
   return NextResponse.json(
-    { overlays },
+    { overlays, lotLines },
     {
       headers: {
         // Per-report data is immutable apart from a retry; an hour in the

@@ -274,6 +274,11 @@ export async function fetchElevationProfile(
       // still bound what we store).
       maxAllowableOffset: 0.00002,
       bufferDegrees: CONTEXT_HALF_DEG,
+      // Quantized JSON: same 2.2 m grid, ~15% less server time and a
+      // smaller body than GeoJSON on this layer (measured 5.1 s → 4.4 s
+      // at East Brisbane). The server still walks the whole index, so
+      // this is the floor, not a fix.
+      quantize: true,
     }).catch(() => null);
     if (!rawContext || rawContext.features.length === 0) continue;
 

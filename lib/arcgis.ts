@@ -229,6 +229,12 @@ class Semaphore {
 // Host patterns → max concurrent requests. Unlisted hosts are unlimited.
 const HOST_LIMITS: Array<[RegExp, number]> = [
   [/(^|\.)information\.qld\.gov\.au$/i, 6],
+  // ArcGIS Online hosted services (BCC, Gold Coast, Moreton Bay, the
+  // Education catchments): ~80 of a report's ~100 calls land here. Fully
+  // unbounded, the fan-out opened them all at once and the slowest few
+  // queued behind the whole batch on the server; a dozen in flight keeps
+  // the pipe full without the queue.
+  [/(^|\.)arcgis\.com$/i, 12],
 ];
 const limiters = new Map<string, Semaphore>();
 

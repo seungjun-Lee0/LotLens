@@ -182,6 +182,9 @@ export function ModuleMap({
   // below the map reads from this too.
   const [overlays, setOverlays] = useState<OverlayFeature[]>(initialOverlays);
   const overlaysRef = useRef<OverlayFeature[] | null>(overlaysUrl ? null : initialOverlays);
+  // Lot lines can arrive with the fetched overlays (zoning) instead of as
+  // a prop; whichever is present is drawn.
+  const lotLinesRef = useRef<unknown | null>(lotLines);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -222,8 +225,9 @@ export function ModuleMap({
         try {
           const res = await fetch(overlaysUrl, { credentials: "same-origin" });
           if (!res.ok) throw new Error(`overlays ${res.status}`);
-          const body = (await res.json()) as { overlays?: OverlayFeature[] };
+          const body = (await res.json()) as { overlays?: OverlayFeature[]; lotLines?: unknown };
           overlaysRef.current = body.overlays ?? [];
+          if (body.lotLines) lotLinesRef.current = body.lotLines;
         } catch (err) {
           console.warn("[module-map] overlays fetch failed:", (err as Error).message);
           overlaysRef.current = [];
@@ -502,14 +506,15 @@ export function ModuleMap({
       // Cadastre lot boundaries: faint white hairlines so zone fills read
       // per-lot (Develo-style) instead of as one flat colour wash. Drawn
       // above the overlay fill but below the selected-property outline.
+      const lotLinesNow = lotLinesRef.current;
       if (
-        lotLines &&
-        typeof lotLines === "object" &&
-        (lotLines as { type?: string }).type === "FeatureCollection"
+        lotLinesNow &&
+        typeof lotLinesNow === "object" &&
+        (lotLinesNow as { type?: string }).type === "FeatureCollection"
       ) {
         map.addSource("lot-lines", {
           type: "geojson",
-          data: lotLines as GeoJSON.FeatureCollection,
+          data: lotLinesNow as GeoJSON.FeatureCollection,
         });
         map.addLayer({
           id: "lot-lines",

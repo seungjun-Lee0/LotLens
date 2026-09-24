@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 
 import { getSessionUser, isAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { invalidateReportPdf } from "@/lib/pdf-cache";
 import { canViewReport, retryFailedChecks } from "@/lib/pipeline";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
@@ -59,6 +60,10 @@ export async function POST(
     }
 
     const result = await retryFailedChecks(id);
+    // The run's data changed: a cached PDF would show the old checks.
+    await invalidateReportPdf(id).catch((err) =>
+      console.warn("[report-retry] pdf cache invalidation failed:", (err as Error).message),
+    );
     return NextResponse.json(result);
   } catch (err) {
     console.error("[report-retry] failed:", err);

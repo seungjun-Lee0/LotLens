@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
 import { getSessionUser, isActiveSubscriber } from "@/lib/auth";
+import { invalidateUserReportPdfs } from "@/lib/pdf-cache";
 
 export const runtime = "nodejs";
 
@@ -76,5 +77,9 @@ export async function POST(req: Request) {
       brand_logo_url = ${logo || null}
     WHERE id = ${user.id}
   `;
+  // Cached PDFs carry the old branding on their cover and footer.
+  await invalidateUserReportPdfs(user.id).catch((err) =>
+    console.warn("[branding] pdf cache invalidation failed:", (err as Error).message),
+  );
   return NextResponse.json({ ok: true });
 }

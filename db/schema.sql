@@ -126,6 +126,13 @@ update reports r
    and a.paid_at is not null
    and r.generated_at < timestamptz '2026-09-26 00:00:00+10';
 
+-- Rendered PDF, cached in Vercel Blob once per unlocked report (see
+-- lib/pdf-cache.ts). Cleared when the run is retried or the owner's
+-- branding changes; absent = render on demand.
+alter table reports add column if not exists pdf_url text;
+alter table reports add column if not exists pdf_filename text;
+alter table reports add column if not exists pdf_rendered_at timestamptz;
+
 -- ── One row per (address, module) ─────────────────────────────────────────
 -- The overlay writer upserts on this key; before it was delete-then-insert
 -- with no constraint, and two concurrent runs could leave an address with

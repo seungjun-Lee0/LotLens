@@ -21,7 +21,9 @@
 
 import JSZip from "jszip";
 
-import { renderReportPdf } from "@/lib/render-report-pdf";
+// Cache-aware: a report already rendered once is a blob read, so a ZIP of
+// previously downloaded reports costs no renders at all.
+import { getReportPdf } from "@/lib/pdf-cache";
 
 /** Each PDF is held in memory (~3 MB) until the ZIP streams out, and 60
  * reports ≈ 5 min of rendering — already brushing a 300 s route budget.
@@ -66,7 +68,7 @@ export function streamBulkPdfZip(reportIds: string[]): Response {
       for (let i = 0; i < reportIds.length; i++) {
         const reportId = reportIds[i];
         try {
-          const out = await renderReportPdf(reportId);
+          const out = await getReportPdf(reportId);
           if (!out) {
             line({ type: "result", i, reportId, ok: false, error: "not found" });
             continue;

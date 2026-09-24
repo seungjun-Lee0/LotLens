@@ -9,8 +9,8 @@ import { NextResponse } from "next/server";
 import { getSessionUser, isAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { canViewReport } from "@/lib/pipeline";
+import { getReportPdf } from "@/lib/pdf-cache";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { renderReportPdf } from "@/lib/render-report-pdf";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,7 +51,7 @@ export async function GET(
     return NextResponse.json({ error: "report not unlocked" }, { status: 403 });
   }
 
-  const rendered = await renderReportPdf(id);
+  const rendered = await getReportPdf(id);
   if (!rendered) {
     return NextResponse.json({ error: "report not found" }, { status: 404 });
   }

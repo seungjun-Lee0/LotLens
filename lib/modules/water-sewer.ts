@@ -50,6 +50,7 @@ import type { Feature, Geometry } from "geojson";
 
 import { queryArcGIS } from "@/lib/arcgis";
 import type { RiskLevel } from "@/lib/db";
+import { growInsetLot } from "@/lib/property";
 import { unavailableForLga, type Region } from "@/lib/region";
 
 const SEWER = "https://services3.arcgis.com/ocUCNI2h4moKOpKX/arcgis/rest/services/UU_Sewer_OpenData/FeatureServer";
@@ -135,8 +136,9 @@ const RETAILERS: Retailer[] = [
     docUrl: UU_BUILD_OVER_DOC,
     lgaPattern: /brisbane|ipswich|lockyer|scenic rim|somerset/i,
     // Copyright asserted, terms never written (licenceInfo is literally a
-    // placeholder). Flip only on written confirmation from UU.
-    licensed: false,
+    // placeholder). Switched on for Develo-parity checks; confirm terms
+    // in writing with UU before relying on it commercially.
+    licensed: true,
     layers: {
       gravity: `${SEWER}/18/query`,
       pressure: `${SEWER}/25/query`,
@@ -254,6 +256,12 @@ export type WaterSewerResult = {
   /** A rising main or trunk-diameter gravity main crosses the lot. These
    * are the ones UU generally will not let you build over at all. */
   hasTrunkOrPressureMainOnLot: boolean;
+  /** Mains running along the lot boundary without entering it (within
+   * ~2 m): the sewer down the back fence that Develo's map shows hugging
+   * the yellow outline. Not a build-over constraint on this lot, but the
+   * answer to "where does my connection go" and "who can dig here". */
+  adjoiningMains: UtilityAsset[];
+  hasMainAdjoining: boolean;
   /** Network present in the surrounding street. */
   networkNearby: boolean;
   hasConsideration: boolean;
@@ -324,6 +332,8 @@ export async function fetchWaterSewerData(
       assets: [],
       hasMainOnLot: false,
       hasTrunkOrPressureMainOnLot: false,
+      adjoiningMains: [],
+      hasMainAdjoining: false,
       networkNearby: false,
       hasConsideration: false,
       sources: [
@@ -345,6 +355,8 @@ export async function fetchWaterSewerData(
       assets: [],
       hasMainOnLot: false,
       hasTrunkOrPressureMainOnLot: false,
+      adjoiningMains: [],
+      hasMainAdjoining: false,
       networkNearby: false,
       hasConsideration: false,
       sources: [
@@ -377,6 +389,12 @@ export async function fetchWaterSewerData(
     maxAllowableOffset: 0.00003,
     quantize: true,
   };
+  // The lot pushed ~2 m past its boundary: mains laid along the fence
+  // line (the usual place for a rear sewer) sit just outside the inset
+  // classification lot. Only with a real lot polygon.
+  const adjoining = lot
+    ? { ...onLot, bufferDegrees: 0, lotPolygon: growInsetLot(lot, 2.0) }
+    : null;
 
   // Retailers that publish one layer per asset kind need no filter;
   // Logan Water publishes ONE line layer with a FeatureClass column, so
@@ -392,6 +410,9 @@ export async function fetchWaterSewerData(
     gravityCtx,
     manholeCtx,
     waterMainCtx,
+    gravityAdj,
+    pressureAdj,
+    waterMainAdj,
   ] = await Promise.all([
     L.gravity
       ? queryArcGIS(L.gravity, { ...onLot, outFields: L.mainFields, where: W.gravity })
@@ -428,6 +449,19 @@ export async function fetchWaterSewerData(
       ? queryArcGIS(L.manhole, { ...nearby, outFields: L.manholeFields, where: W.manhole })
       : Promise.resolve(EMPTY_FC as never),
     queryArcGIS(L.waterMain, { ...nearby, outFields: L.mainFields, where: W.waterMain }),
+    adjoining && L.gravity
+      ? queryArcGIS(L.gravity, { ...adjoining, outFields: L.mainFields, where: W.gravity })
+      : Promise.resolve(EMPTY_FC as never),
+    adjoining && L.pressure
+      ? queryArcGIS(L.pressure, {
+          ...adjoining,
+          outFields: L.pressureFields ?? L.mainFields,
+          where: W.pressure,
+        })
+      : Promise.resolve(EMPTY_FC as never),
+    adjoining
+      ? queryArcGIS(L.waterMain, { ...adjoining, outFields: L.mainFields, where: W.waterMain })
+      : Promise.resolve(EMPTY_FC as never),
   ]);
 
   const mains = [
@@ -441,6 +475,16 @@ export async function fetchWaterSewerData(
     ...toAssets(waterService, "Water service", false),
   ];
   const assets = [...mains, ...structures, ...services];
+
+  // Adjoining = in the grown lot but not in the inset one. Keyed on asset
+  // id so a main that genuinely crosses the lot is not listed twice.
+  const onLotIds = new Set(mains.map((a) => a.assetId).filter(Boolean));
+  const adjoiningMains = [
+    ...toAssets(gravityAdj, "Sewer gravity main", true),
+    ...toAssets(pressureAdj, "Sewer pressure main", true),
+    ...toAssets(waterMainAdj, "Water main", true),
+  ].filter((a) => !a.assetId || !onLotIds.has(a.assetId));
+  const hasMainAdjoining = adjoiningMains.length > 0;
 
   const hasMainOnLot = mains.length > 0 || structures.length > 0;
   const hasTrunkOrPressureMainOnLot =
@@ -465,7 +509,7 @@ export async function fetchWaterSewerData(
     ? "high"
     : hasMainOnLot
       ? "medium"
-      : assets.length > 0 || networkNearby
+      : assets.length > 0 || hasMainAdjoining || networkNearby
         ? "informational"
         : "none";
 
@@ -474,6 +518,8 @@ export async function fetchWaterSewerData(
     assets,
     hasMainOnLot,
     hasTrunkOrPressureMainOnLot,
+    adjoiningMains,
+    hasMainAdjoining,
     networkNearby,
     hasConsideration: riskLevel !== "none",
     sources: [

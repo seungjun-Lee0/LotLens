@@ -71,7 +71,7 @@ export const WATER_SEWER_ENABLED: boolean = true;
  * The annotation is load-bearing: without it TypeScript narrows the type
  * to `false` and reports the guarded branches as dead code.
  */
-export const POWER_ENABLED: boolean = false;
+export const POWER_ENABLED: boolean = true;
 
 /**
  * Environment (koala habitat + MSES wildlife) is built and tested but

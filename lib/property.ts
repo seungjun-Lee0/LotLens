@@ -53,6 +53,38 @@ const EMPTY: ParcelInfo = {
  * for a cached geo blob whose parcel is absent without a live lookup. */
 export const EMPTY_PARCEL: ParcelInfo = EMPTY;
 
+/**
+ * The classification lot (the 0.3%-inset copy from insetParcelPolygon)
+ * pushed `metres` past its TRUE boundary. For "adjoining" checks: an
+ * easement parcel or a sewer main that runs along the fence line sits
+ * outside the inset lot, and the cadastre polygon was generalised to ~1 m
+ * on fetch, so a growth measured in centimetres would not reliably reach
+ * it. The nearest such feature that is NOT on a shared boundary sits a
+ * road width (15 m+) away, so a metre or two cannot over-reach.
+ */
+export function growInsetLot(lot: Geometry, metres: number): Geometry {
+  const rings: number[][][] =
+    lot.type === "Polygon"
+      ? (lot.coordinates as number[][][])
+      : lot.type === "MultiPolygon"
+        ? (lot.coordinates as number[][][][]).flat()
+        : [];
+  const verts = rings.flat();
+  if (verts.length === 0) return lot;
+  const cx = verts.reduce((s, [x]) => s + x, 0) / verts.length;
+  const cy = verts.reduce((s, [, y]) => s + y, 0) / verts.length;
+  const kx = Math.cos((cy * Math.PI) / 180) * 111_320;
+  const ky = 111_320;
+  // Nearest vertex to the centroid bounds how far the boundary sits from
+  // it: scaling by 1 + m / that distance moves every edge out by ≥ m.
+  const minR = Math.min(
+    ...verts.map(([x, y]) => Math.hypot((x - cx) * kx, (y - cy) * ky)),
+  );
+  if (!Number.isFinite(minR) || minR <= 0) return lot;
+  // Undo the classification inset first, then grow.
+  return insetParcelPolygon(lot, (1 / 0.997) * (1 + metres / minR));
+}
+
 function str(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
 }

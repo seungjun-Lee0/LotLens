@@ -1052,6 +1052,19 @@ function renderStubWaterSewer(
   }
 
   if (!raw.hasMainOnLot) {
+    const adjoining = asArr<{ kind: string }>(raw.adjoiningMains);
+    if (adjoining.length > 0) {
+      const kinds = Array.from(new Set(adjoining.map((a) => a.kind.toLowerCase())));
+      return {
+        summary: `A ${retailer} ${kinds.join(" and ")} runs along the boundary of ${input.address}.`,
+        detail: `The main sits just outside the lot line (typically in the neighbour's lot or the road reserve) rather than crossing this lot, so ${retailer}'s build-over rules are not triggered by it. It still matters: it is where this property's connection most likely joins the network, and ${retailer} can require access along that edge to maintain it.\n\nA pool, retaining wall or deep footings hard against that boundary are the works to check with them first.`,
+        questions_to_ask: [
+          "Which side of the boundary is the main on, and what setback does the retailer want from it?",
+          "Where does this property's connection join it, and is that the lawful point of discharge?",
+        ],
+        sources: sourcesFromRaw(raw),
+      };
+    }
     return {
       summary: `No ${retailer} main crosses ${input.address}.`,
       detail:

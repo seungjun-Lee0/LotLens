@@ -749,6 +749,13 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
               .join(" · ") || "Urban Utilities asset",
         });
       }
+      const adjoining = asArr<RawAttrs>(raw.adjoiningMains);
+      if (adjoining.length > 0) {
+        rows.push({
+          key: "Along boundary",
+          val: Array.from(new Set(adjoining.map((a) => String(a.kind ?? "Main")))).join(", "),
+        });
+      }
       rows.push({
         key: "Build over/near",
         val:

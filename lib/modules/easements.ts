@@ -24,7 +24,7 @@ import {
   queryOverlayAdapter,
 } from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
-import { insetParcelPolygon } from "@/lib/property";
+import { growInsetLot } from "@/lib/property";
 import type { Region } from "@/lib/region";
 
 const QSPATIAL_EASEMENTS =
@@ -110,40 +110,9 @@ function toCadastral(f: Feature<Geometry | null, GeoJsonProperties>): CadastralE
 const easementKey = (e: CadastralEasement) => `${e.lotplan}|${e.areaSqm}`;
 
 /**
- * The lot pushed ~1 m past its true boundary. The polygon we receive is
- * the 0.3%-inset classification copy of a cadastre polygon that was
- * itself generalised to ~1 m on fetch, so a growth measured in
- * centimetres does not reliably reach a parcel snapped to the real
- * boundary. One metre does, and the nearest easement that is NOT on a
- * shared boundary sits a road width (15 m+) away.
- */
-function growLotForAdjoining(lot: Geometry, metres = 1.0): Geometry {
-  const rings: number[][][] =
-    lot.type === "Polygon"
-      ? (lot.coordinates as number[][][])
-      : lot.type === "MultiPolygon"
-        ? (lot.coordinates as number[][][][]).flat()
-        : [];
-  const verts = rings.flat();
-  if (verts.length === 0) return lot;
-  const cx = verts.reduce((s, [x]) => s + x, 0) / verts.length;
-  const cy = verts.reduce((s, [, y]) => s + y, 0) / verts.length;
-  const kx = Math.cos((cy * Math.PI) / 180) * 111_320;
-  const ky = 111_320;
-  // Nearest vertex to the centroid bounds how far the boundary sits from
-  // it: scaling by 1 + m / that distance moves every edge out by ≥ m.
-  const minR = Math.min(
-    ...verts.map(([x, y]) => Math.hypot((x - cx) * kx, (y - cy) * ky)),
-  );
-  if (!Number.isFinite(minR) || minR <= 0) return lot;
-  // Undo the classification inset first, then grow.
-  return insetParcelPolygon(lot, (1 / 0.997) * (1 + metres / minR));
-}
-
-/**
  * Easement parcels that ADJOIN the lot: everything the cadastre layer
  * intersects with a copy of the lot pushed ~1 m past its true boundary
- * (growLotForAdjoining), minus what the inset (on-lot) query already
+ * (growInsetLot), minus what the inset (on-lot) query already
  * found. Done on the server rather than against the simplified context
  * geometry: the context query's 3 m generalisation moves vertices
  * further than the overlap we are testing for.
@@ -224,7 +193,7 @@ export async function fetchEasementsData(
           inSR: 4326,
           outFields: dcdbFields,
           returnGeometry: false,
-          lotPolygon: growLotForAdjoining(lot),
+          lotPolygon: growInsetLot(lot, 1.0),
         })
       : Promise.resolve(EMPTY),
   ]);

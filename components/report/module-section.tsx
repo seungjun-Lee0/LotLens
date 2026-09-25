@@ -519,6 +519,16 @@ function ModuleFacts({
               </dd>
             </Fragment>
           ))}
+          {Array.isArray(raw.adjoiningMains) && (raw.adjoiningMains as { kind: string }[]).length > 0 && (
+            <>
+              <dt className="text-muted-foreground">Along boundary</dt>
+              <dd className="font-medium">
+                {Array.from(
+                  new Set((raw.adjoiningMains as { kind: string }[]).map((a) => a.kind)),
+                ).join(", ")}
+              </dd>
+            </>
+          )}
           <dt className="text-muted-foreground">Build over</dt>
           <dd className="font-medium">
             {severe
@@ -915,7 +925,8 @@ export function ModuleSection({
           propertyPolygon={propertyPolygon}
           // Lot boundary lines only add value on the zoning map (they make the
           // dissolved zone fill read per-lot). Other modules don't need them.
-          lotLines={row.module === "zoning" ? lotLines : null}
+          // With on-demand overlays they arrive from the overlays route.
+          lotLines={row.module === "zoning" && !reportId ? lotLines : null}
           // Transport is the one module whose features are POINTS spread up
           // to ~2 km out: frame them, or the map shows an empty lot.
           fitPoints={row.module === "transport"}

@@ -24,6 +24,7 @@
 
 import type { Feature, FeatureCollection, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
+import { contextBuffer } from "@/lib/context-window";
 import {
   councilOf,
   FLOOD_ADAPTERS,
@@ -243,7 +244,7 @@ export async function fetchFloodingData(
     returnGeometry: true,
     // ~280m envelope around the property: wide enough for street-level
     // context, tight enough to keep payload bounded.
-    bufferDegrees: 0.0025,
+    bufferDegrees: contextBuffer(lot, lat, lng),
     // Polygon vertex simplification ~10m: invisible at the map zoom we
     // use but keeps the envelope payload to ~10s of KB.
     maxAllowableOffset: 0.00003,

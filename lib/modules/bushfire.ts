@@ -31,6 +31,7 @@ import { PbfReader } from "pbf";
 import { VectorTile } from "@mapbox/vector-tile";
 
 import { queryArcGIS } from "@/lib/arcgis";
+import { contextBuffer } from "@/lib/context-window";
 import {
   BUSHFIRE_ADAPTERS,
   councilOf,
@@ -351,7 +352,7 @@ async function fetchBushfireFromTiles(
   // Context polygons for the module map: every hazard/buffer feature from
   // the tiles covering a ~280 m envelope, as GeoJSON. Adjacent-tile clip
   // seams tile together invisibly at render.
-  const BUF = 0.0025;
+  const BUF = contextBuffer(lot, lat, lng);
   const corners: [number, number][] = [
     [lng - BUF, lat - BUF],
     [lng + BUF, lat - BUF],
@@ -470,7 +471,7 @@ async function fetchBushfireFromFeatureServer(
       inSR: 4326,
       outFields: fields,
       returnGeometry: true,
-      bufferDegrees: 0.0025,
+      bufferDegrees: contextBuffer(lot, lat, lng),
       maxAllowableOffset: 0.00003,
       quantize: true,
     }),

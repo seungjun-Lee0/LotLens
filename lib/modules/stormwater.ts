@@ -28,6 +28,7 @@
 import type { Feature, Geometry } from "geojson";
 
 import { queryArcGIS } from "@/lib/arcgis";
+import { contextBuffer } from "@/lib/context-window";
 import { councilOf, type CouncilId } from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
 import { unavailableForLga, type Region } from "@/lib/region";
@@ -297,7 +298,7 @@ export async function fetchStormwaterData(
     geometryType: "esriGeometryPoint" as const,
     inSR: 4326,
     returnGeometry: true,
-    bufferDegrees: 0.0025,
+    bufferDegrees: contextBuffer(lot, lat, lng),
     maxAllowableOffset: 0.00003,
     quantize: true,
   };

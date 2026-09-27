@@ -21,6 +21,7 @@
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
+import { contextBuffer } from "@/lib/context-window";
 import type { RiskLevel } from "@/lib/db";
 
 const TENEMENT =
@@ -86,7 +87,7 @@ export async function fetchMiningData(
     inSR: 4326,
     outFields,
     returnGeometry: true,
-    bufferDegrees: 0.0025,
+    bufferDegrees: contextBuffer(lot, lat, lng),
     maxAllowableOffset: 0.00005,
   });
 

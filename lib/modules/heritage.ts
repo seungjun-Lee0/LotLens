@@ -18,6 +18,7 @@ import type {
   Geometry,
 } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
+import { contextBuffer } from "@/lib/context-window";
 import {
   councilOf,
   HERITAGE_ADAPTERS,
@@ -142,7 +143,7 @@ export async function fetchHeritageData(
     inSR: 4326,
     outFields,
     returnGeometry: true,
-    bufferDegrees: 0.0025,
+    bufferDegrees: contextBuffer(lot, lat, lng),
     maxAllowableOffset: 0.00003,
     quantize: true,
   });

@@ -14,6 +14,7 @@ import type { FeatureCollection, Geometry } from "geojson";
 import polygonClipping from "polygon-clipping";
 
 import { queryArcGIS } from "@/lib/arcgis";
+import { contextBuffer } from "@/lib/context-window";
 import type { Region } from "@/lib/region";
 
 export type CouncilId =
@@ -205,7 +206,7 @@ export async function queryOverlayAdapter(
   label: string | null;
 }> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
-  const CTX_BUFFER = 0.0025;
+  const CTX_BUFFER = contextBuffer(lot, lat, lng);
   const [hit, ctx] = await Promise.all([
     queryWithRetry(adapter.url, {
       geometry: point,

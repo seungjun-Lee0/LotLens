@@ -32,6 +32,7 @@
 
 import type { Feature, GeoJsonProperties, Geometry } from "geojson";
 import { queryArcGIS } from "@/lib/arcgis";
+import { contextBuffer } from "@/lib/context-window";
 import { councilOf, ZONING_ADAPTERS, type ZoningAdapter } from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
 import { councilDisplayName, type Region } from "@/lib/region";
@@ -221,6 +222,7 @@ async function fetchSeqRegionalZoning(
   lat: number,
   lng: number,
   region?: Region,
+  lot?: Geometry | null,
 ): Promise<ZoningResult> {
   const point = { x: lng, y: lat, spatialReference: 4326 } as const;
   const [fc, ctx] = await Promise.all([
@@ -237,7 +239,7 @@ async function fetchSeqRegionalZoning(
       inSR: 4326,
       outFields: "rluc2023",
       returnGeometry: true,
-      bufferDegrees: 0.0025,
+      bufferDegrees: contextBuffer(lot, lat, lng),
       maxAllowableOffset: 0.00005,
     }),
   ]);

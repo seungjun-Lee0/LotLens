@@ -352,7 +352,9 @@ function ModuleFacts({
       );
     }
     case "acid_sulfate": {
-      const code = raw.mapCode as string | null;
+      const codes = Array.isArray(raw.mapCodes) ? (raw.mapCodes as string[]) : [];
+      // Every soil class on the lot; older rows only stored the one code.
+      const code = codes.length > 0 ? codes.join(", ") : (raw.mapCode as string | null);
       const meaning = raw.meaning as string | null;
       const scale = raw.scale as string | null;
       if (!code && !meaning) return null;

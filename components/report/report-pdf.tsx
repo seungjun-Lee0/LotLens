@@ -614,10 +614,13 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
     case "acid_sulfate": {
       const rows: { key: string; val: string }[] = [];
       if (raw.meaning) rows.push({ key: "Classification", val: String(raw.meaning) });
-      if (raw.mapCode)
+      // Every soil class on the lot; older rows only stored the one code.
+      const codes = asArr<string>(raw.mapCodes);
+      const code = codes.length > 0 ? codes.join(", ") : raw.mapCode;
+      if (code)
         rows.push({
-          key: "Map code",
-          val: `${raw.mapCode}${raw.scale ? ` · ${raw.scale}` : ""}`,
+          key: codes.length > 1 ? "Map codes" : "Map code",
+          val: `${String(code)}${raw.scale ? ` · ${raw.scale}` : ""}`,
         });
       return rows;
     }

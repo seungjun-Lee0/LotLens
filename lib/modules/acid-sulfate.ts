@@ -33,6 +33,9 @@ export type AcidSulfateResult = {
   riskLevel: RiskLevel;
   /** map_code at the finest scale that hits, e.g. "A0S1". */
   mapCode: string | null;
+  /** Every distinct map_code on the lot at that scale, classifying code
+   * first. One entry for the usual single-class lot. */
+  mapCodes: string[];
   /** map_code_meaning: plain-English description of the ASS class. */
   meaning: string | null;
   /** Which mapping scale produced the hit ("1:25 000" etc.). */
@@ -89,19 +92,15 @@ export async function fetchAcidSulfateData(
     queryArcGIS(ASS_100K, contextParams),
   ]);
 
-  // Prefer the finest-scale hit for classification.
-  const hit =
+  // Prefer the finest-scale layer that hits for classification.
+  const layer =
     k25.features.length > 0
-      ? { f: k25.features[0], scale: "1:25 000" }
+      ? { features: k25.features, scale: "1:25 000" }
       : k50.features.length > 0
-        ? { f: k50.features[0], scale: "1:50 000" }
+        ? { features: k50.features, scale: "1:50 000" }
         : k100.features.length > 0
-          ? { f: k100.features[0], scale: "1:100 000" }
+          ? { features: k100.features, scale: "1:100 000" }
           : null;
-
-  const a = attrs(hit?.f);
-  const mapCode = str(a.map_code);
-  const meaning = str(a.map_code_meaning) ?? str(a.dominant_entity_meaning);
 
   // ASS presence is a management/cost consideration rather than a hazard
   // band. Codes containing S (sulfidic material at shallow depth) rate
@@ -109,15 +108,36 @@ export async function fetchAcidSulfateData(
   // Anything else mapped is informational: the state layer covers every
   // coastal lowland, so most riverside and bayside lots are inside it with
   // no obligation attached unless you dig.
-  const riskLevel: RiskLevel = !hit
-    ? "none"
-    : /s[0-2]/i.test(mapCode ?? "") || /sulfid/i.test(meaning ?? "")
+  const grade = (f: Feature<Geometry | null, GeoJsonProperties>): RiskLevel => {
+    const p = attrs(f);
+    const meaningOf = str(p.map_code_meaning) ?? str(p.dominant_entity_meaning);
+    return /s[0-2]/i.test(str(p.map_code) ?? "") || /sulfid/i.test(meaningOf ?? "")
       ? "medium"
       : "informational";
+  };
+  // A lot can straddle several soil classes and feature order is not
+  // stable: classify on the worst one, and keep every distinct code so the
+  // facts panel names them all.
+  const worst = layer
+    ? (layer.features.find((f) => grade(f) === "medium") ?? layer.features[0])
+    : undefined;
+  const hit = layer && worst ? { f: worst, scale: layer.scale } : null;
+
+  const a = attrs(hit?.f);
+  const mapCode = str(a.map_code);
+  const meaning = str(a.map_code_meaning) ?? str(a.dominant_entity_meaning);
+  const mapCodes = layer
+    ? [...new Set(layer.features.map((f) => str(attrs(f).map_code)).filter((c): c is string => c !== null))]
+    : [];
+  // The classifying code leads.
+  if (mapCode) mapCodes.sort((x, y) => (x === mapCode ? -1 : y === mapCode ? 1 : 0));
+
+  const riskLevel: RiskLevel = !hit ? "none" : grade(hit.f);
 
   return {
     riskLevel,
     mapCode,
+    mapCodes,
     meaning,
     scale: hit?.scale ?? null,
     hasConsideration: riskLevel !== "none",

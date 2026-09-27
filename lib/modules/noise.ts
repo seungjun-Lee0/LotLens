@@ -24,7 +24,6 @@ import {
   type OverlayAdapter,
 } from "@/lib/councils";
 import type { RiskLevel } from "@/lib/db";
-import { RISK_RANK } from "@/lib/risk-style";
 import { unavailableForLga, type Region } from "@/lib/region";
 
 const TRANSPORT_NOISE =
@@ -88,6 +87,37 @@ function classify(transport: string | null, anef: string | null): RiskLevel {
   return "none";
 }
 
+/**
+ * Loudness score for a corridor label, higher = louder. Finer than
+ * classify(): QDC categories 0 and 1 both grade "low", and a lot straddling
+ * both must still name category 1, not whichever the service listed first.
+ */
+function loudness(label: string): number {
+  const qdc = /categor(?:y|ies)\s*(\d)/i.exec(label);
+  if (qdc) return Number(qdc[1]) + 1; // category 0..4 → 1..5
+  const corridor = /corridor\s*(\d)/i.exec(label);
+  if (corridor) return 6 - Number(corridor[1]); // corridor 1..4 → 5..2
+  return 0.5; // un-numbered corridor presence
+}
+
+/** The loudest corridor on the lot. A lot-polygon query routinely returns
+ * several bands (47 features on one Brisbane lot) in no stable order. */
+function loudestCorridor(labels: string[]): string | null {
+  return labels.reduce<string | null>(
+    (worst, l) => (worst === null || loudness(l) > loudness(worst) ? l : worst),
+    null,
+  );
+}
+
+/** Highest ANEF contour on the lot ("30 ANEF" beats "20 ANEF"). */
+function highestAnef(labels: string[]): string | null {
+  const n = (l: string) => parseInt(l.replace(/\D/g, ""), 10) || 0;
+  return labels.reduce<string | null>(
+    (worst, l) => (worst === null || n(l) > n(worst) ? l : worst),
+    null,
+  );
+}
+
 const EMPTY_FC = { type: "FeatureCollection", features: [] } as const;
 
 // Council transport-noise overlays via per-council adapters (Moreton Bay,
@@ -116,14 +146,10 @@ async function fetchCouncilNoise(
     type: "FeatureCollection" as const,
     features: airportResults.flatMap((r) => r[key].features),
   });
-  // Worst corridor across every adapter's features: order isn't stable.
-  const RANK = RISK_RANK;
-  const label = results
-    .flatMap((r, i) => overlayLabels(r.point, adapters[i].labelFields))
-    .reduce<string | null>(
-      (worst, l) => (RANK[classify(l, null)] > RANK[classify(worst, null)] ? l : worst),
-      null,
-    );
+  // Loudest corridor across every adapter's features: order isn't stable.
+  const label = loudestCorridor(
+    results.flatMap((r, i) => overlayLabels(r.point, adapters[i].labelFields)),
+  );
   const merged = (key: "point" | "context") => ({
     type: "FeatureCollection" as const,
     features: results.flatMap((r) => r[key].features),
@@ -205,12 +231,15 @@ export async function fetchNoiseData(
     queryArcGIS(ANEF, contextParams),
   ]);
 
-  const tAttrs = attrs(transport.features[0]);
-  const aAttrs = attrs(anef.features[0]);
-  const transportCorridor =
-    typeof tAttrs.OVL2_DESC === "string" ? tAttrs.OVL2_DESC : null;
-  const anefCategory =
-    typeof aAttrs.OVL2_DESC === "string" ? aAttrs.OVL2_DESC : null;
+  // Grade EVERY band on the lot and keep the loudest. Taking features[0]
+  // reported "category 2" for lots that also sit in category 3 (verified
+  // at 1118 Creek Road, Carina Heights), understating the requirement.
+  const descs = (fc: { features: Feature<Geometry | null, GeoJsonProperties>[] }) =>
+    fc.features
+      .map((f) => attrs(f).OVL2_DESC)
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+  const transportCorridor = loudestCorridor(descs(transport));
+  const anefCategory = highestAnef(descs(anef));
   const riskLevel = classify(transportCorridor, anefCategory);
 
   return {

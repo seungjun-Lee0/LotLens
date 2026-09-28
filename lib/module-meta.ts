@@ -60,7 +60,7 @@ export const APPLE_HEX = {
 // We re-declare here to avoid a circular import: module-meta is consumed
 // by the PDF too. Both files must move together when changing colours.
 const D = {
-  floodHigh: "#1e3a8a", floodMedium: "#2563eb", floodLow: "#60a5fa", floodVeryLow: "#bfdbfe",
+  floodHigh: "#1e3a8a", floodMedium: "#2563eb", floodLow: "#60a5fa", floodVeryLow: "#bfdbfe", floodMinimal: "#dbeafe",
   overlandHigh: "#c2410c", overlandMedium: "#f97316", overlandLow: "#fbbf24", overlandVeryLow: "#fde68a",
   stormHigh: "#0e7490", stormMedium: "#06b6d4", stormLow: "#67e8f9", stormVeryLow: "#cffafe",
   histFeb2022: "#c026d3", histJan2011: "#a855f7",
@@ -119,7 +119,8 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
       { label: "Planning area 1 - strictest", color: D.floodHigh,    colorHex: D.floodHigh },
       { label: "Planning area 2",             color: D.floodMedium,  colorHex: D.floodMedium },
       { label: "Planning area 3",             color: D.floodLow,     colorHex: D.floodLow },
-      { label: "Planning area 4 - mildest",   color: D.floodVeryLow, colorHex: D.floodVeryLow },
+      { label: "Planning area 4",             color: D.floodVeryLow, colorHex: D.floodVeryLow },
+      { label: "Planning area 5 - mildest",   color: D.floodMinimal, colorHex: D.floodMinimal },
       { label: "Overland flow flood planning area", color: D.overlandMedium, colorHex: D.overlandMedium },
     ],
   },

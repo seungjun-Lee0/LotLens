@@ -94,6 +94,7 @@ export const DEVELO_HEX = {
   floodMedium:  "#2563eb",
   floodLow:     "#60a5fa",
   floodVeryLow: "#bfdbfe",
+  floodMinimal: "#dbeafe",
 
   // Overland Flow: orange/yellow family
   overlandHigh:    "#c2410c",
@@ -465,7 +466,10 @@ function floodPlanningColor(props: Record<string, unknown>) {
   if (n === 1) return { fillColor: DEVELO_HEX.floodHigh,    legendLabel: "Planning area 1 - strictest" };
   if (n === 2) return { fillColor: DEVELO_HEX.floodMedium,  legendLabel: "Planning area 2" };
   if (n === 3) return { fillColor: DEVELO_HEX.floodLow,     legendLabel: "Planning area 3" };
-  if (n >= 4) return { fillColor: DEVELO_HEX.floodVeryLow, legendLabel: "Planning area 4 - mildest" };
+  // BCC's creek and river overlays both run to area 5: 4 and 5 are
+  // different tiers and must not share one "4 - mildest" swatch.
+  if (n === 4) return { fillColor: DEVELO_HEX.floodVeryLow, legendLabel: "Planning area 4" };
+  if (n >= 5) return { fillColor: DEVELO_HEX.floodMinimal, legendLabel: "Planning area 5 - mildest" };
   // Councils outside Brisbane publish unnumbered statutory areas ("Flood
   // Assessment Required", "Flood Storage Preservation Area"): paint them
   // in the flood palette under their own name rather than a grey blank.

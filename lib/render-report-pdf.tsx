@@ -159,7 +159,7 @@ export async function renderReportPdf(
           overlays,
           propertyPolygon: payload.propertyPolygon,
           lotLines: row.module === "zoning" ? payload.parcelLines : null,
-          fitPoints: row.module === "transport",
+          fitPoints: row.module === "transport" || row.module === "schools",
           tightFrame: row.module === "boundary",
         });
         maps[idx] = { module: row.module, png };

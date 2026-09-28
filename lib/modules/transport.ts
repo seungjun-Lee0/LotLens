@@ -31,10 +31,12 @@ const TRANSLINK_DOC = "https://translink.com.au/";
  * (0.009° ≈ 1 km at Brisbane's latitude).
  */
 const MODES = [
-  { layer: 101, kind: "Train station", radiusDegrees: 0.018 },
-  { layer: 103, kind: "Ferry terminal", radiusDegrees: 0.018 },
-  { layer: 104, kind: "Tram stop", radiusDegrees: 0.018 },
-  { layer: 102, kind: "Bus stop", radiusDegrees: 0.007 },
+  { layer: 101, kind: "Train station", radiusDegrees: 0.018, keep: 1 },
+  { layer: 103, kind: "Ferry terminal", radiusDegrees: 0.018, keep: 1 },
+  { layer: 104, kind: "Tram stop", radiusDegrees: 0.018, keep: 1 },
+  // Three bus stops, not one: neighbouring stops usually serve different
+  // routes, and the second-closest is often the useful one.
+  { layer: 102, kind: "Bus stop", radiusDegrees: 0.007, keep: 3 },
 ] as const;
 
 export type TransportStop = {
@@ -48,7 +50,7 @@ export type TransportStop = {
 
 export type TransportResult = {
   riskLevel: RiskLevel;
-  /** Nearest stop per mode, closest mode first. */
+  /** Nearest stop per mode (nearest three for buses), closest first. */
   stops: TransportStop[];
   hasConsideration: boolean;
   sources: Array<{ name: string; url: string; layer: string }>;
@@ -106,25 +108,34 @@ export async function fetchTransportData(
   const stops: TransportStop[] = [];
   results.forEach((fc, i) => {
     const mode = MODES[i];
-    let best: TransportStop | null = null;
+    const candidates: TransportStop[] = [];
     for (const f of fc.features) {
       const c = pointOf(f);
       if (!c) continue;
-      const distanceM = haversineM({ lat, lng }, { lat: c[1], lng: c[0] });
-      if (best && distanceM >= best.distanceM) continue;
       const a = (f.properties ?? {}) as Record<string, unknown>;
       // GTFS encodes wheelchair_boarding as 0 unknown / 1 yes / 2 no, and
       // the layer surfaces it as either a number or its string form.
       const wc = Number(a.wheelchair_boarding);
-      best = {
+      candidates.push({
         kind: mode.kind,
         name: str(a.stop_name),
         code: str(a.stop_code),
-        distanceM: Math.round(distanceM),
+        distanceM: Math.round(haversineM({ lat, lng }, { lat: c[1], lng: c[0] })),
         wheelchair: wc === 1 ? true : wc === 2 ? false : null,
-      };
+      });
     }
-    if (best) stops.push(best);
+    candidates.sort((a, b) => a.distanceM - b.distanceM);
+    // A pair of stops on opposite kerbs share a name: count them once so
+    // "three bus stops" means three places to catch a bus, not one place
+    // listed for both directions.
+    const seen = new Set<string>();
+    for (const s of candidates) {
+      const key = (s.name ?? s.code ?? String(s.distanceM)).toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      stops.push(s);
+      if (seen.size >= mode.keep) break;
+    }
   });
 
   stops.sort((a, b) => a.distanceM - b.distanceM);

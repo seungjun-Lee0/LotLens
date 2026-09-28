@@ -70,6 +70,7 @@ const D = {
   easementHV: "#db2777", easementCadastre: "#a21caf",
   vegWaterway: "#0284c7", vegMSES: "#ea580c", vegBiodiversity: "#84cc16", vegCorridor: "#16a34a", vegNall: "#d97706",
   catchmentPrimary: "#16a34a", catchmentSecondary: "#4f46e5",
+  schoolState: "#0ea5e9", schoolCatholic: "#a855f7", schoolIndependent: "#f59e0b",
   zoneCentre: "#dc2626", zoneMixed: "#f97316", zoneLowMediumResidential: "#d97706", zoneResidential: "#facc15", zoneOpenSpace: "#16a34a", zoneOther: "#6366f1",
   coastalErosion: "#d97706",
   rvmA: "#15803d", rvmB: "#16a34a", rvmC: "#84cc16", rvmR: "#0d9488",
@@ -492,6 +493,9 @@ export const MODULE_META: Record<Module, ModuleMeta> = {
     legend: [
       { label: "Primary catchment",   color: D.catchmentPrimary,   colorHex: D.catchmentPrimary },
       { label: "Secondary catchment", color: D.catchmentSecondary, colorHex: D.catchmentSecondary },
+      { label: "State school",        color: D.schoolState,        colorHex: D.schoolState },
+      { label: "Catholic school",     color: D.schoolCatholic,     colorHex: D.schoolCatholic },
+      { label: "Independent school",  color: D.schoolIndependent,  colorHex: D.schoolIndependent },
     ],
   },
 

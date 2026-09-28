@@ -438,6 +438,14 @@ function renderStubSchools(
 ): ModuleNarrative {
   const raw = readRaw(input);
   const schools = asArr<RawAttrs>(raw.schools);
+  const nearby = asArr<{ name: string; sector: string; type: string; distanceM: number }>(raw.nearbySchools);
+  const nearbyText =
+    nearby.length > 0
+      ? `\n\nNearest schools of any sector: ${nearby
+          .slice(0, 5)
+          .map((s) => `${s.name} (${s.sector.toLowerCase()}, ${s.type.toLowerCase()}, ${s.distanceM >= 1000 ? `${(s.distanceM / 1000).toFixed(1)} km` : `${s.distanceM} m`})`)
+          .join("; ")}. Non-state schools enrol on application, not by catchment.`
+      : "";
   if (schools.length === 0) {
     return {
       summary: `No state school catchment was matched for ${input.address}.`,
@@ -456,7 +464,7 @@ function renderStubSchools(
     .join("; ");
   return {
     summary: `${input.address} is zoned for ${schools.map((s) => s.name).join(" + ")}.`,
-    detail: `In-catchment for: ${lines}.\n\nState schools must accept in-catchment enrolments, so choosing this address gives the listed schools as the guaranteed option. Out-of-catchment placements are place-dependent.`,
+    detail: `In-catchment for: ${lines}.\n\nState schools must accept in-catchment enrolments, so choosing this address gives the listed schools as the guaranteed option. Out-of-catchment placements are place-dependent.${nearbyText}`,
     questions_to_ask: [
       "Are the catchment schools at NAPLAN / OP performance you're happy with? Check MySchool.",
       "If you're moving for school, confirm enrolment with the school before contract.",

@@ -144,6 +144,10 @@ export const DEVELO_HEX = {
   // distinct boundaries rather than one indistinct green wash.
   catchmentPrimary:   "#16a34a", // green
   catchmentSecondary: "#4f46e5", // indigo
+  // Nearby school points, by sector.
+  schoolState:       "#0ea5e9",
+  schoolCatholic:    "#a855f7",
+  schoolIndependent: "#f59e0b",
 
   // Zoning: keep multi-family
   zoneCentre:   "#dc2626",
@@ -531,6 +535,15 @@ function schoolsColor(props: Record<string, unknown>): Classified {
   if (t.includes("secondary"))
     return { fillColor: DEVELO_HEX.catchmentSecondary, legendLabel: "Secondary catchment", fillOpacity: 0, fillPattern: "hatch", strokeWidth: 3.4 };
   return { fillColor: "#94a3b8", legendLabel: t || "School catchment", fillOpacity: 0, fillPattern: "hatch", strokeWidth: 3.4 };
+}
+
+/** Nearby school points: one hue per sector so the legend reads "State
+ * school · Catholic school · Independent school" at a glance. */
+function nearbySchoolColor(props: Record<string, unknown>): Classified {
+  const s = String(props.sector ?? "").toLowerCase();
+  if (s === "state") return { fillColor: DEVELO_HEX.schoolState, legendLabel: "State school" };
+  if (s === "catholic") return { fillColor: DEVELO_HEX.schoolCatholic, legendLabel: "Catholic school" };
+  return { fillColor: DEVELO_HEX.schoolIndependent, legendLabel: "Independent school" };
 }
 
 function rvmColor(props: Record<string, unknown>): Classified | null {
@@ -973,7 +986,12 @@ export function extractOverlays(
       return out;
     }
     case "schools": {
-      pushFC(out, inner, schoolsColor);
+      // New shape {catchments, nearby}; old rows stored the catchment FC
+      // directly (see lib/modules/schools).
+      const i = inner as Record<string, unknown>;
+      const legacy = Array.isArray(i.features);
+      pushFC(out, legacy ? inner : i.catchments, schoolsColor);
+      if (!legacy) pushFC(out, i.nearby, nearbySchoolColor);
       // The source layer is per YEAR LEVEL, so one band arrives as several
       // near-identical stacked polygons — each repainting its translucent
       // fill/hatch until the map is a moiré mess. One polygon per label is
@@ -981,7 +999,7 @@ export function extractOverlays(
       // narrative. (Geometry-less property-scope rows keep every label.)
       const seenLabel = new Set<string>();
       const deduped = out.filter((f) => {
-        if (!f.geometry) return true;
+        if (!f.geometry || f.geometry.type === "Point") return true;
         if (seenLabel.has(f.properties.legendLabel)) return false;
         seenLabel.add(f.properties.legendLabel);
         return true;

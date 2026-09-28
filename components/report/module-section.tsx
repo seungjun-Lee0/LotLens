@@ -195,30 +195,81 @@ function ModuleFacts({
             yearRange?: string;
           }[])
         : [];
-      if (schools.length === 0) return null;
+      const nearby = Array.isArray(raw.nearbySchools)
+        ? (raw.nearbySchools as {
+            name: string;
+            sector: string;
+            type: string;
+            yearRange: string;
+            distanceM: number;
+          }[])
+        : [];
+      if (schools.length === 0 && nearby.length === 0) return null;
+      const pill = (label: string, tint: string) => (
+        <span
+          className="w-full rounded-full px-2 py-0.5 text-center text-[9px] uppercase tracking-normal whitespace-nowrap"
+          style={{
+            background: `color-mix(in oklab, ${tint} 14%, transparent)`,
+            color: tint,
+          }}
+        >
+          {label}
+        </span>
+      );
+      const sectorTint: Record<string, string> = {
+        state: "var(--apple-blue)",
+        catholic: "var(--apple-purple)",
+        independent: "var(--apple-orange)",
+      };
       return (
-        <ul className="flex flex-col gap-1.5 text-[12.5px]">
-          {schools.map((s, i) => (
-            <li key={i} className="grid grid-cols-[112px_1fr] items-baseline gap-2.5">
-              <span
-                className="w-full rounded-full px-2 py-0.5 text-center text-[9px] uppercase tracking-normal whitespace-nowrap"
-                style={{
-                  background:
-                    "color-mix(in oklab, var(--apple-teal) 14%, transparent)",
-                  color: "var(--apple-teal)",
-                }}
-              >
-                {s.type || "Catchment"}
-              </span>
-              <span className="text-foreground/85">
-                <span className="font-medium">{s.name}</span>
-                {s.yearRange && (
-                  <span className="text-muted-foreground"> · {s.yearRange}</span>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-col gap-3 text-[12.5px]">
+          {schools.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Catchment · guaranteed enrolment
+              </div>
+              <ul className="flex flex-col gap-1.5">
+                {schools.map((s, i) => (
+                  <li key={i} className="grid grid-cols-[112px_1fr] items-baseline gap-2.5">
+                    {pill(s.type || "Catchment", "var(--apple-teal)")}
+                    <span className="text-foreground/85">
+                      <span className="font-medium">{s.name}</span>
+                      {s.yearRange && (
+                        <span className="text-muted-foreground"> · {s.yearRange}</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {nearby.length > 0 && (
+            <div>
+              {/* Every sector, nearest first: the catchment says where you
+                  MUST be accepted, this says what is actually around. */}
+              <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Nearby schools · all sectors
+              </div>
+              <ul className="flex flex-col gap-1.5">
+                {nearby.map((s, i) => (
+                  <li key={i} className="grid grid-cols-[112px_1fr] items-baseline gap-2.5">
+                    {pill(s.sector, sectorTint[s.sector.toLowerCase()] ?? "var(--apple-gray)")}
+                    <span className="text-foreground/85">
+                      <span className="font-medium">{s.name}</span>
+                      <span className="text-muted-foreground">
+                        {" "}· {s.type}
+                        {s.yearRange && s.yearRange !== s.type ? `, ${s.yearRange}` : ""}
+                      </span>
+                      <span className="whitespace-nowrap text-muted-foreground">
+                        {" "}· {s.distanceM >= 1000 ? `${(s.distanceM / 1000).toFixed(1)} km` : `${s.distanceM} m`}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       );
     }
     case "heritage": {
@@ -641,7 +692,9 @@ function ModuleFacts({
               </span>
               <span className="text-foreground/85">
                 <span className="font-medium">{s.name ?? "Unnamed stop"}</span>
-                <span className="text-muted-foreground">
+                {/* nowrap: on a phone the line broke between the number
+                    and its unit ("· 155" / "m away"). */}
+                <span className="whitespace-nowrap text-muted-foreground">
                   {" "}· {s.distanceM} m away
                 </span>
               </span>
@@ -931,7 +984,7 @@ export function ModuleSection({
           lotLines={row.module === "zoning" && !reportId ? lotLines : null}
           // Transport is the one module whose features are POINTS spread up
           // to ~2 km out: frame them, or the map shows an empty lot.
-          fitPoints={row.module === "transport"}
+          fitPoints={row.module === "transport" || row.module === "schools"}
           // Contours colour the entire viewport, so a tighter frame keeps
           // the lot legible inside the everywhere-layer.
           tightFrame={row.module === "steep_land" || row.module === "boundary"}

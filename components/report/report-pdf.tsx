@@ -108,6 +108,13 @@ function asArr<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
+/** Closing facts row for a list only the first few of are itemised: a
+ * silent cut reads as "that's all there is". No-op at count ≤ 0. */
+function pushMore(rows: { key: string; val: string }[], count: number, noun: string): void {
+  if (count <= 0) return;
+  rows.push({ key: "", val: `+${count} more ${noun}${count === 1 ? "" : "s"} on the online map` });
+}
+
 /** Summary line for the At-a-glance list: the AI lead restates the full
  * address ("Westfield Chermside, Gympie Rd, … carries high flood risk…"),
  * which wastes the line: strip it and uppercase the first letter. The row
@@ -535,10 +542,20 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       const schools = asArr<{ name: string; type: string; yearRange?: string }>(raw.schools);
       // Catchment type is the row key, so it doesn't need repeating in the
       // value alongside the school name and its year range.
-      return schools.map((s) => ({
+      const rows = schools.map((s) => ({
         key: s.type || "Catchment",
         val: s.yearRange ? `${s.name} · ${s.yearRange}` : s.name,
       }));
+      // Nearest schools of any sector. The one-page budget allows ~8 facts
+      // rows in all, so the catchment rows come first and the list is cut.
+      const nearby = asArr<{ name: string; sector: string; type: string; distanceM: number }>(raw.nearbySchools);
+      const room = Math.max(0, 7 - rows.length);
+      for (const s of nearby.slice(0, room)) {
+        const d = s.distanceM >= 1000 ? `${(s.distanceM / 1000).toFixed(1)} km` : `${s.distanceM} m`;
+        rows.push({ key: `${s.sector} · ${d}`, val: `${s.name} (${s.type})` });
+      }
+      pushMore(rows, nearby.length - room, "nearby school");
+      return rows;
     }
     case "heritage": {
       const entries = asArr<RawAttrs>(raw.entries);

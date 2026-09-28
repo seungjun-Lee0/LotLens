@@ -265,7 +265,7 @@ async function runOverlayFetch(
   tasks.set("mining", settle("mining", fetchMiningData(addr.lat, addr.lng, lot)));
   // Schools stays point-based on purpose: catchment is decided by where
   // the dwelling is, and a lot straddling two catchments would double-list.
-  tasks.set("schools", settle("schools", fetchSchoolsData(addr.lat, addr.lng)));
+  tasks.set("schools", settle("schools", fetchSchoolsData(addr.lat, addr.lng, lot)));
   tasks.set("flooding", settle("flooding", fetchFloodingData(addr.lat, addr.lng, region, lot)));
   tasks.set("flood_planning", settle("flood_planning", fetchFloodPlanningData(addr.lat, addr.lng, region, lot)));
   tasks.set("overland_flow", settle("overland_flow", fetchOverlandFlowData(addr.lat, addr.lng, region, lot)));

@@ -9,6 +9,7 @@
 // change.
 
 import type { CouncilDataRow, Module } from "@/lib/db";
+import { distinctLotplans, groupEasementParcels } from "@/lib/easement-summary";
 
 export type ModuleNarrative = {
   summary: string;
@@ -488,21 +489,21 @@ function renderStubEasements(
   const cadastralList = Array.isArray(raw.cadastralEasements)
     ? (raw.cadastralEasements as Array<{ lotplan?: string | null }>)
     : [];
-  const lotplans = cadastralList
-    .map((e) => e.lotplan)
-    .filter((s): s is string => typeof s === "string" && s.length > 0);
+  // Counted and named per EASEMENT: the DCDB returns one row per polygon
+  // piece, so the raw list repeats a lot/plan once per piece.
+  const lotplans = distinctLotplans(cadastralList);
+  const cadastralCount = groupEasementParcels(cadastralList).length;
   const scope = (raw.scopeNote as string | null) ?? "";
   const adjoiningList = Array.isArray(raw.adjoiningEasements)
     ? (raw.adjoiningEasements as Array<{ lotplan?: string | null }>)
     : [];
 
   if (!hv && !cadastral && adjoiningList.length > 0) {
-    const lots = adjoiningList
-      .map((e) => e.lotplan)
-      .filter((s): s is string => typeof s === "string" && s.length > 0);
+    const lots = distinctLotplans(adjoiningList);
+    const adjoiningCount = groupEasementParcels(adjoiningList).length;
     return {
       summary: `A registered easement adjoins ${input.address} but does not enter the lot.`,
-      detail: `${adjoiningList.length} easement parcel${adjoiningList.length === 1 ? "" : "s"}${lots.length ? ` (${lots.slice(0, 3).join(", ")})` : ""} share${adjoiningList.length === 1 ? "s" : ""} a boundary with this lot. Nothing is registered over the lot itself, but a drainage or sewer easement along the fence line usually means a pipe runs beside it, and the authority's access and dig rights stop at the boundary. ${scope}`,
+      detail: `${adjoiningCount} easement parcel${adjoiningCount === 1 ? "" : "s"}${lots.length ? ` (${lots.slice(0, 3).join(", ")}${lots.length > 3 ? ` +${lots.length - 3} more` : ""})` : ""} share${adjoiningCount === 1 ? "s" : ""} a boundary with this lot. Nothing is registered over the lot itself, but a drainage or sewer easement along the fence line usually means a pipe runs beside it, and the authority's access and dig rights stop at the boundary. ${scope}`,
       questions_to_ask: [
         "What is the adjoining easement for, and does any pipe or cable it serves cross onto this lot?",
         "Would a boundary fence, retaining wall or pool on this side need the easement holder's consent?",
@@ -528,10 +529,10 @@ function renderStubEasements(
   if (hv) parts.push("a high-voltage powerline easement (BCC overlay)");
   if (cadastral) {
     const lotplanText = lotplans.length
-      ? ` (lot/plan: ${lotplans.slice(0, 3).join(", ")})`
+      ? ` (lot/plan: ${lotplans.slice(0, 3).join(", ")}${lotplans.length > 3 ? ` +${lotplans.length - 3} more` : ""})`
       : "";
     parts.push(
-      `${cadastralList.length} registered cadastral easement parcel${cadastralList.length === 1 ? "" : "s"}${lotplanText}`,
+      `${cadastralCount} registered cadastral easement parcel${cadastralCount === 1 ? "" : "s"}${lotplanText}`,
     );
   }
   const summary = `${input.address} sits on ${parts.join(" and ")}.`;

@@ -3,6 +3,7 @@ import { Check, Info, TriangleAlert } from "lucide-react";
 
 import { ModuleMap } from "@/components/report/module-map";
 import type { ModuleNarrative } from "@/lib/anthropic";
+import { formatEasementGroup, groupEasementParcels } from "@/lib/easement-summary";
 import { MODULE_META } from "@/lib/module-meta";
 import {
   contourColorAt,
@@ -309,14 +310,14 @@ function ModuleFacts({
       const cadastral = (raw.cadastralEasements as EasementRow[] | undefined) ?? [];
       const adjoining = (raw.adjoiningEasements as EasementRow[] | undefined) ?? [];
       if (!desc && cadastral.length === 0 && adjoining.length === 0) return null;
-      const list = (rows: EasementRow[]) =>
-        rows
-          .map((e) =>
-            e.lotplan
-              ? `${e.lotplan}${e.areaSqm ? ` · ${Math.round(e.areaSqm)} m²` : ""}`
-              : "Easement parcel",
-          )
-          .join(", ");
+      // One row per EASEMENT, not per polygon piece (see easement-summary).
+      const list = (rows: EasementRow[]) => (
+        <ul className="flex flex-col gap-0.5">
+          {groupEasementParcels(rows).map((g, i) => (
+            <li key={i}>{formatEasementGroup(g)}</li>
+          ))}
+        </ul>
+      );
       return (
         <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           {desc && (

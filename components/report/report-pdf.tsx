@@ -15,6 +15,7 @@ import {
 } from "@react-pdf/renderer";
 
 import type { ModuleNarrative } from "@/lib/anthropic";
+import { formatEasementGroup, groupEasementParcels } from "@/lib/easement-summary";
 import { formatAuAddress } from "@/lib/format-address";
 import { MODULE_META, APPLE_HEX } from "@/lib/module-meta";
 import {
@@ -576,22 +577,15 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       const cadastral = asArr<{ lotplan?: string | null; areaSqm?: number | null }>(
         raw.cadastralEasements,
       );
-      cadastral.forEach((e, i) => {
-        const parts = [
-          e.lotplan ?? "Easement parcel",
-          e.areaSqm ? `${Math.round(e.areaSqm)} m²` : null,
-        ].filter(Boolean);
-        rows.push({ key: `Cadastral ${i + 1}`, val: parts.join(" · ") });
+      // One row per EASEMENT, not per polygon piece (see easement-summary).
+      groupEasementParcels(cadastral).forEach((g, i) => {
+        rows.push({ key: `Cadastral ${i + 1}`, val: formatEasementGroup(g) });
       });
       const adjoining = asArr<{ lotplan?: string | null; areaSqm?: number | null }>(
         raw.adjoiningEasements,
       );
-      adjoining.forEach((e, i) => {
-        const parts = [
-          e.lotplan ?? "Easement parcel",
-          e.areaSqm ? `${Math.round(e.areaSqm)} m²` : null,
-        ].filter(Boolean);
-        rows.push({ key: `Adjoining ${i + 1}`, val: parts.join(" · ") });
+      groupEasementParcels(adjoining).forEach((g, i) => {
+        rows.push({ key: `Adjoining ${i + 1}`, val: formatEasementGroup(g) });
       });
       return rows;
     }

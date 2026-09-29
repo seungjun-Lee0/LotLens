@@ -660,6 +660,8 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       if (raw.zonePrecinct) rows.push({ key: "Zone", val: String(raw.zonePrecinct) });
       if (raw.lvl2Zone) rows.push({ key: "Specific", val: String(raw.lvl2Zone) });
       if (raw.lvl1Zone) rows.push({ key: "Family", val: String(raw.lvl1Zone) });
+      const others = asArr<string>(raw.otherZones);
+      if (others.length > 0) rows.push({ key: "Also on lot", val: others.join(", ") });
       return rows;
     }
     case "internet": {

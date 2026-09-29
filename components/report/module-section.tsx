@@ -462,6 +462,12 @@ function ModuleFacts({
           )}
           <dt className="text-muted-foreground">Family</dt>
           <dd className="font-medium">{lvl1 ?? "Not stated"}</dd>
+          {Array.isArray(raw.otherZones) && (raw.otherZones as string[]).length > 0 && (
+            <>
+              <dt className="text-muted-foreground">Also on lot</dt>
+              <dd className="font-medium">{(raw.otherZones as string[]).join(", ")}</dd>
+            </>
+          )}
         </dl>
       );
     }

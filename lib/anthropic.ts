@@ -338,9 +338,14 @@ function renderStubZoning(
     };
   }
   const specific = lvl2 ?? zonePrecinct ?? zoneCode ?? lvl1;
+  const others = asArr<string>(raw.otherZones);
+  const othersText =
+    others.length > 0
+      ? ` Part of the lot also sits in ${others.join(" and ")}: a site that straddles a zone boundary is assessed under each zone for the land it covers.`
+      : "";
   return {
-    summary: `Zoned ${specific} (${srcName(input)}).`,
-    detail: `Specific zone: ${lvl2 ?? "not stated"}. Top-level zone: ${lvl1 ?? "not stated"}. Precinct: ${zonePrecinct ?? "not stated"} (${zoneCode ?? "no code"}).\n\nZoning governs what can be built, run as a business, or subdivided on the lot. Zone and precinct names differ per planning scheme, so check the specific zone description against your intended use.`,
+    summary: `Zoned ${specific} (${srcName(input)})${others.length > 0 ? `, with part of the lot in ${others.join(" and ")}` : ""}.`,
+    detail: `Specific zone: ${lvl2 ?? "not stated"}. Top-level zone: ${lvl1 ?? "not stated"}. Precinct: ${zonePrecinct ?? "not stated"} (${zoneCode ?? "no code"}).${othersText}\n\nZoning governs what can be built, run as a business, or subdivided on the lot. Zone and precinct names differ per planning scheme, so check the specific zone description against your intended use.`,
     questions_to_ask: [
       "What is the maximum height / GFA / site cover under this zone?",
       "Is a granny flat / dual occupancy permitted as code-assessable or impact-assessable?",

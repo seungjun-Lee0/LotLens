@@ -292,7 +292,7 @@ async function runOverlayFetch(
   // Zoning stays point-based too: a lot is in one zone for practical
   // purposes, and BCC's point-query zone polygon doubles as the parcel
   // fallback for the report's yellow lot outline.
-  tasks.set("zoning", settle("zoning", fetchZoningData(addr.lat, addr.lng, region)));
+  tasks.set("zoning", settle("zoning", fetchZoningData(addr.lat, addr.lng, region, lot)));
   // Boundary is arithmetic on the parcel already fetched above: the RAW
   // polygon, not the inset copy the risk modules classify against, so the
   // side lengths are the cadastre's own.

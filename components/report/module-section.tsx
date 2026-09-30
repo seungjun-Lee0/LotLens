@@ -26,6 +26,21 @@ import { prettyUrl } from "@/lib/url";
 
 // ── Per-module facts panel ────────────────────────────────────────────────
 
+/** Closing row for a list the panel itemises only the first few of: a
+ * silent cut reads as "that's all there is". Renders nothing at count ≤ 0. */
+function MoreRow({ count, noun }: { count: number; noun: string }) {
+  if (count <= 0) return null;
+  return (
+    <>
+      <dt />
+      <dd className="text-muted-foreground">
+        +{count} more {noun}
+        {count === 1 ? "" : "s"} shown on the map
+      </dd>
+    </>
+  );
+}
+
 function ModuleFacts({
   module,
   raw,
@@ -443,6 +458,7 @@ function ModuleFacts({
               </dd>
             </Fragment>
           ))}
+          <MoreRow count={tenements.length - 3} noun="tenure" />
         </dl>
       );
     }
@@ -530,7 +546,10 @@ function ModuleFacts({
         <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-[12.5px]">
           <dt className="text-muted-foreground">On the lot</dt>
           <dd className="font-medium">
-            {assets.length === 0 ? "No network assets on the lot" : kinds.slice(0, 4).join(", ")}
+            {assets.length === 0
+              ? "No network assets on the lot"
+              : kinds.slice(0, 4).join(", ") +
+                (kinds.length > 4 ? ` +${kinds.length - 4} more` : "")}
           </dd>
           <dt className="text-muted-foreground">Easement risk</dt>
           <dd className="font-medium">
@@ -579,6 +598,7 @@ function ModuleFacts({
               </dd>
             </Fragment>
           ))}
+          <MoreRow count={mains.length - 3} noun="main" />
           {Array.isArray(raw.adjoiningMains) && (raw.adjoiningMains as { kind: string }[]).length > 0 && (
             <>
               <dt className="text-muted-foreground">Along boundary</dt>
@@ -666,6 +686,7 @@ function ModuleFacts({
               </dd>
             </Fragment>
           ))}
+          <MoreRow count={publicAssets.length - 3} noun="Council asset" />
           <dt className="text-muted-foreground">Build over</dt>
           <dd className="font-medium">
             {onLot ? "Council approval required" : "Not triggered by mapped assets"}

@@ -13,11 +13,13 @@ import {
   StyleSheet,
   Font,
 } from "@react-pdf/renderer";
+import type { Style } from "@react-pdf/types";
 
 import type { ModuleNarrative } from "@/lib/anthropic";
 import { formatEasementGroup, groupEasementParcels } from "@/lib/easement-summary";
 import { formatAuAddress } from "@/lib/format-address";
 import { MODULE_META, APPLE_HEX } from "@/lib/module-meta";
+import { fitLeftColumn, fitRightColumn } from "@/lib/pdf-fit";
 import {
   contourColorAt,
   CONTOUR_LEGEND_LABEL,
@@ -325,6 +327,8 @@ const styles = StyleSheet.create({
     backgroundColor: PANEL_BG,
     borderWidth: 0.5,
     borderColor: HAIRLINE,
+    // Never squeezed: a shrunk panel draws its rows over each other.
+    flexShrink: 0,
   },
   factRow: { flexDirection: "row", marginBottom: 2 },
   factKey: { width: 92, color: TEXT_MUTED, fontSize: 8.5 },
@@ -337,6 +341,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 0.5,
     borderTopColor: HAIRLINE,
     flexDirection: "row",
+    flexShrink: 0,
   },
   noteLabel: { fontFamily: "Helvetica-Bold", color: TEXT_PRIMARY, fontSize: 8 },
   noteText: { flex: 1, fontSize: 8, color: TEXT_BODY, lineHeight: 1.4 },
@@ -647,6 +652,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
           val: [t.type ?? "Resource authority", t.status, t.owner].filter(Boolean).join(" · "),
         });
       });
+      pushMore(rows, tenements.length - 3, "tenure");
       return rows;
     }
     case "zoning": {
@@ -713,6 +719,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
             .join(" · ") || "Council-owned",
         });
       }
+      pushMore(rows, publicAssets.length - 3, "Council asset");
       rows.push({
         key: "Build over/near",
         val: raw.hasPublicAssetOnLot === true
@@ -727,7 +734,10 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
       const kinds = [...new Set(assets.map((a) => String(a.kind ?? "")))].filter(Boolean);
       rows.push({
         key: "On the lot",
-        val: kinds.length === 0 ? "No network assets on the lot" : kinds.slice(0, 4).join(", "),
+        val:
+          kinds.length === 0
+            ? "No network assets on the lot"
+            : kinds.slice(0, 4).join(", ") + (kinds.length > 4 ? ` +${kinds.length - 4} more` : ""),
       });
       rows.push({
         key: "Easement risk",
@@ -765,6 +775,7 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
               .join(" · ") || "Urban Utilities asset",
         });
       }
+      pushMore(rows, mains.length - 3, "main");
       const adjoining = asArr<RawAttrs>(raw.adjoiningMains);
       if (adjoining.length > 0) {
         rows.push({
@@ -786,17 +797,19 @@ function factsRows(module: Module, raw: RawAttrs | undefined): { key: string; va
     case "local_plans": {
       const rows: { key: string; val: string }[] = [];
       if (raw.planName) rows.push({ key: "Plan", val: String(raw.planName) });
-      for (const p of asArr<RawAttrs>(raw.precincts).slice(0, 3)) {
+      const precincts = asArr<RawAttrs>(raw.precincts);
+      for (const p of precincts.slice(0, 3)) {
         rows.push({
           key: p.code ? `Precinct ${String(p.code)}` : "Precinct",
           val: [p.name, p.subPrecinct].filter(Boolean).map(String).join(": "),
         });
       }
+      pushMore(rows, precincts.length - 3, "precinct");
       return rows;
     }
     case "transport": {
       return asArr<RawAttrs>(raw.stops)
-        .slice(0, 4)
+        .slice(0, 6)
         .map((s) => ({
           key: String(s.kind ?? "Stop"),
           val: `${s.name ? `${String(s.name)} · ` : ""}${String(s.distanceM)} m`,
@@ -832,8 +845,8 @@ function ModulePage({
   const allFacts = factsRows(module, raw);
   const facts = allFacts.slice(0, 8);
   const factsMore = allFacts.length - facts.length;
-  const questions = (narrative?.questions_to_ask ?? []).slice(0, 4);
-  const sources = Array.from(new Set(narrative?.sources ?? [])).slice(0, 4);
+  const allQuestions = (narrative?.questions_to_ask ?? []).slice(0, 4);
+  const allSources = Array.from(new Set(narrative?.sources ?? [])).slice(0, 4);
   const failed = raw?.fetchFailed === true;
   const unavailable = isUnavailable(raw);
   // Severity colour rides the SHARED risk scale (lib/risk-style.ts): the
@@ -875,13 +888,48 @@ function ModulePage({
     items.filter((i) => i.label !== CONTOUR_LEGEND_LABEL);
   const appliesAll = dropContourRow(legendAll.applies);
   const nearbyAll = dropContourRow(legendAll.nearby);
-  const legendItems = {
+  const legendCapped = {
     applies: appliesAll.slice(0, 7),
     nearby: nearbyAll.slice(0, Math.max(0, 9 - Math.min(7, appliesAll.length))),
+  };
+
+  // Measure, then trim to the body's fixed height (lib/pdf-fit): an
+  // over-full column used to draw paragraphs over each other and clip the
+  // tail of "For this property" and the Note.
+  const detailParas =
+    narrative?.detail && !unavailable && !isNoSourceText(narrative.detail)
+      ? narrative.detail.split(/\n{2,}/)
+      : null;
+  const left = fitLeftColumn({
+    thingsToKnow: meta.thingsToKnow,
+    detail: detailParas,
+    facts,
+    factsMore: factsMore > 0,
+    note: meta.note,
+  });
+  const LEGEND_ROW_H = 12.5;
+  const right = fitRightColumn({
+    questions: allQuestions,
+    legendApplies: legendCapped.applies.length,
+    legendNearby: legendCapped.nearby.length,
+    references: allSources.length > 0 ? allSources.length : unavailable ? 1 : 0,
+    fixedLegendH:
+      LEGEND_ROW_H +
+      (elevationLegend
+        ? (elevationLegend.fallM === null ? 2 : 3) * LEGEND_ROW_H + 4 + CONTOUR_RAMP.length * 7
+        : 0),
+  });
+  const questions = allQuestions.slice(0, right.questions);
+  const sources = allSources.slice(0, right.references);
+  const legendItems = {
+    applies: legendCapped.applies.slice(0, right.legendApplies),
+    nearby: legendCapped.nearby.slice(0, right.legendNearby),
   };
   const legendMore =
     appliesAll.length + nearbyAll.length -
     (legendItems.applies.length + legendItems.nearby.length);
+  const clamp = (base: Style, maxLines?: number): Style | Style[] =>
+    maxLines ? [base, { maxLines, textOverflow: "ellipsis" }] : base;
 
   return (
     <Page size="A4" style={styles.page} wrap={false}>
@@ -919,11 +967,11 @@ function ModulePage({
       <View style={styles.body}>
         <View style={styles.leftCol}>
           <Text style={styles.sectionLabel}>Things to know</Text>
-          {meta.thingsToKnow.map((p, i) => (
-            <Text key={i} style={styles.para}>{p}</Text>
+          {left.thingsToKnow.map((p, i) => (
+            <Text key={i} style={clamp(styles.para, p.maxLines)}>{p.text}</Text>
           ))}
 
-          {narrative?.detail && !unavailable && !isNoSourceText(narrative.detail) && (
+          {left.detail && (
             <View
               style={[
                 styles.forProperty,
@@ -934,16 +982,15 @@ function ModulePage({
                 For this property
               </Text>
               {/* Blank lines = paragraph breaks (see the web renderer). */}
-              {narrative.detail.split(/\n{2,}/).map((para, i) => (
+              {left.detail.map((para, i) => (
                 <Text
                   key={i}
-                  style={
-                    i > 0
-                      ? [styles.forPropertyText, { marginTop: 5 }]
-                      : styles.forPropertyText
-                  }
+                  style={clamp(
+                    i > 0 ? { ...styles.forPropertyText, marginTop: 5 } : styles.forPropertyText,
+                    para.maxLines,
+                  )}
                 >
-                  {para}
+                  {para.text}
                 </Text>
               ))}
             </View>
@@ -967,7 +1014,7 @@ function ModulePage({
 
           <View style={styles.noteWrap}>
             <Text style={styles.noteLabel}>Note · </Text>
-            <Text style={[styles.noteText, { maxLines: 3, textOverflow: "ellipsis" }]}>{meta.note}</Text>
+            <Text style={[styles.noteText, { maxLines: left.noteLines, textOverflow: "ellipsis" }]}>{meta.note}</Text>
           </View>
         </View>
 

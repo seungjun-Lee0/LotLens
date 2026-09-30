@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser, isAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { canViewReport } from "@/lib/pipeline";
+import { shareTokenFromUrl, verifyShareToken } from "@/lib/share";
 import { getReportPdf } from "@/lib/pdf-cache";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
@@ -34,14 +35,15 @@ export async function GET(
     return NextResponse.json({ error: "invalid report id" }, { status: 400 });
   }
   const sql = getDb();
-  const [rows, viewer] = await Promise.all([
+  const [rows, viewer, shared] = await Promise.all([
     sql`SELECT paid_at, user_id FROM reports WHERE id = ${id}::uuid LIMIT 1`,
     getSessionUser(),
+    verifyShareToken(shareTokenFromUrl(req.url), id),
   ]);
   const row = (rows as Array<{ paid_at: string | null; user_id: string | null }>)[0];
   const admin = isAdmin(viewer);
   // Same answer for "not yours" and "doesn't exist": no ownership probe.
-  if (!row || !canViewReport({ ownerId: row.user_id }, viewer, admin)) {
+  if (!row || !canViewReport({ ownerId: row.user_id }, viewer, admin, shared)) {
     return NextResponse.json({ error: "report not found" }, { status: 404 });
   }
   // The report page only hides the download button for unpaid reports —

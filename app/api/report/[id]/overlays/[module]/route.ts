@@ -12,6 +12,7 @@ import { getSessionUser, isAdmin } from "@/lib/auth";
 import { getDb, MODULE_ORDER, type Module } from "@/lib/db";
 import { extractOverlays } from "@/lib/overlays";
 import { canViewReport, loadCouncilRowsCached } from "@/lib/pipeline";
+import { shareTokenFromUrl, verifyShareToken } from "@/lib/share";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
 const PREVIEW_MODULE: Module = "flooding";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ id: string; module: string }> },
 ) {
   const { id, module } = await context.params;
@@ -28,13 +29,14 @@ export async function GET(
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
   const sql = getDb();
-  const [rows, viewer] = await Promise.all([
+  const [rows, viewer, shared] = await Promise.all([
     sql`SELECT paid_at, user_id FROM reports WHERE id = ${id}::uuid LIMIT 1`,
     getSessionUser(),
+    verifyShareToken(shareTokenFromUrl(req.url), id),
   ]);
   const report = (rows as Array<{ paid_at: string | null; user_id: string | null }>)[0];
   const admin = isAdmin(viewer);
-  if (!report || !canViewReport({ ownerId: report.user_id }, viewer, admin)) {
+  if (!report || !canViewReport({ ownerId: report.user_id }, viewer, admin, shared)) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
   // Same paywall as the page: an unpaid report serves only the preview.

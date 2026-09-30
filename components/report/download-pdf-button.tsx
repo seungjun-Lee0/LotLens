@@ -17,6 +17,7 @@ export function DownloadPdfButton({
   filename,
   iconOnly = false,
   small = false,
+  query = null,
 }: {
   reportId: string;
   /** Falls back to the Content-Disposition name the route already sets. */
@@ -25,6 +26,8 @@ export function DownloadPdfButton({
   iconOnly?: boolean;
   /** With iconOnly: a 36 px list-row button instead of the 48 px FAB. */
   small?: boolean;
+  /** Query string (without "?") for the PDF request: a share token. */
+  query?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +48,7 @@ export function DownloadPdfButton({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/report/${reportId}/pdf`);
+      const res = await fetch(`/api/report/${reportId}/pdf${query ? `?${query}` : ""}`);
       if (!res.ok) {
         // The route answers JSON on 402/403/404 and a PDF otherwise.
         const body = (await res.json().catch(() => null)) as

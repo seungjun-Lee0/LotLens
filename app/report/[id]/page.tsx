@@ -15,6 +15,8 @@ import { getSessionUser, isAdmin } from "@/lib/auth";
 import { heroAerialUrl, heroLotPath } from "@/lib/aerial";
 import { formatAuAddress } from "@/lib/format-address";
 import { canViewReport, loadReportPayload } from "@/lib/pipeline";
+import { SHARE_PARAM, verifyShareToken, withShareToken } from "@/lib/share";
+import { ShareButton } from "@/components/report/share-button";
 import { isFlagged, isUnavailable, RISK_RANK, riskOf } from "@/lib/risk-style";
 import { ESSENTIAL_MODULES, GOOD_TO_KNOW_MODULES, type Module } from "@/lib/db";
 
@@ -31,7 +33,7 @@ export default async function ReportPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ session_id?: string; skin?: string }>;
+  searchParams?: Promise<{ session_id?: string; skin?: string; [SHARE_PARAM]?: string }>;
 }) {
   const { id } = await params;
   const sp = (await searchParams) ?? {};
@@ -50,12 +52,25 @@ export default async function ReportPage({
     }
   }
 
-  const [payload, viewer] = await Promise.all([loadReportPayload(id), getSessionUser()]);
+  const shareToken = typeof sp[SHARE_PARAM] === "string" ? sp[SHARE_PARAM] : null;
+  const [payload, viewer, shared] = await Promise.all([
+    loadReportPayload(id),
+    getSessionUser(),
+    verifyShareToken(shareToken, id),
+  ]);
   if (!payload) notFound();
   const admin = isAdmin(viewer);
   // A signed-in user's run is theirs: anyone else gets the same 404 as a
   // missing id, so a leaked link is not a bearer token for a paid report.
-  if (!canViewReport(payload.report, viewer, admin)) notFound();
+  // A share link (lib/share) is the deliberate exception.
+  if (!canViewReport(payload.report, viewer, admin, shared)) notFound();
+  // The token must ride along on every same-report request the page makes
+  // (map overlays, PDF), or a shared viewer's maps would 404.
+  const accessQuery = shared && shareToken ? withShareToken("", shareToken).slice(1) : null;
+  // Sharing is the owner's call. A viewer who arrived via a share link, or
+  // an anonymous run's URL-only reader, gets no Share button.
+  const canShare =
+    !shared && !!viewer && (admin || payload.report.ownerId === viewer.id);
 
   const { report, address, modules, propertyPolygon, parcelLines } = payload;
   // Admins bypass the paywall outright: full report, no unlock, no
@@ -208,9 +223,10 @@ export default async function ReportPage({
                     <dd className="report-display mt-1 text-[2.6rem] leading-none sm:text-[3.4rem]">{infoModules.length}</dd>
                   </div>
                 </dl>
-                {paid && (
-                  <div className="report-hero-cta">
-                    <DownloadPdfButton reportId={report.id} />
+                {(paid || canShare) && (
+                  <div className="report-hero-cta flex flex-wrap items-center gap-2">
+                    {canShare && <ShareButton reportId={report.id} addressLabel={displayAddress} />}
+                    {paid && <DownloadPdfButton reportId={report.id} query={accessQuery} />}
                   </div>
                 )}
               </div>
@@ -227,7 +243,12 @@ export default async function ReportPage({
                 {displayAddress}
               </h1>
             </div>
-            {paid && <DownloadPdfButton reportId={report.id} />}
+            {(paid || canShare) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {canShare && <ShareButton reportId={report.id} addressLabel={displayAddress} />}
+                {paid && <DownloadPdfButton reportId={report.id} query={accessQuery} />}
+              </div>
+            )}
           </header>
         )}
 
@@ -252,6 +273,7 @@ export default async function ReportPage({
               propertyPolygon={propertyPolygon}
               lotLines={parcelLines}
               reportId={report.id}
+              accessQuery={accessQuery}
             />
           ))}
 
@@ -269,6 +291,7 @@ export default async function ReportPage({
                 propertyPolygon={propertyPolygon}
                 lotLines={parcelLines}
                 reportId={report.id}
+                accessQuery={accessQuery}
               />
             ))}
 
@@ -294,6 +317,7 @@ export default async function ReportPage({
                   propertyPolygon={propertyPolygon}
                   lotLines={parcelLines}
                   reportId={report.id}
+                  accessQuery={accessQuery}
                 />
               ))}
             </>
@@ -377,7 +401,7 @@ export default async function ReportPage({
             hasConsideration: m.hasConsideration,
             failed: isFailed(m),
           }))}
-          action={<DownloadPdfButton reportId={report.id} iconOnly />}
+          action={<DownloadPdfButton reportId={report.id} iconOnly query={accessQuery} />}
         />
       )}
 

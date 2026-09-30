@@ -930,6 +930,7 @@ export function ModuleSection({
   propertyPolygon = null,
   lotLines = null,
   reportId = null,
+  accessQuery = null,
 }: {
   row: ReportModuleRow;
   narrative: ModuleNarrative | undefined;
@@ -940,6 +941,9 @@ export function ModuleSection({
    * the RSC payload then carries only the legend, not every polygon of
    * every section. */
   reportId?: string | null;
+  /** Query string (without "?") appended to the overlays URL: the share
+   * token for a viewer who arrived via a share link. */
+  accessQuery?: string | null;
   propertyPolygon?: unknown | null;
   lotLines?: unknown | null;
 }) {
@@ -1001,7 +1005,11 @@ export function ModuleSection({
           lng={lng}
           className="h-64 sm:h-80 lg:h-96"
           overlays={reportId ? [] : mapOverlays}
-          overlaysUrl={reportId ? `/api/report/${reportId}/overlays/${row.module}` : null}
+          overlaysUrl={
+            reportId
+              ? `/api/report/${reportId}/overlays/${row.module}${accessQuery ? `?${accessQuery}` : ""}`
+              : null
+          }
           // Legend-only features: the property-scoped pass carries labels
           // without geometry, so this stays small.
           applicableOverlays={applicableOverlays.map((f) => ({ ...f, geometry: null }))}

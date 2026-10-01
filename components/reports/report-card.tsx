@@ -24,17 +24,7 @@ import { MODULE_META } from "@/lib/module-meta";
 import type { ReportListItem } from "@/lib/reports";
 import { RISK_STYLE } from "@/lib/risk-style";
 
-// Fixed zone so the server render and the browser agree on the day (a
-// UTC-evening timestamp is "tomorrow" in Brisbane) — a locale-only format
-// would hydrate with a mismatch for any viewer outside AEST.
-export function formatRunDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Australia/Brisbane",
-  });
-}
+import { formatRunDate } from "@/lib/format-date";
 
 function PaidPill({ paid }: { paid: boolean }) {
   return (

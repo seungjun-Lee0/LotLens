@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowRight,
+  Columns3,
   FileArchive,
   FileText,
   Loader2,
@@ -363,6 +364,16 @@ export function ReportList({
                   <FileArchive className="size-4" />
                   Save ZIP
                 </a>
+              )}
+              {/* Side-by-side view of two or three ticked reports. */}
+              {!zipBusy && selectedCount >= 2 && selectedCount <= 3 && (
+                <Link
+                  href={`/reports/compare?ids=${items.filter((it) => selected.has(it.id)).map((it) => it.id).join(",")}`}
+                  className="glass inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-semibold"
+                >
+                  <Columns3 className="size-4" />
+                  Compare {selectedCount}
+                </Link>
               )}
               {zipBusy ? (
                 <button

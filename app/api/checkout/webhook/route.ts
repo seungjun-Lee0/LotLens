@@ -1,58 +1,24 @@
 // POST /api/checkout/webhook
 //
-// Stripe webhook for Checkout completion. Marks the report paid_at +
-// stores session id. Also exposed as a public endpoint that the report
-// page can poll (with session_id) as a fallback when the webhook hasn't
-// landed by the time the user is redirected back.
+// Stripe webhook: verifies the signature, claims the event id once, and
+// hands the event to lib/billing (report unlock, credit pack, or
+// subscription sync). The GET form re-applies one Checkout session by id,
+// for clients that poll after the redirect back.
 
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
-import { PLAN_QUOTAS } from "@/lib/auth";
+import {
+  applyCheckoutSession,
+  syncCheckoutSessionById,
+  syncSubscription,
+} from "@/lib/billing";
 import { getDb } from "@/lib/db";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
-
-// The unlock belongs to the REPORT the buyer was looking at, never to the
-// address: addresses are a cache key shared by everyone who searches the
-// same label, so an address-level flag handed the full report to the next
-// stranger who typed it in.
-async function markPaid(session: Stripe.Checkout.Session) {
-  const reportId = session.metadata?.reportId;
-  const addressId = session.metadata?.addressId;
-  if (!reportId && !addressId) {
-    console.warn("[checkout/webhook] no reportId/addressId in session metadata", session.id);
-    return;
-  }
-  if (session.payment_status !== "paid") {
-    console.log("[checkout/webhook] session not paid yet, skipping", session.id, session.payment_status);
-    return;
-  }
-  const sql = getDb();
-  if (reportId) {
-    await sql`
-      UPDATE reports
-      SET paid_at = COALESCE(paid_at, now()),
-          stripe_session_id = COALESCE(stripe_session_id, ${session.id})
-      WHERE id = ${reportId}::uuid
-    `;
-    return;
-  }
-  // Sessions created before reportId rode in the metadata: unlock the
-  // newest run of that address, which is the one the buyer came from.
-  await sql`
-    UPDATE reports
-    SET paid_at = COALESCE(paid_at, now()),
-        stripe_session_id = COALESCE(stripe_session_id, ${session.id})
-    WHERE id = (
-      SELECT id FROM reports WHERE address_id = ${addressId}::uuid
-      ORDER BY generated_at DESC LIMIT 1
-    )
-  `;
-}
 
 /** Stripe retries deliveries: claim the event id once, skip replays. */
 async function claimEvent(event: Stripe.Event): Promise<boolean> {
@@ -64,85 +30,6 @@ async function claimEvent(event: Stripe.Event): Promise<boolean> {
     RETURNING id
   `) as Array<{ id: string }>;
   return rows.length > 0;
-}
-
-// Newer Stripe API versions expose current_period_end on the subscription
-// item rather than the subscription itself: read whichever is present.
-function periodEnd(sub: Stripe.Subscription): string | null {
-  const raw =
-    (sub as unknown as { current_period_end?: number }).current_period_end ??
-    sub.items?.data?.[0]?.current_period_end;
-  return typeof raw === "number" ? new Date(raw * 1000).toISOString() : null;
-}
-
-/**
- * Persist subscription state onto the user row (idempotent) and manage the
- * credit balance:
- *   - activation / new billing period / plan change → credits reset to the
- *     plan's quota (basic 10, pro 50): plans renew monthly, they don't
- *     accumulate or top up mid-cycle;
- *   - cancellation / non-active status → plan back to free, credits zeroed.
- */
-async function syncSubscription(sub: Stripe.Subscription) {
-  const userId = sub.metadata?.userId;
-  const plan = sub.metadata?.plan;
-  if (!userId || (plan !== "basic" && plan !== "pro")) {
-    console.warn("[checkout/webhook] subscription missing userId/plan metadata", sub.id);
-    return;
-  }
-  const active = sub.status === "active" || sub.status === "trialing";
-  const newPeriodEnd = periodEnd(sub);
-  const sql = getDb();
-
-  const prevRows = (await sql`
-    SELECT plan, current_period_end, credits FROM users WHERE id = ${userId} LIMIT 1
-  `) as Array<{ plan: string; current_period_end: string | null; credits: number }>;
-  const prev = prevRows[0];
-  if (!prev) {
-    console.warn("[checkout/webhook] user not found for subscription", sub.id, userId);
-    return;
-  }
-
-  let credits = prev.credits ?? 0;
-  if (!active) {
-    credits = 0;
-  } else {
-    const planChanged = prev.plan !== plan;
-    const newCycle =
-      !!newPeriodEnd &&
-      (!prev.current_period_end ||
-        new Date(newPeriodEnd).getTime() >
-          new Date(prev.current_period_end).getTime());
-    if (planChanged || newCycle) credits = PLAN_QUOTAS[plan];
-  }
-
-  await sql`
-    UPDATE users
-    SET plan = ${active ? plan : "free"},
-        subscription_status = ${sub.status},
-        stripe_subscription_id = ${sub.id},
-        current_period_end = ${newPeriodEnd},
-        credits = ${credits}
-    WHERE id = ${userId}
-  `;
-}
-
-/** checkout.session.completed router: one-time report vs subscription. */
-async function handleSessionCompleted(
-  stripe: Stripe,
-  session: Stripe.Checkout.Session,
-) {
-  if (session.mode === "subscription") {
-    const subId =
-      typeof session.subscription === "string"
-        ? session.subscription
-        : session.subscription?.id;
-    if (!subId) return;
-    const sub = await stripe.subscriptions.retrieve(subId);
-    await syncSubscription(sub);
-    return;
-  }
-  await markPaid(session);
 }
 
 export async function POST(req: Request) {
@@ -190,7 +77,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ received: true, duplicate: true });
     }
     if (event.type === "checkout.session.completed") {
-      await handleSessionCompleted(
+      await applyCheckoutSession(
         stripe,
         event.data.object as Stripe.Checkout.Session,
       );
@@ -222,10 +109,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ paid: false }, { status: 200 });
   }
   try {
-    const stripe = getStripe();
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-    await handleSessionCompleted(stripe, session);
-    return NextResponse.json({ paid: session.payment_status === "paid" });
+    return NextResponse.json({ paid: await syncCheckoutSessionById(sessionId) });
   } catch (err) {
     console.error("[checkout/webhook GET] retrieve failed:", err);
     return NextResponse.json(

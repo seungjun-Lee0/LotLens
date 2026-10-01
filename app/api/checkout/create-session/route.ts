@@ -6,14 +6,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getSessionUser } from "@/lib/auth";
+import { getSessionUser, isActiveSubscriber } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import {
+  CREDIT_PACKS,
   REPORT_CURRENCY,
   REPORT_PRICE_CENTS,
   SUBSCRIPTION_PLANS,
   getStripe,
   isStripeConfigured,
+  packsForPlan,
+  type CreditPack,
 } from "@/lib/stripe";
 
 export const runtime = "nodejs";
@@ -28,7 +31,70 @@ const BodySchema = z.union([
   z.object({
     plan: z.enum(["basic", "pro"]),
   }),
+  z.object({
+    pack: z.enum(["small", "large"]),
+    /** Report to land back on after paying (else /account). */
+    reportId: z.string().uuid().optional(),
+  }),
 ]);
+
+/**
+ * One-off Checkout for a credit pack. Subscribers only, and only the
+ * packs their plan may buy (see packsForPlan): the pack is a top-up for an
+ * exhausted allowance, not a cheaper way around the subscription.
+ */
+async function createPackSession(
+  req: Request,
+  pack: CreditPack,
+  reportId?: string,
+): Promise<NextResponse> {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "auth required", loginUrl: "/login?next=%2Faccount" },
+      { status: 401 },
+    );
+  }
+  if (!isActiveSubscriber(user) || !packsForPlan(user.plan).includes(pack)) {
+    return NextResponse.json(
+      { error: "This credit pack is not available on your plan." },
+      { status: 403 },
+    );
+  }
+  const origin =
+    req.headers.get("origin") ??
+    process.env.NEXT_PUBLIC_BASE_URL ??
+    "http://localhost:3000";
+  const def = CREDIT_PACKS[pack];
+  const back = reportId ? `/report/${reportId}` : "/account";
+  const session = await getStripe().checkout.sessions.create({
+    mode: "payment",
+    currency: REPORT_CURRENCY,
+    ...(user.stripeCustomerId ? { customer: user.stripeCustomerId } : { customer_email: user.email }),
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: REPORT_CURRENCY,
+          unit_amount: def.amountCents,
+          product_data: {
+            name: `LotLens: ${def.name}`,
+            description: "Report credits that never expire. Used after your monthly credits.",
+          },
+        },
+      },
+    ],
+    metadata: {
+      kind: "credit_pack",
+      userId: user.id,
+      pack,
+      credits: String(def.credits),
+    },
+    success_url: `${origin}${back}?checkout=credits&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}${back}`,
+  });
+  return NextResponse.json({ redirectUrl: session.url });
+}
 
 async function createSubscriptionSession(
   req: Request,
@@ -112,6 +178,17 @@ export async function POST(req: Request) {
       return await createSubscriptionSession(req, parsed.plan);
     } catch (err) {
       console.error("[checkout] subscription session failed:", err);
+      return NextResponse.json(
+        { error: `stripe error: ${(err as Error).message}` },
+        { status: 502 },
+      );
+    }
+  }
+  if ("pack" in parsed) {
+    try {
+      return await createPackSession(req, parsed.pack, parsed.reportId);
+    } catch (err) {
+      console.error("[checkout] credit pack session failed:", err);
       return NextResponse.json(
         { error: `stripe error: ${(err as Error).message}` },
         { status: 502 },

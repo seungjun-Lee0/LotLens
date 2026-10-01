@@ -32,6 +32,35 @@ export const SUBSCRIPTION_PLANS = {
 
 export type SubscriptionPlan = keyof typeof SUBSCRIPTION_PLANS;
 
+// Credit packs: what a subscriber buys when the month's allowance is gone.
+// Priced per credit ABOVE the plan that may buy them (Basic is $4.90 a
+// report, its pack $5.00; Pro is $1.58, its pack $2.00) so the
+// subscription stays the cheapest way to run reports, and far below the
+// $19 single report so topping up always beats falling back to it. Pack
+// credits never expire (see users.bonus_credits).
+export const CREDIT_PACKS = {
+  small: {
+    name: "5 report credits",
+    credits: Number(process.env.PACK_SMALL_CREDITS ?? 5),
+    amountCents: Number(process.env.PACK_SMALL_PRICE_CENTS ?? 2500),
+  },
+  large: {
+    name: "25 report credits",
+    credits: Number(process.env.PACK_LARGE_CREDITS ?? 25),
+    amountCents: Number(process.env.PACK_LARGE_PRICE_CENTS ?? 5000),
+  },
+} as const;
+
+export type CreditPack = keyof typeof CREDIT_PACKS;
+
+/** Packs a plan may buy. The large pack's unit price undercuts Basic's
+ * own, so Basic only sees the small one (and the upgrade to Pro). */
+export function packsForPlan(plan: string): CreditPack[] {
+  if (plan === "pro") return ["large", "small"];
+  if (plan === "basic") return ["small"];
+  return [];
+}
+
 let cached: Stripe | null = null;
 
 export function getStripe(): Stripe {

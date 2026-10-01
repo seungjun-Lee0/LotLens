@@ -31,6 +31,8 @@ export type SessionUser = {
   currentPeriodEnd: string | null;
   /** Report credits left this billing cycle (granted by the webhook). */
   credits: number;
+  /** Credits bought in packs: never reset, spent after the monthly ones. */
+  bonusCredits: number;
   /** False for Google-only accounts (they can add a password in /account). */
   hasPassword: boolean;
   /** PDF report branding (subscriber feature). */
@@ -48,6 +50,7 @@ type UserRow = {
   stripe_customer_id: string | null;
   current_period_end: string | null;
   credits: number;
+  bonus_credits: number;
   has_password: boolean;
   brand_name: string | null;
   brand_color: string | null;
@@ -113,6 +116,7 @@ function toSessionUser(row: UserRow): SessionUser {
     stripeCustomerId: row.stripe_customer_id,
     currentPeriodEnd: row.current_period_end,
     credits: row.credits ?? 0,
+    bonusCredits: row.bonus_credits ?? 0,
     hasPassword: row.has_password,
     brandName: row.brand_name ?? null,
     brandColor: row.brand_color ?? null,
@@ -136,7 +140,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     const sql = getDb();
     const rows = (await sql`
       SELECT id, email, name, plan, subscription_status,
-             stripe_customer_id, current_period_end, credits,
+             stripe_customer_id, current_period_end, credits, bonus_credits,
              (password_hash IS NOT NULL) AS has_password,
              brand_name, brand_color, brand_logo_url
       FROM users WHERE id = ${userId} LIMIT 1
@@ -156,6 +160,16 @@ export function isActiveSubscriber(user: SessionUser | null): boolean {
     (user.subscriptionStatus === "active" ||
       user.subscriptionStatus === "trialing")
   );
+}
+
+/**
+ * Credits the user can spend right now: the monthly allowance only counts
+ * while the subscription is active; pack credits were paid for outright,
+ * so they stay spendable even after a plan lapses.
+ */
+export function spendableCredits(user: SessionUser | null): number {
+  if (!user) return 0;
+  return (isActiveSubscriber(user) ? user.credits : 0) + user.bonusCredits;
 }
 
 /** Reports unlocked against quota in the current calendar month. */

@@ -148,6 +148,23 @@ create unique index if not exists council_data_addr_module_uidx on council_data(
 -- Every search does an exact lookup on the resolved label.
 create index if not exists addresses_address_text_idx on addresses(address_text);
 
+-- ── Credit packs ──────────────────────────────────────────────────────────
+-- users.credits is the MONTHLY allowance: reset to the plan quota on every
+-- renewal, zeroed on cancel. bonus_credits are bought in packs when the
+-- allowance runs out: never reset, never expire, spent only after the
+-- monthly credits are gone. The ledger's unique session id is what makes a
+-- grant idempotent (the webhook and the post-checkout poll both call it).
+alter table users add column if not exists bonus_credits int not null default 0;
+create table if not exists credit_purchases (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references users(id) on delete cascade,
+  credits           int not null,
+  amount_cents      int not null,
+  stripe_session_id text not null unique,
+  created_at        timestamptz not null default now()
+);
+create index if not exists credit_purchases_user_idx on credit_purchases(user_id, created_at);
+
 -- ── Stripe webhook idempotency ────────────────────────────────────────────
 -- Stripe retries deliveries; each event id is handled once.
 create table if not exists stripe_events (

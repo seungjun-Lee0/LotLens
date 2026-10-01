@@ -820,7 +820,7 @@ export async function generateReportForAddress(
   let quotaUnlock: QuotaUnlock | null = null;
   if (userId) {
     try {
-      quotaUnlock = await trySpendCredit(userId, reportId, addressId);
+      quotaUnlock = await trySpendCredit(userId, reportId);
     } catch (err) {
       console.error("[pipeline] quota unlock failed (non-fatal):", err);
     }

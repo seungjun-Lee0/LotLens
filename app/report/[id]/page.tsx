@@ -10,8 +10,10 @@ import { ModuleSection } from "@/components/report/module-section";
 import { ModuleNav } from "@/components/report/module-nav";
 import { NextSteps } from "@/components/report/next-steps";
 import { RetryChecks } from "@/components/report/retry-checks";
-import { UnlockButton } from "@/components/report/unlock-button";
-import { getSessionUser, isAdmin } from "@/lib/auth";
+import { UnlockButton, UnlockWithCreditButton } from "@/components/report/unlock-button";
+import { TopUpOptions } from "@/components/site/top-up-options";
+import { getSessionUser, isActiveSubscriber, isAdmin, spendableCredits } from "@/lib/auth";
+import { syncCheckoutSessionById } from "@/lib/billing";
 import { heroAerialUrl, heroLotPath } from "@/lib/aerial";
 import { formatAuAddress } from "@/lib/format-address";
 import { canViewReport, loadReportPayload } from "@/lib/pipeline";
@@ -33,23 +35,17 @@ export default async function ReportPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ session_id?: string; skin?: string; [SHARE_PARAM]?: string }>;
+  searchParams?: Promise<{ session_id?: string; skin?: string; checkout?: string; [SHARE_PARAM]?: string }>;
 }) {
   const { id } = await params;
   const sp = (await searchParams) ?? {};
-  // Best-effort: if Stripe redirected back with session_id, ping the
-  // webhook GET handler so paid_at is set even when the async webhook
-  // hasn't landed yet. We don't await response: the page server-render
-  // re-loads paid status straight from the DB after.
+  // Stripe redirects back before its webhook necessarily lands: apply
+  // the session here (report unlock or credit pack), in-process, so the
+  // render below already sees the result.
   if (sp.session_id) {
-    try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL ?? ""}/api/checkout/webhook?session_id=${encodeURIComponent(sp.session_id)}`,
-        { cache: "no-store" },
-      );
-    } catch {
-      // ignore: the webhook itself will eventually catch up
-    }
+    await syncCheckoutSessionById(sp.session_id).catch(() => {
+      // the webhook will catch up
+    });
   }
 
   const shareToken = typeof sp[SHARE_PARAM] === "string" ? sp[SHARE_PARAM] : null;
@@ -364,7 +360,31 @@ export default async function ReportPage({
                 and PDF download.
               </p>
               <div className="mt-7">
-                <UnlockButton addressId={address.id} reportId={report.id} />
+                {/* Three cases: a credit to spend (one tap, no Checkout);
+                    a subscriber who has run out (top up or upgrade, with
+                    the single-report price as the fallback); everyone
+                    else (single report). */}
+                {viewer && spendableCredits(viewer) > 0 ? (
+                  <UnlockWithCreditButton
+                    reportId={report.id}
+                    creditsLeft={spendableCredits(viewer)}
+                  />
+                ) : viewer && isActiveSubscriber(viewer) ? (
+                  <div className="mx-auto flex max-w-md flex-col gap-5">
+                    <p className="text-[13.5px] font-medium text-foreground/90">
+                      You have used this month&rsquo;s credits.
+                    </p>
+                    <TopUpOptions user={viewer} reportId={report.id} />
+                    <div className="flex items-center gap-3 text-[11.5px] text-muted-foreground">
+                      <span className="h-px flex-1 bg-border/60" />
+                      or just this report
+                      <span className="h-px flex-1 bg-border/60" />
+                    </div>
+                    <UnlockButton addressId={address.id} reportId={report.id} />
+                  </div>
+                ) : (
+                  <UnlockButton addressId={address.id} reportId={report.id} />
+                )}
               </div>
             </section>
           )}

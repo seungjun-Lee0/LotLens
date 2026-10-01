@@ -3,7 +3,7 @@ import Link from "next/link";
 import { NavAnchor } from "@/components/site/nav-anchor";
 import { ThemeToggle } from "@/components/site/theme-toggle";
 import { UserMenu } from "@/components/site/user-menu";
-import { getSessionUser, isActiveSubscriber, isAdmin } from "@/lib/auth";
+import { getSessionUser, isActiveSubscriber, isAdmin, spendableCredits } from "@/lib/auth";
 
 export async function SiteHeader({
   /** Show the Modules / Pricing / FAQ anchors. They scroll to sections that
@@ -14,7 +14,10 @@ export async function SiteHeader({
   sectionNav?: boolean;
 } = {}) {
   const user = await getSessionUser();
-  const showCredits = isActiveSubscriber(user);
+  // Subscribers always see the balance; anyone else only while they still
+  // hold pack credits.
+  const credits = spendableCredits(user);
+  const showCredits = isActiveSubscriber(user) || credits > 0;
   const admin = isAdmin(user);
 
   return (
@@ -83,7 +86,7 @@ export async function SiteHeader({
               {showCredits && user && (
                 <Link
                   href="/account"
-                  title="Report credits left this cycle"
+                  title="Report credits you can spend"
                   className="hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold sm:inline-flex"
                   style={{
                     background:
@@ -96,7 +99,7 @@ export async function SiteHeader({
                     className="size-1.5 rounded-full"
                     style={{ background: "currentColor" }}
                   />
-                  {user.credits} credits
+                  {credits} credits
                 </Link>
               )}
               {/* Theme toggle sits to the LEFT of the avatar so the
@@ -107,7 +110,7 @@ export async function SiteHeader({
                 initial={(user.name ?? user.email).slice(0, 1).toUpperCase()}
                 isAdmin={admin}
                 showCredits={showCredits}
-                credits={user.credits}
+                credits={credits}
               />
             </>
           ) : (

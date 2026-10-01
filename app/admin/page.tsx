@@ -60,7 +60,8 @@ export default async function AdminPage() {
       GROUP BY plan
     `,
     sql`
-      SELECT u.email, u.name, u.plan, u.subscription_status, u.credits,
+      SELECT u.email, u.name, u.plan, u.subscription_status,
+             (u.credits + u.bonus_credits) AS credits,
              u.created_at,
              (SELECT count(*)::int FROM reports r WHERE r.user_id = u.id) AS report_count
       FROM users u

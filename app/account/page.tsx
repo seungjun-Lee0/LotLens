@@ -11,6 +11,8 @@ import { NameForm, PasswordForm } from "@/components/site/account-security";
 import { BrandingForm } from "@/components/site/branding-form";
 import { DeleteAccount } from "@/components/site/delete-account";
 import { ReportCard } from "@/components/reports/report-card";
+import { TopUpOptions } from "@/components/site/top-up-options";
+import { syncCheckoutSessionById } from "@/lib/billing";
 import {
   PLAN_QUOTAS,
   getSessionUser,
@@ -60,14 +62,11 @@ export default async function AccountPage({
   // Post-checkout: sync the session before rendering so the new plan shows
   // even when the async webhook hasn't landed yet (same trick as /report).
   if (sp.session_id) {
-    try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"}/api/checkout/webhook?session_id=${encodeURIComponent(sp.session_id)}`,
-        { cache: "no-store" },
-      );
-    } catch {
-      // webhook will catch up
-    }
+    // In-process, not an HTTP call to our own API: no base URL to get
+    // wrong, and one hop fewer before the page renders.
+    await syncCheckoutSessionById(sp.session_id).catch(() => {
+      // the webhook will catch up
+    });
   }
 
   const user = await getSessionUser();
@@ -78,6 +77,7 @@ export default async function AccountPage({
     ? PLAN_QUOTAS[user.plan as keyof typeof PLAN_QUOTAS]
     : 0;
   const credits = subscriber ? user.credits : 0;
+  const bonus = user.bonusCredits;
   const renews =
     subscriber && user.currentPeriodEnd
       ? new Date(user.currentPeriodEnd).toLocaleDateString("en-AU", {
@@ -126,6 +126,17 @@ export default async function AccountPage({
             }}
           >
             ✓ Subscription active: welcome aboard.
+          </div>
+        )}
+        {sp.checkout === "credits" && (
+          <div
+            className="rounded-2xl px-4 py-3 text-[13.5px] font-medium"
+            style={{
+              background: "color-mix(in oklab, var(--apple-green) 12%, transparent)",
+              color: "var(--apple-green)",
+            }}
+          >
+            ✓ Credits added to your account.
           </div>
         )}
 
@@ -198,25 +209,56 @@ export default async function AccountPage({
                   }}
                 />
               </div>
+              {bonus > 0 && (
+                <div className="mt-3 flex items-baseline justify-between text-[13px]">
+                  <span className="text-muted-foreground">Extra credits (never expire)</span>
+                  <span className="font-medium">{bonus}</span>
+                </div>
+              )}
               <p className="mt-2 text-[12px] text-muted-foreground">
-                {credits === 0 ? (
+                {credits === 0 && bonus === 0 ? (
                   <>
                     <b className="font-semibold text-foreground">
                       No credits left this cycle.
                     </b>{" "}
-                    Credits reset when your plan renews
-                    {renews ? ` on ${renews}` : ""}. Single reports at $19 still
-                    work meanwhile.
+                    Monthly credits reset when your plan renews
+                    {renews ? ` on ${renews}` : ""}. Top up below to keep going.
+                  </>
+                ) : credits === 0 ? (
+                  <>
+                    Monthly credits are used up
+                    {renews ? ` until ${renews}` : ""}; reports now draw on your
+                    extra credits.
                   </>
                 ) : (
                   <>
-                    1 credit unlocks 1 full report. Credits reset to {quota} when
-                    your plan renews: they don&rsquo;t accumulate or top up
-                    mid-cycle.
+                    1 credit unlocks 1 full report. Monthly credits reset to{" "}
+                    {quota} when your plan renews and don&rsquo;t carry over.
                   </>
                 )}
               </p>
+
+              {/* Top-up: always reachable, pushed forward once the month's
+                  allowance is nearly gone. */}
+              <details
+                className="group mt-4 rounded-2xl border border-border/60 bg-background/40 p-4"
+                open={credits <= 2}
+              >
+                <summary className="cursor-pointer list-none text-[13px] font-medium text-foreground/90">
+                  Need more reports this month?
+                </summary>
+                <div className="mt-3">
+                  <TopUpOptions user={user} />
+                </div>
+              </details>
             </div>
+          )}
+          {!subscriber && bonus > 0 && (
+            <p className="mt-4 text-[12.5px] text-muted-foreground">
+              You have <b className="font-semibold text-foreground">{bonus}</b>{" "}
+              extra credit{bonus === 1 ? "" : "s"} left from a pack. They still
+              unlock reports without a plan.
+            </p>
           )}
         </section>
 

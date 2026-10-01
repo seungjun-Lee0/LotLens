@@ -368,7 +368,7 @@ export default function Home() {
               <ul className="flex flex-col gap-2 text-[13.5px] leading-relaxed text-muted-foreground">
                 <li>· 10 full reports per month</li>
                 <li>· Single user</li>
-                <li>· Renews monthly, with no automatic top-ups</li>
+                <li>· Run out early? Add a credit pack or move to Pro</li>
                 <li>· Manage or cancel in one click</li>
               </ul>
               <div className="mt-auto">
@@ -412,7 +412,7 @@ export default function Home() {
                 <li>· 50 full reports per month</li>
                 <li>· Branded PDF reports</li>
                 <li>· Buyer&rsquo;s agents and conveyancers</li>
-                <li>· Renews monthly, with no automatic top-ups</li>
+                <li>· Run out early? Add a credit pack that never expires</li>
               </ul>
               <div className="mt-auto">
                 <SubscribeButton plan="pro" label="Start Pro" />

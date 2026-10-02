@@ -653,9 +653,16 @@ function cityPlanZone(props: Record<string, unknown>): Classified | null {
   const code = (m?.[1] ?? String(props.ZONE_CODE ?? "").toUpperCase().trim()).toUpperCase();
   const hex = CITYPLAN_ZONE_HEX[code] ?? CITYPLAN_ZONE_HEX[code.replace(/\d+$/, "")];
   if (!hex) return null;
+  // LVL2_ZONE carries the full zone + precinct name ("Conservation
+  // (District)", "Mixed use (Centre frame)"); ZONE_PREC_DESC often holds
+  // only the precinct suffix after its code ("CN2 - District", "MU2 -
+  // Centre frame"), which read as orphans in a legend. Prefer the full
+  // name and fall back to the stripped description for schemes that
+  // publish no LVL2 field.
   const label =
+    String(props.LVL2_ZONE ?? "").trim() ||
     desc.replace(/^[A-Z]{1,3}\d?\s*-\s*/, "").trim() ||
-    String(props.LVL2_ZONE ?? props.LVL1_ZONE ?? code);
+    String(props.LVL1_ZONE ?? code);
   return { fillColor: hex, legendLabel: label, fillOpacity: ZONE_FILL_OPACITY };
 }
 
@@ -707,8 +714,13 @@ function zoningColor(props: Record<string, unknown>): Classified {
     return { fillColor: DEVELO_HEX.zoneOpenSpace, legendLabel: props.rluc2023, fillOpacity: o };
   }
   // BCC fields first; council adapter fields (GC ZONE/LVL1_ZONE, MBRC
-  // ZONE_PREC, SCC LABEL/HEADING, Redland ZONEDESC) folded in after.
-  const f = String(props.LVL1_ZONE ?? props.HEADING ?? props.ZONEDESC ?? props.ZONE_PREC ?? props.LABEL ?? "").toLowerCase();
+  // ZONE_PREC, SCC LABEL/HEADING, Redland ZONEDESC, Logan Zone/Precinct)
+  // folded in after. Logan's title-case `Zone` was missing here, so every
+  // Logan polygon painted as "Other".
+  const family = String(
+    props.LVL1_ZONE ?? props.HEADING ?? props.ZONEDESC ?? props.ZONE_PREC ?? props.LABEL ?? props.Zone ?? "",
+  );
+  const f = family.toLowerCase();
   const z = [
     props.LVL2_ZONE,
     props.ZONE_PREC_DESC,
@@ -717,6 +729,8 @@ function zoningColor(props: Record<string, unknown>): Classified {
     props.ZONE_PREC,
     props.LABEL,
     props.ZONEDESC,
+    props.Zone,
+    props.Precinct,
   ]
     .map((v) => String(v ?? "").toLowerCase())
     .join(" ");
@@ -729,7 +743,9 @@ function zoningColor(props: Record<string, unknown>): Classified {
                                           return { fillColor: DEVELO_HEX.zoneResidential, legendLabel: "Residential", fillOpacity: o };
   if (f.includes("open space") || f.includes("recreation") || f.includes("rural") || f.includes("environment") || f.includes("conservation"))
                                           return { fillColor: DEVELO_HEX.zoneOpenSpace, legendLabel: "Open space / Rural / Environment", fillOpacity: o };
-  return { fillColor: DEVELO_HEX.zoneOther, legendLabel: String(props.LVL1_ZONE ?? props.ZONEDESC ?? props.LABEL ?? props.ZONE_PREC ?? "Other"), fillOpacity: o };
+  // Zones outside the families above (Community facilities, Industry,
+  // Special purpose …) keep their own name in the legend.
+  return { fillColor: DEVELO_HEX.zoneOther, legendLabel: family || "Other", fillOpacity: o };
 }
 
 // Stormwater is a LINE/POINT network, not an area. `fillOpacity` is
